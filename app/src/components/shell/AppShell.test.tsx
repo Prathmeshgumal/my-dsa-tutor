@@ -26,7 +26,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston' })
+  useSettings.setState({ runner: 'piston', outputPosition: 'right' })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -184,4 +184,10 @@ test('picking a file in the panel opens it and closes the panel', async () => {
 test('the files panel is closed after a reload', () => {
   renderShell()
   expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+})
+
+test('output position "bottom" stacks the output under the editor on a wide window', () => {
+  useSettings.setState({ outputPosition: 'bottom' })
+  renderShell()
+  expect(screen.getByTestId('workspace-panels')).toHaveStyle({ flexDirection: 'column' })
 })

@@ -27,6 +27,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
   const filesOpen = useFilesPanel((s) => s.open)
+  const vertical = narrow || useSettings((s) => s.outputPosition) === 'bottom'
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -37,9 +38,9 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
           <IconRail />
           {filesOpen && <FilesPanel />}
           <ResizablePanelGroup
-            key={narrow ? 'vertical' : 'horizontal'}
+            key={vertical ? 'vertical' : 'horizontal'}
             data-testid="workspace-panels"
-            orientation={narrow ? 'vertical' : 'horizontal'}
+            orientation={vertical ? 'vertical' : 'horizontal'}
             defaultLayout={{ editor: editorSize, output: outputSize }}
             onLayoutChanged={(l) => setPanelLayout([l.editor, l.output])}
             className="min-w-0 flex-1"

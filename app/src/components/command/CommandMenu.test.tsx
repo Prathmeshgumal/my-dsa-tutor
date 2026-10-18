@@ -107,3 +107,9 @@ test('after picking a file the cursor goes back into the editor', async () => {
   await userEvent.keyboard('{Enter}')
   await vi.waitFor(() => expect(focusEditor).toHaveBeenCalled())
 })
+
+test('command moves the output to the bottom', async () => {
+  useSettings.setState({ outputPosition: 'right' })
+  await choose(/move output to the bottom/i)
+  expect(useSettings.getState().outputPosition).toBe('bottom')
+})

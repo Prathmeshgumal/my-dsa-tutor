@@ -42,6 +42,11 @@ the left bar).
 | ⌘/Ctrl + Enter | Run the current file |
 | ⌘/Ctrl + K | Search files and commands |
 
+The **Files** button in the left bar opens a drawer listing every file; it closes
+when you click outside it, press Escape, or pick a file. The button at the top
+right of the output panel moves the output **below the editor or back to the
+right**; your choice is remembered.
+
 ## Develop
 
 ```sh

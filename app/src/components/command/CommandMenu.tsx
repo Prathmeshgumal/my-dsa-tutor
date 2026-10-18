@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { FilePlus2, Moon, Play, Settings, Sun } from 'lucide-react'
+import { FilePlus2, Moon, PanelBottom, PanelRight, Play, Settings, Sun } from 'lucide-react'
 import { create } from 'zustand'
 import { focusEditor } from '@/components/editor/editorFocus'
 import { openNewFileDialog } from '@/components/editor/FileDialogs'
@@ -37,6 +37,7 @@ export function CommandMenu() {
   const files = useWorkspace((s) => s.files)
   const activeId = useWorkspace((s) => s.activeId)
   const theme = useResolvedTheme()
+  const outputPosition = useSettings((s) => s.outputPosition)
 
   // Capture phase: Monaco swallows Ctrl+K (its chord prefix) before a bubbling listener would see it.
   useEffect(() => {
@@ -94,6 +95,13 @@ export function CommandMenu() {
               onSelect={run(() => useSettings.getState().setTheme(theme === 'dark' ? 'light' : 'dark'))}
             >
               {theme === 'dark' ? <Sun /> : <Moon />} Toggle theme
+            </CommandItem>
+            <CommandItem
+              value={outputPosition === 'right' ? 'Move output to the bottom' : 'Move output to the right'}
+              onSelect={run(() => useSettings.getState().setOutputPosition(outputPosition === 'right' ? 'bottom' : 'right'))}
+            >
+              {outputPosition === 'right' ? <PanelBottom /> : <PanelRight />}
+              {outputPosition === 'right' ? 'Move output to the bottom' : 'Move output to the right'}
             </CommandItem>
             <CommandItem value="Open settings" onSelect={run(() => useSettingsDialog.getState().show())}>
               <Settings /> Open settings

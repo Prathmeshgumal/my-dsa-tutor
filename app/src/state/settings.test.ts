@@ -25,3 +25,9 @@ test('stores the runner choice', () => {
   expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.runner).toBe('judge0')
 })
 
+
+test('output sits on the right by default and the choice is remembered', () => {
+  useSettings.setState({ outputPosition: 'right' })
+  useSettings.getState().setOutputPosition('bottom')
+  expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.outputPosition).toBe('bottom')
+})

@@ -1,7 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import userEvent from '@testing-library/user-event'
+import { useSettings } from '@/state/settings'
+import { mockMatchMedia } from '@/test/matchMedia'
 import { RunnerError, type RunResult } from '@/lib/runner/types'
 import { useRun } from '@/state/run'
 import { OutputPanel } from './OutputPanel'
+
+// The app provides tooltips from AppShell; isolated renders need the provider too.
+const render = (ui: React.ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
 
 const base: RunResult = {
   status: 'success',
@@ -18,6 +25,8 @@ function showResult(result: Partial<RunResult>) {
 }
 
 beforeEach(() => {
+  mockMatchMedia(() => false)
+  useSettings.setState({ outputPosition: 'right' })
   useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected' })
 })
 
@@ -92,4 +101,18 @@ test('runner error shows message inline', () => {
   useRun.setState({ state: 'error', error: new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.') })
   render(<OutputPanel />)
   expect(screen.getByRole('alert')).toHaveTextContent('Daily Judge0 quota used up. Try again tomorrow.')
+})
+
+test('layout button moves the output to the bottom and back', async () => {
+  render(<OutputPanel />)
+  await userEvent.click(screen.getByRole('button', { name: 'Move output to the bottom' }))
+  expect(useSettings.getState().outputPosition).toBe('bottom')
+  await userEvent.click(screen.getByRole('button', { name: 'Move output to the right' }))
+  expect(useSettings.getState().outputPosition).toBe('right')
+})
+
+test('narrow window: no layout button (output is always at the bottom there)', () => {
+  mockMatchMedia((q) => q === '(max-width: 899px)')
+  render(<OutputPanel />)
+  expect(screen.queryByRole('button', { name: /move output/i })).not.toBeInTheDocument()
 })

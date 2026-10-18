@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Clock, Cpu, KeyRound, Loader2, Terminal } from 'lucide-react'
+import { AlertCircle, Clock, Cpu, KeyRound, Loader2, PanelBottom, PanelRight, Terminal } from 'lucide-react'
 import { GlowBorder } from '@/components/glow/GlowBorder'
 import { Kbd } from '@/components/Kbd'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { shortcut } from '@/lib/platform'
 import type { RunResult } from '@/lib/runner/types'
 import { cn } from '@/lib/utils'
 import { useRun } from '@/state/run'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
 type Tone = 'success' | 'warning' | 'error'
@@ -46,6 +49,31 @@ function Terminalbox({ label, testId, children }: { label: string; testId: strin
         </pre>
       </ScrollArea>
     </GlowBorder>
+  )
+}
+
+/** Switches the output between the right side and below the editor (wide windows only). */
+function LayoutToggle() {
+  const narrow = useMediaQuery(NARROW_QUERY)
+  const position = useSettings((s) => s.outputPosition)
+  if (narrow) return null
+  const next = position === 'right' ? 'bottom' : 'right'
+  const label = next === 'bottom' ? 'Move output to the bottom' : 'Move output to the right'
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          onClick={() => useSettings.getState().setOutputPosition(next)}
+          className="ml-auto text-muted-foreground"
+        >
+          {next === 'bottom' ? <PanelBottom /> : <PanelRight />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -88,6 +116,7 @@ export function OutputPanel() {
             </span>
           </TabsTrigger>
         </TabsList>
+        <LayoutToggle />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
