@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { uniqueName } from '@/lib/languages'
 import { useWorkspace } from '@/state/workspace'
+import { focusEditor } from './editorFocus'
 
 type DialogKind = 'new' | 'rename' | 'delete'
 
@@ -36,6 +37,12 @@ export const openNewFileDialog = () => useFileDialogs.setState({ kind: 'new', fi
 export const openRenameDialog = (id: string) => useFileDialogs.setState({ kind: 'rename', fileId: id })
 export const openDeleteDialog = (id: string) => useFileDialogs.setState({ kind: 'delete', fileId: id })
 const close = () => useFileDialogs.setState({ kind: null, fileId: null })
+
+// Return the cursor to the code instead of the button that opened the dialog.
+const backToEditor = (e: Event) => {
+  e.preventDefault()
+  focusEditor()
+}
 
 function NameDialog({ kind, fileId }: { kind: 'new' | 'rename'; fileId: string | null }) {
   const files = useWorkspace((s) => s.files)
@@ -54,7 +61,7 @@ function NameDialog({ kind, fileId }: { kind: 'new' | 'rename'; fileId: string |
   }
 
   return (
-    <DialogContent className="sm:max-w-sm">
+    <DialogContent className="sm:max-w-sm" onCloseAutoFocus={backToEditor}>
       <form onSubmit={submit} className="grid gap-4">
         <DialogHeader>
           <DialogTitle>{kind === 'new' ? 'New file' : 'Rename file'}</DialogTitle>
@@ -104,7 +111,7 @@ export function FileDialogs() {
       </Dialog>
 
       <AlertDialog open={kind === 'delete'} onOpenChange={(open) => !open && close()}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={backToEditor}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {file?.name}?</AlertDialogTitle>
             <AlertDialogDescription>

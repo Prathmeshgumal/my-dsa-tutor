@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useWorkspace } from '@/state/workspace'
+import { focusEditor } from './editorFocus'
 import { openDeleteDialog, openNewFileDialog, openRenameDialog } from './FileDialogs'
 
 export function FileTabs() {
@@ -37,7 +38,10 @@ export function FileTabs() {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setActive(file.id)}
+                onClick={() => {
+                  setActive(file.id)
+                  focusEditor()
+                }}
                 onDoubleClick={() => openRenameDialog(file.id)}
                 className="flex items-center gap-2 outline-none focus-visible:underline"
               >

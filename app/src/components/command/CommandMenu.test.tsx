@@ -6,7 +6,10 @@ import { useRun } from '@/state/run'
 import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 import { useWorkspace } from '@/state/workspace'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { CommandMenu, useCommandMenu } from './CommandMenu'
+
+vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
 
 const ws = () => useWorkspace.getState()
 
@@ -94,4 +97,13 @@ test('⌘K works even when the focused element (e.g. Monaco) stops propagation',
   fireEvent.keyDown(editorLike, { key: 'k', ctrlKey: true })
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   editorLike.remove()
+})
+
+test('after picking a file the cursor goes back into the editor', async () => {
+  vi.mocked(focusEditor).mockClear()
+  useCommandMenu.setState({ open: true })
+  render(<CommandMenu />)
+  await userEvent.type(screen.getByRole('combobox'), 'tw')
+  await userEvent.keyboard('{Enter}')
+  await vi.waitFor(() => expect(focusEditor).toHaveBeenCalled())
 })

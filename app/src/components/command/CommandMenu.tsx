@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { FilePlus2, Moon, Play, Settings, Sun } from 'lucide-react'
 import { create } from 'zustand'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { openNewFileDialog } from '@/components/editor/FileDialogs'
 import { LanguageIcon } from '@/components/LanguageIcon'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
@@ -56,7 +57,16 @@ export function CommandMenu() {
   }
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} title="Command menu" description="Open a file or run a command">
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      title="Command menu"
+      description="Open a file or run a command"
+      onCloseAutoFocus={(e) => {
+        e.preventDefault()
+        focusEditor()
+      }}
+    >
       <Command>
         <CommandInput placeholder="Search files and commands…" />
         <CommandList>

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { cn } from '@/lib/utils'
 import { useSettings, type RunnerKind } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
@@ -145,7 +146,13 @@ export function SettingsDialog() {
   const open = useSettingsDialog((s) => s.open)
   return (
     <Dialog open={open} onOpenChange={(o) => !o && useSettingsDialog.getState().hide()}>
-      <DialogContent className="sm:max-w-md">{open && <SettingsForm />}</DialogContent>
+      <DialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          focusEditor()
+        }}
+      >{open && <SettingsForm />}</DialogContent>
     </Dialog>
   )
 }

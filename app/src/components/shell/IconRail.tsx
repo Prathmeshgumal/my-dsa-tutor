@@ -1,7 +1,7 @@
 import { Code2, FolderOpen, History, Settings, Sparkles, type LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useSettings } from '@/state/settings'
+import { useFilesPanel } from '@/state/filesPanel'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
 const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
@@ -12,8 +12,8 @@ const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
 export function IconRail() {
-  const filesOpen = useSettings((s) => s.filesPanelOpen)
-  const setFilesOpen = useSettings((s) => s.setFilesPanelOpen)
+  const filesOpen = useFilesPanel((s) => s.open)
+  const setFilesOpen = useFilesPanel((s) => s.setOpen)
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
@@ -37,6 +37,7 @@ export function IconRail() {
             type="button"
             aria-label="Files"
             aria-pressed={filesOpen}
+            data-files-toggle
             onClick={() => setFilesOpen(!filesOpen)}
             className={cn(
               item,

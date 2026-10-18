@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useSettings } from '@/state/settings'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { SettingsDialog, useSettingsDialog } from './SettingsDialog'
+
+vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
 
 beforeEach(() => {
   useSettings.setState({ apiKey: '', runner: 'judge0' })
@@ -67,4 +70,12 @@ test('Piston selected shows how to start it', () => {
   render(<SettingsDialog />)
   expect(screen.getByRole('radio', { name: /local \(piston\)/i })).toBeChecked()
   expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument()
+})
+
+test('closing settings returns the cursor to the editor', async () => {
+  vi.mocked(focusEditor).mockClear()
+  useSettingsDialog.getState().show()
+  render(<SettingsDialog />)
+  await userEvent.keyboard('{Escape}')
+  await vi.waitFor(() => expect(focusEditor).toHaveBeenCalled())
 })

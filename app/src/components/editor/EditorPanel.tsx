@@ -1,8 +1,10 @@
+import { useEffect, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { Loader2 } from 'lucide-react'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
 import { languageFromFilename } from '@/lib/languages'
 import { useWorkspace } from '@/state/workspace'
+import { registerEditor } from './editorFocus'
 import { EmptyState } from './EmptyState'
 import { FileTabs } from './FileTabs'
 import { registerGlowThemes } from './monacoThemes'
@@ -17,8 +19,12 @@ export function EditorPanel({ onCursorChange, onRunShortcut }: Props) {
   const updateContent = useWorkspace((s) => s.updateContent)
   const ready = useWorkspace((s) => s.ready)
   const theme = useResolvedTheme()
+  const unregister = useRef<(() => void) | null>(null)
+  useEffect(() => () => unregister.current?.(), [])
 
   const onMount: OnMount = (editor, monaco) => {
+    unregister.current?.()
+    unregister.current = registerEditor(editor)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, onRunShortcut)
     editor.onDidChangeCursorPosition((e) => onCursorChange({ line: e.position.lineNumber, col: e.position.column }))
     const pos = editor.getPosition()

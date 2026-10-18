@@ -3,6 +3,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { FilesPanel } from '@/components/files/FilesPanel'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
 import { IconRail } from './IconRail'
 import { StatusBar, type Connection } from './StatusBar'
@@ -25,14 +26,14 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const narrow = useMediaQuery(NARROW_QUERY)
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
-  const filesOpen = useSettings((s) => s.filesPanelOpen)
+  const filesOpen = useFilesPanel((s) => s.open)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="app-bg flex h-dvh flex-col overflow-hidden text-foreground">
         <TopBar narrow={narrow} onRun={onRun} running={running} canRun={canRun} onOpenCommand={onOpenCommand} />
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <IconRail />
           {filesOpen && <FilesPanel />}
           <ResizablePanelGroup

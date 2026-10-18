@@ -4,6 +4,9 @@ import { defaultWorkspace } from '@/lib/storage'
 import { useWorkspace } from '@/state/workspace'
 import { FileDialogs, useFileDialogs } from './FileDialogs'
 import { FileTabs } from './FileTabs'
+import { focusEditor } from './editorFocus'
+
+vi.mock('./editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
 
 const ws = () => useWorkspace.getState()
 
@@ -17,6 +20,7 @@ function renderTabs() {
 }
 
 beforeEach(() => {
+  vi.mocked(focusEditor).mockClear()
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: null })
   useFileDialogs.setState({ kind: null, fileId: null })
   ws().createFile('two.py')
@@ -93,4 +97,18 @@ test('delete asks for confirmation via AlertDialog', async () => {
   expect(ws().files).toHaveLength(2)
   await userEvent.click(within(alert).getByRole('button', { name: 'Delete' }))
   expect(ws().files.map((f) => f.name)).toEqual(['main.cpp'])
+})
+
+test('clicking a tab puts the cursor back in the editor', async () => {
+  renderTabs()
+  await userEvent.click(screen.getByRole('tab', { name: /main\.cpp/ }))
+  expect(focusEditor).toHaveBeenCalled()
+})
+
+test('closing the rename dialog returns the cursor to the editor', async () => {
+  renderTabs()
+  await userEvent.dblClick(screen.getByRole('tab', { name: /main\.cpp/ }))
+  await screen.findByRole('dialog')
+  await userEvent.keyboard('{Escape}')
+  expect(focusEditor).toHaveBeenCalled()
 })

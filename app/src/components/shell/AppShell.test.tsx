@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
+import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { mockMatchMedia } from '@/test/matchMedia'
@@ -25,7 +26,8 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', filesPanelOpen: false })
+  useSettings.setState({ runner: 'piston' })
+  useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
 })
@@ -144,13 +146,42 @@ test('Files button toggles the files panel and reflects its state', async () => 
   await userEvent.click(button)
   expect(button).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
-  expect(useSettings.getState().filesPanelOpen).toBe(true)
   await userEvent.click(button)
   expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
 })
 
-test('files panel stays open across reloads (persisted setting)', () => {
-  useSettings.setState({ filesPanelOpen: true })
+test('clicking anywhere outside the files panel (e.g. the code) closes it', async () => {
   renderShell()
+  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
+  await userEvent.click(screen.getByText('EDITOR'))
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('Escape closes the files panel', async () => {
+  renderShell()
+  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
+  await userEvent.keyboard('{Escape}')
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+})
+
+test('clicking inside the files panel keeps it open', async () => {
+  renderShell()
+  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
+  await userEvent.click(screen.getByText('solutions/'))
   expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
+})
+
+test('picking a file in the panel opens it and closes the panel', async () => {
+  useWorkspace.getState().createFile('two.py')
+  renderShell()
+  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
+  await userEvent.click(screen.getByRole('button', { name: 'main.cpp' }))
+  expect(useWorkspace.getState().activeFile()!.name).toBe('main.cpp')
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+})
+
+test('the files panel is closed after a reload', () => {
+  renderShell()
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
 })
