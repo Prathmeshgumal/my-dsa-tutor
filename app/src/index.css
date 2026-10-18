@@ -177,6 +177,10 @@
   }
 }
 
+::selection {
+  background: rgb(168 85 247 / 0.28);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

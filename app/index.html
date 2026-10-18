@@ -4,7 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>app</title>
+    <title>DSA Editor</title>
+    <script>
+      // Apply the saved/system theme before first paint so dark mode doesn't flash white.
+      try {
+        var theme = JSON.parse(localStorage.getItem('dsa-editor:settings') || '{}').state?.theme || 'system'
+        var dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
