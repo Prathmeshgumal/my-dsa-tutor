@@ -1,0 +1,95 @@
+import { render, screen } from '@testing-library/react'
+import { RunnerError, type RunResult } from '@/lib/runner/types'
+import { useRun } from '@/state/run'
+import { OutputPanel } from './OutputPanel'
+
+const base: RunResult = {
+  status: 'success',
+  statusText: 'Accepted',
+  stdout: '0 1\n',
+  stderr: '',
+  compileOutput: '',
+  timeMs: 12,
+  memoryKb: 3400,
+}
+
+function showResult(result: Partial<RunResult>) {
+  useRun.setState({ state: 'done', result: { ...base, ...result }, error: null })
+}
+
+beforeEach(() => {
+  useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected' })
+})
+
+test('idle shows run hint', () => {
+  render(<OutputPanel />)
+  expect(
+    screen.getByText((_, el) => el?.tagName === 'P' && /Press (⌘↵|Ctrl ↵) to run/.test(el.textContent ?? '')),
+  ).toBeInTheDocument()
+})
+
+test('running shows progress', () => {
+  useRun.setState({ state: 'running' })
+  render(<OutputPanel />)
+  expect(screen.getByText(/Running on Judge0/)).toBeInTheDocument()
+})
+
+test('success shows green "Success" badge, stdout, "12 ms", "3.3 MB"', () => {
+  showResult({})
+  render(<OutputPanel />)
+  expect(screen.getByTestId('status-badge')).toHaveTextContent('Success')
+  expect(screen.getByTestId('status-badge')).toHaveAttribute('data-tone', 'success')
+  expect(screen.getByTestId('stdout')).toHaveTextContent('0 1')
+  expect(screen.getByText('12 ms')).toBeInTheDocument()
+  expect(screen.getByText('3.3 MB')).toBeInTheDocument()
+})
+
+test('small memory is shown in KB', () => {
+  showResult({ memoryKb: 900 })
+  render(<OutputPanel />)
+  expect(screen.getByText('900 KB')).toBeInTheDocument()
+})
+
+test('success with empty stdout says so', () => {
+  showResult({ stdout: '' })
+  render(<OutputPanel />)
+  expect(screen.getByTestId('stdout')).toHaveTextContent('(no output)')
+})
+
+test('compile_error switches to Errors tab and shows compileOutput; badge count 1', () => {
+  showResult({ status: 'compile_error', statusText: 'Compilation Error', stdout: '', compileOutput: "error: expected ';'" })
+  render(<OutputPanel />)
+  expect(screen.getByRole('tab', { name: /errors/i })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByRole('tab', { name: /errors/i })).toHaveTextContent('1')
+  expect(screen.getByTestId('errors')).toHaveTextContent("error: expected ';'")
+  expect(screen.getByTestId('status-badge')).toHaveTextContent('Compilation error')
+  expect(screen.getByTestId('status-badge')).toHaveAttribute('data-tone', 'error')
+})
+
+test('time_limit shows amber "Time limit exceeded"', () => {
+  showResult({ status: 'time_limit', statusText: 'Time Limit Exceeded', stdout: '' })
+  render(<OutputPanel />)
+  expect(screen.getByTestId('status-badge')).toHaveTextContent('Time limit exceeded')
+  expect(screen.getByTestId('status-badge')).toHaveAttribute('data-tone', 'warning')
+})
+
+test('runtime_error shows red badge with statusText and stderr', () => {
+  showResult({ status: 'runtime_error', statusText: 'Runtime Error (SIGSEGV)', stdout: '', stderr: 'Segmentation fault' })
+  render(<OutputPanel />)
+  expect(screen.getByTestId('status-badge')).toHaveTextContent('Runtime Error (SIGSEGV)')
+  expect(screen.getByTestId('status-badge')).toHaveAttribute('data-tone', 'error')
+  expect(screen.getByTestId('errors')).toHaveTextContent('Segmentation fault')
+})
+
+test('Errors tab count is 0 on success', () => {
+  showResult({})
+  render(<OutputPanel />)
+  expect(screen.getByRole('tab', { name: /errors/i })).toHaveTextContent('0')
+  expect(screen.getByRole('tab', { name: /output/i })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('runner error shows message inline', () => {
+  useRun.setState({ state: 'error', error: new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.') })
+  render(<OutputPanel />)
+  expect(screen.getByRole('alert')).toHaveTextContent('Daily Judge0 quota used up. Try again tomorrow.')
+})

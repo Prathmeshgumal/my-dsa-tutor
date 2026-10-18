@@ -1,5 +1,6 @@
-import { Code2, FolderOpen, History, Sparkles, type LucideIcon } from 'lucide-react'
+import { Code2, FolderOpen, History, Settings, Sparkles, type LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useSettingsDialog } from '@/state/settingsDialog'
 
 const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
   { label: 'Files', icon: FolderOpen },
@@ -9,7 +10,7 @@ const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
 
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
-export function IconRail({ children }: { children?: React.ReactNode }) {
+export function IconRail() {
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
       <Tooltip>
@@ -43,7 +44,19 @@ export function IconRail({ children }: { children?: React.ReactNode }) {
       ))}
 
       <div className="flex-1" />
-      {children}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={() => useSettingsDialog.getState().show()}
+            className={`${item} text-muted-foreground hover:bg-muted hover:text-foreground`}
+          >
+            <Settings />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Settings</TooltipContent>
+      </Tooltip>
     </nav>
   )
 }

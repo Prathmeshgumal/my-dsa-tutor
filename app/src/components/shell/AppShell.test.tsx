@@ -119,3 +119,11 @@ test('below 900px uses vertical panel direction', () => {
   renderShell()
   expect(screen.getByTestId('workspace-panels')).toHaveStyle({ flexDirection: 'column' })
 })
+
+test('rail settings button opens the settings dialog', async () => {
+  const { useSettingsDialog } = await import('@/state/settingsDialog')
+  useSettingsDialog.setState({ open: false })
+  renderShell()
+  await userEvent.click(screen.getByRole('button', { name: 'Settings' }))
+  expect(useSettingsDialog.getState()).toMatchObject({ open: true, reason: 'manual' })
+})

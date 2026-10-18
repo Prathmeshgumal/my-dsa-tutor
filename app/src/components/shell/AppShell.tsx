@@ -16,12 +16,11 @@ interface Props {
   connection: Connection
   cursor: { line: number; col: number } | null
   onOpenCommand(): void
-  railFooter?: ReactNode
 }
 
 const DEFAULT_LAYOUT = [58, 42]
 
-export function AppShell({ editor, output, onRun, running, canRun, connection, cursor, onOpenCommand, railFooter }: Props) {
+export function AppShell({ editor, output, onRun, running, canRun, connection, cursor, onOpenCommand }: Props) {
   const narrow = useMediaQuery(NARROW_QUERY)
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
@@ -32,7 +31,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
       <div className="app-bg flex h-dvh flex-col overflow-hidden text-foreground">
         <TopBar narrow={narrow} onRun={onRun} running={running} canRun={canRun} onOpenCommand={onOpenCommand} />
         <div className="flex min-h-0 flex-1">
-          <IconRail>{railFooter}</IconRail>
+          <IconRail />
           <ResizablePanelGroup
             key={narrow ? 'vertical' : 'horizontal'}
             data-testid="workspace-panels"

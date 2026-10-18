@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import { languageFromFilename } from '@/lib/languages'
 import { cn } from '@/lib/utils'
+import type { Connection } from '@/state/run'
 import { useWorkspace } from '@/state/workspace'
 
-export type Connection = 'no_key' | 'connected' | 'failed'
+export type { Connection }
 
 const CONNECTION: Record<Connection, { text: string; dot: string }> = {
   no_key: { text: 'No API key', dot: 'bg-amber-500 shadow-[0_0_8px] shadow-amber-500' },
