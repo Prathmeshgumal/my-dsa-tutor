@@ -14,7 +14,7 @@ function renderPanel() {
 }
 
 beforeEach(() => {
-  useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: null })
+  useWorkspace.setState({ ...defaultWorkspace(), ready: true, saveStatus: 'saved', lastSavedAt: null })
   useFileDialogs.setState({ kind: null, fileId: null })
 })
 
@@ -54,4 +54,11 @@ test('no files at all → EmptyState', () => {
   useWorkspace.setState({ files: [], openIds: [], activeId: null })
   renderPanel()
   expect(screen.getByText(/no file open/i)).toBeInTheDocument()
+})
+
+test('shows a loading state until files have loaded from disk', () => {
+  useWorkspace.setState({ ready: false })
+  renderPanel()
+  expect(screen.queryByTestId('monaco')).not.toBeInTheDocument()
+  expect(screen.getByText(/loading files/i)).toBeInTheDocument()
 })

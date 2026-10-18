@@ -139,3 +139,11 @@ RapidAPI's Judge0 CE no longer has a free plan, so v1 now defaults to a **self-h
 - Settings has a runner choice: **Local (Piston)** (default, no key) or **Judge0 on RapidAPI** (key required). The key field and the no-key flow apply only to Judge0.
 - `scripts/piston-install.sh` installs gcc 10.2.0, java 15.0.2 and python 3.12.0 once.
 - Compiler labels are now generic ("C++ · GCC", "Java · OpenJDK", "Python 3") because the versions depend on the runner.
+
+## Addendum (2026-10-18): files on disk, fixed port
+
+- **Files live on disk** in `<repo>/solutions` (or `SOLUTIONS_DIR`), served by a small Vite dev-server middleware: `GET /api/files` lists; `PUT /api/files/:name`, `DELETE /api/files/:name` and `POST /api/files/:name/rename` change files. The server only accepts plain `.cpp/.java/.py` names directly inside the folder, with no paths or traversal.
+- On startup the app loads files from disk (disk is the source of truth). It reuses the browser's ids, open tabs and active file by name. An empty folder takes the browser's existing files, so older browser-only work moves over automatically.
+- Autosave still writes localStorage (tabs plus a backup copy) and also syncs changed files to disk with deletes, then renames, then writes. A failed write shows "Couldn’t save" and is retried on the next change. If the files API is unreachable, the app warns and keeps working with browser-only storage.
+- The dev server always runs on **port 5199** (`strictPort`), because browser storage is per origin.
+- Out of scope: live reload when files change on disk. Reload the page to pick up outside edits.

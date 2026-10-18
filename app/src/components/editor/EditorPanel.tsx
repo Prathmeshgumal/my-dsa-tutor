@@ -15,6 +15,7 @@ interface Props {
 export function EditorPanel({ onCursorChange, onRunShortcut }: Props) {
   const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId) ?? null)
   const updateContent = useWorkspace((s) => s.updateContent)
+  const ready = useWorkspace((s) => s.ready)
   const theme = useResolvedTheme()
 
   const onMount: OnMount = (editor, monaco) => {
@@ -30,7 +31,12 @@ export function EditorPanel({ onCursorChange, onRunShortcut }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <FileTabs />
-      {file ? (
+      {!ready ? (
+        <div className="flex flex-1 items-center justify-center gap-2 bg-card text-[13px] text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          Loading files…
+        </div>
+      ) : file ? (
         <div className="min-h-0 flex-1 bg-card">
           <Editor
             path={file.id}

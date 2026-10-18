@@ -12,6 +12,8 @@ export type SaveStatus = 'saved' | 'saving' | 'error'
 export type Result = { ok: true } | { ok: false; error: string }
 
 interface WorkspaceState extends WorkspaceData {
+  /** False until files have been loaded from disk at startup. */
+  ready: boolean
   saveStatus: SaveStatus
   lastSavedAt: number | null
   createFile(name: string): Result
@@ -35,6 +37,7 @@ function closeInTabs(openIds: string[], activeId: string | null, id: string) {
 
 export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   ...loadWorkspace(),
+  ready: false,
   saveStatus: 'saved',
   lastSavedAt: null,
 

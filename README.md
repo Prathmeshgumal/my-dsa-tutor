@@ -21,6 +21,17 @@ Code runs on [Piston](https://github.com/engineer-man/piston) in a local Docker
 container (free, no API key). The dev server forwards `/piston` to it at
 `127.0.0.1:2000`.
 
+## Where your code is saved
+
+Every file in the editor is a real file in **`solutions/`** at the repo root (set
+`SOLUTIONS_DIR` to use another folder). Edits are written there half a second
+after you stop typing, so you can open, back up or commit them like any other
+code. If you change a file outside the editor (for example in VS Code), reload
+the page to see the change.
+
+The browser also keeps a backup copy, plus your open tabs, theme and settings,
+in localStorage for `http://localhost:5199`. The port is fixed for that reason.
+
 You can switch to Judge0 on RapidAPI (paid, needs an API key) in Settings (⚙️ in
 the left bar).
 
