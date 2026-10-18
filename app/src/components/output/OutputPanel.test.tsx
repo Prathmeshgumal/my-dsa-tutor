@@ -31,7 +31,7 @@ test('idle shows run hint', () => {
 test('running shows progress', () => {
   useRun.setState({ state: 'running' })
   render(<OutputPanel />)
-  expect(screen.getByText(/Running on Judge0/)).toBeInTheDocument()
+  expect(screen.getByText('Running…')).toBeInTheDocument()
 })
 
 test('success shows green "Success" badge, stdout, "12 ms", "3.3 MB"', () => {

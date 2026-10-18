@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
+import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { mockMatchMedia } from '@/test/matchMedia'
 import { AppShell } from './AppShell'
@@ -24,6 +25,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
+  useSettings.setState({ runner: 'piston' })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
 })
@@ -96,7 +98,7 @@ test('status bar shows minutes since last save', () => {
 
 test.each([
   ['no_key', 'No API key'],
-  ['connected', 'Judge0 connected'],
+  ['connected', 'Piston connected'],
   ['failed', 'Last run failed'],
 ] as const)('status bar connection %s', (connection, text) => {
   renderShell({ connection })
@@ -106,7 +108,7 @@ test.each([
 test('status bar shows cursor and compiler label', () => {
   renderShell()
   expect(screen.getByText('Ln 7, Col 42')).toBeInTheDocument()
-  expect(screen.getByText('C++17 · GCC 9.2')).toBeInTheDocument()
+  expect(screen.getByText('C++ · GCC')).toBeInTheDocument()
 })
 
 test('wide window uses horizontal panels', () => {
@@ -126,4 +128,10 @@ test('rail settings button opens the settings dialog', async () => {
   renderShell()
   await userEvent.click(screen.getByRole('button', { name: 'Settings' }))
   expect(useSettingsDialog.getState()).toMatchObject({ open: true, reason: 'manual' })
+})
+
+test('status bar names Judge0 when that runner is selected', () => {
+  useSettings.setState({ runner: 'judge0' })
+  renderShell({ connection: 'connected' })
+  expect(screen.getByText('Judge0 connected')).toBeInTheDocument()
 })

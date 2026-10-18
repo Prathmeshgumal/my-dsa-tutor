@@ -4,7 +4,7 @@ import { useSettings } from '@/state/settings'
 import { SettingsDialog, useSettingsDialog } from './SettingsDialog'
 
 beforeEach(() => {
-  useSettings.setState({ apiKey: '' })
+  useSettings.setState({ apiKey: '', runner: 'judge0' })
   useSettingsDialog.setState({ open: false, reason: 'manual' })
 })
 
@@ -50,4 +50,21 @@ test('key input is type=password with show/hide toggle', async () => {
   expect(input).toHaveAttribute('type', 'text')
   await userEvent.click(screen.getByRole('button', { name: 'Hide key' }))
   expect(input).toHaveAttribute('type', 'password')
+})
+
+test('choosing Local (Piston) hides the key field and saves the runner', async () => {
+  useSettingsDialog.getState().show()
+  render(<SettingsDialog />)
+  await userEvent.click(screen.getByRole('radio', { name: /local \(piston\)/i }))
+  expect(screen.queryByLabelText('RapidAPI key')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  expect(useSettings.getState().runner).toBe('piston')
+})
+
+test('Piston selected shows how to start it', () => {
+  useSettings.setState({ runner: 'piston' })
+  useSettingsDialog.getState().show()
+  render(<SettingsDialog />)
+  expect(screen.getByRole('radio', { name: /local \(piston\)/i })).toBeChecked()
+  expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument()
 })

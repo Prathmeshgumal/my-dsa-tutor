@@ -2,12 +2,26 @@ import { toast } from 'sonner'
 import { create } from 'zustand'
 import { languageFromFilename } from '@/lib/languages'
 import { createJudge0RapidApiRunner } from '@/lib/runner/judge0'
+import { createPistonRunner } from '@/lib/runner/piston'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
-import { useSettings } from './settings'
+import { useSettings, type RunnerKind } from './settings'
 import { useSettingsDialog } from './settingsDialog'
 import { useWorkspace } from './workspace'
 
 export type Connection = 'no_key' | 'connected' | 'failed'
+
+interface RunnerSettings {
+  runner: RunnerKind
+  apiKey: string
+}
+
+export function createRunner({ runner, apiKey }: RunnerSettings): CodeRunner {
+  return runner === 'piston' ? createPistonRunner() : createJudge0RapidApiRunner({ apiKey })
+}
+
+export function initialConnection({ runner, apiKey }: RunnerSettings): Connection {
+  return runner === 'judge0' && !apiKey ? 'no_key' : 'connected'
+}
 
 interface RunState {
   state: 'idle' | 'running' | 'done' | 'error'
@@ -21,7 +35,7 @@ export const useRun = create<RunState>()((set, get) => ({
   state: 'idle',
   result: null,
   error: null,
-  connection: useSettings.getState().apiKey ? 'connected' : 'no_key',
+  connection: initialConnection(useSettings.getState()),
 
   async runActiveFile(runner) {
     if (get().state === 'running') return
@@ -29,8 +43,8 @@ export const useRun = create<RunState>()((set, get) => ({
     const language = file && languageFromFilename(file.name)
     if (!file || !language) return
 
-    const { apiKey } = useSettings.getState()
-    if (!apiKey) {
+    const settings = useSettings.getState()
+    if (settings.runner === 'judge0' && !settings.apiKey) {
       const error = new RunnerError('no_key', 'Add your RapidAPI key in Settings to run code.')
       set({ state: 'error', result: null, error, connection: 'no_key' })
       useSettingsDialog.getState().show('no_key')
@@ -39,7 +53,7 @@ export const useRun = create<RunState>()((set, get) => ({
 
     set({ state: 'running', error: null })
     try {
-      const result = await (runner ?? createJudge0RapidApiRunner({ apiKey })).run({
+      const result = await (runner ?? createRunner(settings)).run({
         language,
         source: file.content,
         stdin: '',
@@ -53,7 +67,7 @@ export const useRun = create<RunState>()((set, get) => ({
   },
 }))
 
-// A new key means the old connection state no longer applies.
+// A new key or runner means the old connection state no longer applies.
 useSettings.subscribe((s, prev) => {
-  if (s.apiKey !== prev.apiKey) useRun.setState({ connection: s.apiKey ? 'connected' : 'no_key' })
+  if (s.apiKey !== prev.apiKey || s.runner !== prev.runner) useRun.setState({ connection: initialConnection(s) })
 })

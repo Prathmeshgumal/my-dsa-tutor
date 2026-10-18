@@ -1,0 +1,16 @@
+# Local code runner for the editor: https://github.com/engineer-man/piston
+services:
+  piston:
+    image: ghcr.io/engineer-man/piston
+    container_name: dsa-piston
+    restart: unless-stopped
+    privileged: true # Piston needs this to sandbox submitted code
+    ports:
+      - "127.0.0.1:2000:2000"
+    volumes:
+      - piston-packages:/piston/packages
+    tmpfs:
+      - /piston/jobs:exec,uid=1000,gid=1000,mode=711
+
+volumes:
+  piston-packages:

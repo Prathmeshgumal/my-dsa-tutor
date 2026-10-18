@@ -103,7 +103,7 @@ export function OutputPanel() {
         {state === 'running' && (
           <Placeholder>
             <Loader2 className="size-5 animate-spin text-violet-500" aria-hidden />
-            <p>Running on Judge0…</p>
+            <p>Running…</p>
           </Placeholder>
         )}
 

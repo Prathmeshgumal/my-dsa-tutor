@@ -3,7 +3,7 @@ import { useSettingsDialog } from '@/components/settings/SettingsDialog'
 import { LANGUAGES } from '@/lib/languages'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
 import { defaultWorkspace } from '@/lib/storage'
-import { useRun } from './run'
+import { createRunner, initialConnection, useRun } from './run'
 import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
@@ -28,7 +28,7 @@ const run = () => useRun.getState()
 beforeEach(() => {
   vi.mocked(toast.error).mockClear()
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: null })
-  useSettings.setState({ apiKey: 'k' })
+  useSettings.setState({ apiKey: 'k', runner: 'judge0' })
   useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected' })
   useSettingsDialog.setState({ open: false, reason: 'manual' })
 })
@@ -108,4 +108,43 @@ test('no active file → no-op', async () => {
   await run().runActiveFile(runner)
   expect(runner.run).not.toHaveBeenCalled()
   expect(run().state).toBe('idle')
+})
+
+test('piston needs no key: runs without opening settings', async () => {
+  useSettings.setState({ apiKey: '', runner: 'piston' })
+  const runner = fakeRunner(async () => ok)
+  await run().runActiveFile(runner)
+  expect(runner.run).toHaveBeenCalledOnce()
+  expect(useSettingsDialog.getState().open).toBe(false)
+  expect(run().state).toBe('done')
+})
+
+test('createRunner picks Piston via the /piston proxy', async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ run: { stdout: '', stderr: '', code: 0, signal: null, status: null, message: null } })))
+  vi.stubGlobal('fetch', fetchMock)
+  await createRunner({ runner: 'piston', apiKey: '' }).run({ language: LANGUAGES.cpp, source: '', stdin: '' })
+  expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe('/piston/execute')
+  vi.unstubAllGlobals()
+})
+
+test('createRunner picks Judge0 on RapidAPI', async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: { id: 3, description: 'Accepted' } })))
+  vi.stubGlobal('fetch', fetchMock)
+  await createRunner({ runner: 'judge0', apiKey: 'k' }).run({ language: LANGUAGES.cpp, source: '', stdin: '' })
+  expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toMatch(/^https:\/\/judge0-ce\.p\.rapidapi\.com\//)
+  vi.unstubAllGlobals()
+})
+
+test.each([
+  [{ runner: 'piston', apiKey: '' }, 'connected'],
+  [{ runner: 'judge0', apiKey: '' }, 'no_key'],
+  [{ runner: 'judge0', apiKey: 'k' }, 'connected'],
+] as const)('initialConnection(%o) → %s', (settings, expected) => {
+  expect(initialConnection(settings)).toBe(expected)
+})
+
+test('switching runner resets the connection state', () => {
+  useRun.setState({ connection: 'failed' })
+  useSettings.getState().setRunner('piston')
+  expect(run().connection).toBe('connected')
 })

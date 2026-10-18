@@ -3,13 +3,14 @@ import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import { languageFromFilename } from '@/lib/languages'
 import { cn } from '@/lib/utils'
 import type { Connection } from '@/state/run'
+import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 
 export type { Connection }
 
 const CONNECTION: Record<Connection, { text: string; dot: string }> = {
   no_key: { text: 'No API key', dot: 'bg-amber-500 shadow-[0_0_8px] shadow-amber-500' },
-  connected: { text: 'Judge0 connected', dot: 'bg-violet-500 shadow-[0_0_8px] shadow-violet-500' },
+  connected: { text: 'connected', dot: 'bg-violet-500 shadow-[0_0_8px] shadow-violet-500' },
   failed: { text: 'Last run failed', dot: 'bg-red-500 shadow-[0_0_8px] shadow-red-500' },
 }
 
@@ -42,12 +43,13 @@ export function StatusBar({ connection, cursor }: Props) {
   const language = fileName ? languageFromFilename(fileName) : null
   const now = useNow(30_000)
   const conn = CONNECTION[connection]
+  const runnerName = useSettings((s) => (s.runner === 'piston' ? 'Piston' : 'Judge0'))
 
   return (
     <footer className="flex h-7 shrink-0 items-center gap-4 border-t px-3.5 text-[11.5px] text-muted-foreground">
       <span className="flex items-center gap-1.5">
         <i className={cn('size-1.5 rounded-full', conn.dot)} aria-hidden />
-        {conn.text}
+        {connection === 'connected' ? `${runnerName} ${conn.text}` : conn.text}
       </span>
       <span className="flex items-center gap-1.5">
         {saveStatus === 'saving' && <Loader2 className="size-3 animate-spin" aria-hidden />}

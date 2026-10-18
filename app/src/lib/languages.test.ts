@@ -12,6 +12,12 @@ test('ids and extensions', () => {
   expect(LANGUAGES.python).toMatchObject({ judge0Id: 71, ext: '.py' })
 })
 
+test('piston language names and fixed file names', () => {
+  expect(LANGUAGES.cpp.piston).toEqual({ language: 'c++', fileName: 'main' })
+  expect(LANGUAGES.java.piston).toEqual({ language: 'java', fileName: 'Main.java' })
+  expect(LANGUAGES.python.piston).toEqual({ language: 'python', fileName: 'main.py' })
+})
+
 test('cpp template', () => {
   expect(LANGUAGES.cpp.template).toContain('#include <bits/stdc++.h>')
   expect(LANGUAGES.cpp.template).toContain('using namespace std;')

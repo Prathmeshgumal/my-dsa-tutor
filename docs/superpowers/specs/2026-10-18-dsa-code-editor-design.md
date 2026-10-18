@@ -131,3 +131,11 @@ Reference mockup: `.superpowers/brainstorm/*/content/layout-v2.html`, variant **
 ## Success looks like
 
 The user opens the app next to their course video, starts typing C++ immediately, presses ⌘↵, and sees output on the right. They can come back the next day and find their files where they left them. They're happy to look at it, in both light and dark.
+
+## Addendum (2026-10-18): local Piston runner
+
+RapidAPI's Judge0 CE no longer has a free plan, so v1 now defaults to a **self-hosted Piston** runner (`docker-compose.yml` at the repo root, bound to `127.0.0.1:2000`).
+- `createPistonRunner` implements the same `CodeRunner` interface. The Vite dev server proxies `/piston/*` to `http://127.0.0.1:2000/api/v2/*`, so there are no CORS issues.
+- Settings has a runner choice: **Local (Piston)** (default, no key) or **Judge0 on RapidAPI** (key required). The key field and the no-key flow apply only to Judge0.
+- `scripts/piston-install.sh` installs gcc 10.2.0, java 15.0.2 and python 3.12.0 once.
+- Compiler labels are now generic ("C++ · GCC", "Java · OpenJDK", "Python 3") because the versions depend on the runner.
