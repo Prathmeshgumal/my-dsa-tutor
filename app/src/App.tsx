@@ -1,14 +1,16 @@
-import { ThemeToggle } from '@/components/theme/ThemeToggle'
+import { AppShell } from '@/components/shell/AppShell'
 
 export default function App() {
   return (
-    <div className="app-bg flex h-screen flex-col">
-      <header className="flex items-center justify-end p-2">
-        <ThemeToggle />
-      </header>
-      <main className="flex flex-1 items-center justify-center text-muted-foreground">
-        DSA editor
-      </main>
-    </div>
+    <AppShell
+      editor={<div className="flex-1 bg-card/60" />}
+      output={<div className="flex-1" />}
+      onRun={() => {}}
+      running={false}
+      canRun
+      connection="no_key"
+      cursor={null}
+      onOpenCommand={() => {}}
+    />
   )
 }

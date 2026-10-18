@@ -107,7 +107,7 @@
 .dark {
     --background: oklch(0.141 0.005 285.823);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
+    --card: oklch(0.17 0.005 285.823);
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.21 0.006 285.885);
     --popover-foreground: oklch(0.985 0 0);
@@ -141,7 +141,7 @@
 }
 
 /* Shimmer (Run button) */
-@keyframes shimmer {
+@keyframes glow-shimmer-move {
   from { background-position: 100% 0; }
   to { background-position: -150% 0; }
 }
@@ -152,14 +152,14 @@
   inherits: false;
   initial-value: 0deg;
 }
-@keyframes spin {
+@keyframes glow-spin {
   to { --glow-angle: 360deg; }
 }
 
-.shimmer {
+.glow-shimmer {
   background: linear-gradient(110deg, #7c3aed 0%, #a855f7 45%, #c084fc 50%, #a855f7 55%, #7c3aed 100%);
   background-size: 250% 100%;
-  animation: shimmer 2.6s linear infinite;
+  animation: glow-shimmer-move 2.6s linear infinite;
 }
 
 .glow-border {
@@ -167,11 +167,11 @@
   background:
     linear-gradient(var(--card), var(--card)) padding-box,
     conic-gradient(from var(--glow-angle), var(--border) 0deg, #a855f7 60deg, #22d3ee 120deg, var(--border) 180deg, var(--border) 360deg) border-box;
-  animation: spin 4s linear infinite;
+  animation: glow-spin 4s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shimmer,
+  .glow-shimmer,
   .glow-border {
     animation: none;
   }
