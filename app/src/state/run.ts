@@ -42,6 +42,8 @@ export const useRun = create<RunState>()((set, get) => ({
     const file = useWorkspace.getState().activeFile()
     const language = file && languageFromFilename(file.name)
     if (!file || !language) return
+    // The result (or error) is about to land in the output panel, so make sure it is visible.
+    useSettings.getState().setOutputOpen(true)
 
     const settings = useSettings.getState()
     if (settings.runner === 'judge0' && !settings.apiKey) {

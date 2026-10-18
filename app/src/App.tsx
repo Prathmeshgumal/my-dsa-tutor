@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { startAutosave } from '@/state/autosave'
 import { hydrateFromDisk } from '@/state/hydrate'
 import { useRun } from '@/state/run'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 import { useWorkspace } from '@/state/workspace'
 
@@ -49,6 +50,19 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // ⌘/Ctrl+J shows or hides the output, as in VS Code. Capture phase so the editor can't swallow it.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j' && !modalOpen()) {
+        e.preventDefault()
+        const { outputOpen, setOutputOpen } = useSettings.getState()
+        setOutputOpen(!outputOpen)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [])
 
   return (

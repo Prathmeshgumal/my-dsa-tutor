@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Clock, Cpu, KeyRound, Loader2, PanelBottom, PanelRight, Terminal } from 'lucide-react'
+import { AlertCircle, Clock, Cpu, KeyRound, Loader2, PanelBottom, PanelRight, Terminal, X } from 'lucide-react'
 import { GlowBorder } from '@/components/glow/GlowBorder'
 import { Kbd } from '@/components/Kbd'
 import { Button } from '@/components/ui/button'
@@ -42,9 +42,14 @@ function formatMemory(kb: number): string {
 function Terminalbox({ label, testId, children }: { label: string; testId: string; children: React.ReactNode }) {
   return (
     <GlowBorder className="flex min-h-0 flex-1 flex-col">
-      <div className="px-3.5 pt-3 text-[11px] font-medium tracking-wider text-muted-foreground/70 uppercase">{label}</div>
+      <div className="px-3.5 pt-3 text-[11px] font-medium tracking-wider text-muted-foreground/70 uppercase">
+        {label}
+      </div>
       <ScrollArea className="min-h-0 flex-1">
-        <pre data-testid={testId} className="px-3.5 pt-1.5 pb-3.5 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+        <pre
+          data-testid={testId}
+          className="px-3.5 pt-1.5 pb-3.5 font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words"
+        >
           {children}
         </pre>
       </ScrollArea>
@@ -67,7 +72,7 @@ function LayoutToggle() {
           size="icon-sm"
           aria-label={label}
           onClick={() => useSettings.getState().setOutputPosition(next)}
-          className="ml-auto text-muted-foreground"
+          className="text-muted-foreground"
         >
           {next === 'bottom' ? <PanelBottom /> : <PanelRight />}
         </Button>
@@ -116,7 +121,23 @@ export function OutputPanel() {
             </span>
           </TabsTrigger>
         </TabsList>
-        <LayoutToggle />
+        <div className="ml-auto flex items-center gap-0.5">
+          <LayoutToggle />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Hide output"
+                onClick={() => useSettings.getState().setOutputOpen(false)}
+                className="text-muted-foreground"
+              >
+                <X />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Hide output ({shortcut('J')})</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
@@ -159,7 +180,10 @@ export function OutputPanel() {
               <span
                 data-testid="status-badge"
                 data-tone={badge.tone}
-                className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium', TONE_CLASSES[badge.tone])}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                  TONE_CLASSES[badge.tone],
+                )}
               >
                 <span className="size-1.5 rounded-full bg-current" aria-hidden />
                 {badge.label}

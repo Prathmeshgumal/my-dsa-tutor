@@ -148,3 +148,18 @@ test('switching runner resets the connection state', () => {
   useSettings.getState().setRunner('piston')
   expect(run().connection).toBe('connected')
 })
+
+test('running with the output hidden opens it straight away, before the result arrives', async () => {
+  useSettings.setState({ outputOpen: false })
+  let resolve!: (r: RunResult) => void
+  const pending = run().runActiveFile(fakeRunner(() => new Promise((r) => (resolve = r))))
+  expect(useSettings.getState().outputOpen).toBe(true)
+  resolve(ok)
+  await pending
+})
+
+test('no-key error still shows the output so the message is visible', async () => {
+  useSettings.setState({ apiKey: '', runner: 'judge0', outputOpen: false })
+  await run().runActiveFile(fakeRunner(async () => ok))
+  expect(useSettings.getState().outputOpen).toBe(true)
+})

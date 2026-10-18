@@ -113,3 +113,9 @@ test('command moves the output to the bottom', async () => {
   await choose(/move output to the bottom/i)
   expect(useSettings.getState().outputPosition).toBe('bottom')
 })
+
+test('command hides the output', async () => {
+  useSettings.setState({ outputOpen: true })
+  await choose(/hide output/i)
+  expect(useSettings.getState().outputOpen).toBe(false)
+})

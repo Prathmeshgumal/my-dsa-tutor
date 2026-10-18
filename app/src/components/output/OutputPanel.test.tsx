@@ -116,3 +116,10 @@ test('narrow window: no layout button (output is always at the bottom there)', (
   render(<OutputPanel />)
   expect(screen.queryByRole('button', { name: /move output/i })).not.toBeInTheDocument()
 })
+
+test('close button hides the output', async () => {
+  useSettings.setState({ outputOpen: true })
+  render(<OutputPanel />)
+  await userEvent.click(screen.getByRole('button', { name: 'Hide output' }))
+  expect(useSettings.getState().outputOpen).toBe(false)
+})

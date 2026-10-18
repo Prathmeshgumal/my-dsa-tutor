@@ -3,6 +3,7 @@ import App from './App'
 import { useCommandMenu } from '@/components/command/CommandMenu'
 import { useFileDialogs } from '@/components/editor/FileDialogs'
 import { useRun } from '@/state/run'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
 vi.mock('@monaco-editor/react', () => import('@/test/monacoStub'))
@@ -34,4 +35,13 @@ test.each([
   open()
   pressRun()
   expect(runActiveFile).not.toHaveBeenCalled()
+})
+
+test('Ctrl+J toggles the output', () => {
+  useSettings.setState({ outputOpen: true })
+  render(<App />)
+  fireEvent.keyDown(window, { key: 'j', ctrlKey: true })
+  expect(useSettings.getState().outputOpen).toBe(false)
+  fireEvent.keyDown(window, { key: 'j', metaKey: true })
+  expect(useSettings.getState().outputOpen).toBe(true)
 })

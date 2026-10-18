@@ -28,6 +28,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
   const filesOpen = useFilesPanel((s) => s.open)
   const vertical = narrow || useSettings((s) => s.outputPosition) === 'bottom'
+  const outputOpen = useSettings((s) => s.outputOpen)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -37,24 +38,36 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
         <div className="relative flex min-h-0 flex-1">
           <IconRail />
           {filesOpen && <FilesPanel />}
+          {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}
           <ResizablePanelGroup
             key={vertical ? 'vertical' : 'horizontal'}
             data-testid="workspace-panels"
             orientation={vertical ? 'vertical' : 'horizontal'}
-            defaultLayout={{ editor: editorSize, output: outputSize }}
-            onLayoutChanged={(l) => setPanelLayout([l.editor, l.output])}
+            defaultLayout={outputOpen ? { editor: editorSize, output: outputSize } : { editor: 100 }}
+            onLayoutChanged={(l) => {
+              if (l.output !== undefined) setPanelLayout([l.editor, l.output])
+            }}
             className="min-w-0 flex-1"
           >
             <ResizablePanel id="editor" minSize="25" className="flex min-h-0 min-w-0 flex-col">
               {editor}
             </ResizablePanel>
-            <ResizableHandle
-              withHandle
-              className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
-            />
-            <ResizablePanel id="output" minSize="25" className="flex min-h-0 min-w-0 flex-col">
-              {output}
-            </ResizablePanel>
+            {outputOpen && (
+              <>
+                <ResizableHandle
+                  withHandle
+                  className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
+                />
+                <ResizablePanel
+                  id="output"
+                  minSize="25"
+                  defaultSize={`${outputSize}`}
+                  className="flex min-h-0 min-w-0 flex-col"
+                >
+                  {output}
+                </ResizablePanel>
+              </>
+            )}
           </ResizablePanelGroup>
         </div>
         <StatusBar connection={connection} cursor={cursor} />

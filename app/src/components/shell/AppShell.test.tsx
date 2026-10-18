@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
@@ -26,7 +27,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', outputPosition: 'right' })
+  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -190,4 +191,36 @@ test('output position "bottom" stacks the output under the editor on a wide wind
   useSettings.setState({ outputPosition: 'bottom' })
   renderShell()
   expect(screen.getByTestId('workspace-panels')).toHaveStyle({ flexDirection: 'column' })
+})
+
+test('hidden output: the editor takes the whole area and the output slot is gone', () => {
+  useSettings.setState({ outputOpen: false })
+  renderShell()
+  expect(screen.queryByText('OUTPUT')).not.toBeInTheDocument()
+  expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  expect(screen.getByText('EDITOR')).toBeInTheDocument()
+})
+
+test('top-bar Output button hides and shows the output', async () => {
+  renderShell()
+  const toggle = screen.getByRole('button', { name: 'Output' })
+  expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await userEvent.click(toggle)
+  expect(useSettings.getState().outputOpen).toBe(false)
+  expect(screen.queryByText('OUTPUT')).not.toBeInTheDocument()
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await userEvent.click(toggle)
+  expect(screen.getByText('OUTPUT')).toBeInTheDocument()
+})
+
+test('hiding and showing the output keeps the same editor mounted (cursor and scroll survive)', async () => {
+  const mounts = vi.fn()
+  function EditorProbe() {
+    useEffect(() => mounts(), [])
+    return <div>EDITOR</div>
+  }
+  renderShell({ editor: <EditorProbe /> })
+  await userEvent.click(screen.getByRole('button', { name: 'Output' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Output' }))
+  expect(mounts).toHaveBeenCalledTimes(1)
 })

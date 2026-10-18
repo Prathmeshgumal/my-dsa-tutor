@@ -11,11 +11,13 @@ interface SettingsState {
   panelLayout: number[] | null
   runner: RunnerKind
   outputPosition: OutputPosition
+  outputOpen: boolean
   setApiKey(k: string): void
   setTheme(t: ThemePref): void
   setPanelLayout(l: number[]): void
   setRunner(r: RunnerKind): void
   setOutputPosition(p: OutputPosition): void
+  setOutputOpen(open: boolean): void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -25,12 +27,14 @@ export const useSettings = create<SettingsState>()(
       theme: 'system',
       panelLayout: null,
       runner: 'piston',
-      outputPosition: 'right',
+      outputPosition: 'bottom',
+      outputOpen: true,
       setApiKey: (apiKey) => set({ apiKey }),
       setTheme: (theme) => set({ theme }),
       setPanelLayout: (panelLayout) => set({ panelLayout }),
       setRunner: (runner) => set({ runner }),
       setOutputPosition: (outputPosition) => set({ outputPosition }),
+      setOutputOpen: (outputOpen) => set({ outputOpen }),
     }),
     { name: 'dsa-editor:settings' },
   ),

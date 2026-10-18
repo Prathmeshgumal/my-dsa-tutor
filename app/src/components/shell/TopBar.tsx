@@ -1,4 +1,4 @@
-import { FileCode2, Play, Search } from 'lucide-react'
+import { FileCode2, PanelBottom, PanelRight, Play, Search } from 'lucide-react'
 import { ShimmerButton } from '@/components/glow/ShimmerButton'
 import { Kbd } from '@/components/Kbd'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LANGUAGES, languageFromFilename, type LanguageId } from '@/lib/languages'
 import { shortcut } from '@/lib/platform'
+import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 
 interface Props {
@@ -20,6 +21,8 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
   const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId) ?? null)
   const setActiveLanguage = useWorkspace((s) => s.setActiveLanguage)
   const language = file ? languageFromFilename(file.name) : null
+  const outputOpen = useSettings((s) => s.outputOpen)
+  const outputRight = useSettings((s) => s.outputPosition) === 'right' && !narrow
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b px-3">
@@ -70,6 +73,18 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
           ))}
         </SelectContent>
       </Select>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Output"
+        aria-pressed={outputOpen}
+        title={`${outputOpen ? 'Hide' : 'Show'} output (${shortcut('J')})`}
+        onClick={() => useSettings.getState().setOutputOpen(!outputOpen)}
+        className={outputOpen ? 'text-foreground' : 'text-muted-foreground'}
+      >
+        {outputRight ? <PanelRight /> : <PanelBottom />}
+      </Button>
 
       <ShimmerButton onClick={onRun} disabled={!canRun} loading={running} aria-label="Run">
         {!running && <Play className="size-3 fill-current" aria-hidden />}

@@ -31,3 +31,12 @@ test('output sits on the right by default and the choice is remembered', () => {
   useSettings.getState().setOutputPosition('bottom')
   expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.outputPosition).toBe('bottom')
 })
+
+test('output is at the bottom and shown by default', () => {
+  expect(useSettings.getInitialState()).toMatchObject({ outputPosition: 'bottom', outputOpen: true })
+})
+
+test('remembers whether the output is shown', () => {
+  useSettings.getState().setOutputOpen(false)
+  expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.outputOpen).toBe(false)
+})
