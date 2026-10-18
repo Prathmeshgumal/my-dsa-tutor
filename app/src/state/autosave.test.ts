@@ -1,5 +1,5 @@
 import { defaultWorkspace, WORKSPACE_KEY } from '@/lib/storage'
-import { startAutosave } from './autosave'
+import { flushAutosave, startAutosave } from './autosave'
 import { useWorkspace } from './workspace'
 
 const ws = () => useWorkspace.getState()
@@ -146,4 +146,19 @@ describe('with disk sync', () => {
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
     expect(init.keepalive).toBe(true)
   })
+})
+
+test('flushAutosave writes pending changes right away and resolves once they are on disk', async () => {
+  stop()
+  const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }))
+  stop = startAutosave({ disk: { synced: ws().files, fetchImpl } })
+  ws().updateContent(ws().files[0].id, 'now please')
+  await flushAutosave()
+  expect(fetchImpl).toHaveBeenCalledOnce()
+  expect(ws().saveStatus).toBe('saved')
+})
+
+test('flushAutosave with nothing pending (or autosave not started) resolves immediately', async () => {
+  stop()
+  await expect(flushAutosave()).resolves.toBeUndefined()
 })

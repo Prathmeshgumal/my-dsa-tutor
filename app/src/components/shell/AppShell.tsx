@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AiPanel } from '@/components/ai/AiPanel'
 import { FilesPanel } from '@/components/files/FilesPanel'
 import { OutputStrip } from '@/components/output/OutputStrip'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
@@ -30,6 +31,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const filesOpen = useFilesPanel((s) => s.open)
   const vertical = narrow || useSettings((s) => s.outputPosition) === 'bottom'
   const outputOpen = useSettings((s) => s.outputOpen)
+  const aiOpen = useSettings((s) => s.aiOpen)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -73,6 +75,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
             </ResizablePanelGroup>
             {!outputOpen && <OutputStrip />}
           </div>
+          {aiOpen && <AiPanel />}
         </div>
         <StatusBar connection={connection} cursor={cursor} />
       </div>

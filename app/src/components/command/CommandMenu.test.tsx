@@ -119,3 +119,9 @@ test('command hides the output', async () => {
   await choose(/hide output/i)
   expect(useSettings.getState().outputOpen).toBe(false)
 })
+
+test('Ask Claude opens the Claude panel', async () => {
+  useSettings.setState({ aiOpen: false })
+  await choose(/ask claude/i)
+  expect(useSettings.getState().aiOpen).toBe(true)
+})

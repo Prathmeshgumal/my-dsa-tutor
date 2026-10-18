@@ -31,3 +31,27 @@ export async function hydrateFromDisk(fetchImpl: typeof fetch = fetch): Promise<
     return { ok: false, synced: [] }
   }
 }
+
+/**
+ * Re-reads the solutions folder after Claude changed files: updates edited files, adds new ones and
+ * drops deleted ones, keeping ids (and so tabs) by name. Unchanged files keep their object identity.
+ */
+export async function refreshFromDisk(fetchImpl: typeof fetch = fetch): Promise<void> {
+  let disk
+  try {
+    disk = await fetchDiskFiles(fetchImpl)
+  } catch {
+    return
+  }
+  const { files: current, openIds, activeId } = useWorkspace.getState()
+  const byName = new Map(current.map((f) => [f.name, f]))
+  const files: CodeFile[] = disk.map(({ name, content }) => {
+    const existing = byName.get(name)
+    if (!existing) return { id: crypto.randomUUID(), name, content }
+    return existing.content === content ? existing : { ...existing, content }
+  })
+  const ids = new Set(files.map((f) => f.id))
+  const nextOpen = openIds.filter((id) => ids.has(id))
+  const nextActive = activeId !== null && ids.has(activeId) ? activeId : (nextOpen[0] ?? null)
+  useWorkspace.setState({ files, openIds: nextOpen, activeId: nextActive })
+}

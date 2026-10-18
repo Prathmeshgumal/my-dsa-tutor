@@ -2,11 +2,11 @@ import { Code2, FolderOpen, History, Settings, Sparkles, type LucideIcon } from 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useFilesPanel } from '@/state/filesPanel'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
 const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
   { label: 'History', icon: History },
-  { label: 'AI help', icon: Sparkles },
 ]
 
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
@@ -14,6 +14,7 @@ const item = 'grid size-[34px] place-items-center rounded-[9px] transition-color
 export function IconRail() {
   const filesOpen = useFilesPanel((s) => s.open)
   const setFilesOpen = useFilesPanel((s) => s.setOpen)
+  const aiOpen = useSettings((s) => s.aiOpen)
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
@@ -67,6 +68,26 @@ export function IconRail() {
           <TooltipContent side="right">{label} · coming soon</TooltipContent>
         </Tooltip>
       ))}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Claude"
+            aria-pressed={aiOpen}
+            onClick={() => useSettings.getState().setAiOpen(!aiOpen)}
+            className={cn(
+              item,
+              aiOpen
+                ? 'bg-violet-500/15 text-violet-600 ring-1 ring-violet-500/30 ring-inset dark:text-violet-300'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <Sparkles />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{aiOpen ? 'Hide Claude' : 'Ask Claude'}</TooltipContent>
+      </Tooltip>
 
       <div className="flex-1" />
       <Tooltip>

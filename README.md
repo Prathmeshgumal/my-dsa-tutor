@@ -50,6 +50,15 @@ collapses it to a thin strip that still shows the last result; click the strip
 (or press ⌘/Ctrl + J) to bring it back. Running code always reopens it. These
 choices are remembered.
 
+## Ask Claude
+
+Click the ✦ button in the left rail (or ⌘/Ctrl + K → "Ask Claude") to chat with
+Claude Code. It runs on this machine using your existing Claude Code login (no API
+key), works inside `solutions/`, and every message includes the file you have open
+with its latest code. Claude can read and edit your files, and edited files reload in
+the editor. It can't run shell commands; use Run for that. Use "New chat" to start
+over; otherwise follow-up questions continue the same conversation.
+
 ## Develop
 
 ```sh

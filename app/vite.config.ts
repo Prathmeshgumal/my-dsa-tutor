@@ -3,6 +3,7 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
+import { createClaudeChatMiddleware } from './server/claudeChat.ts'
 import { createSolutionsMiddleware } from './server/solutionsApi.ts'
 
 // The editor's files live as real files in <repo>/solutions (override with SOLUTIONS_DIR).
@@ -13,6 +14,8 @@ function solutionsApi(): Plugin {
     name: 'solutions-api',
     configureServer(server) {
       server.middlewares.use(createSolutionsMiddleware(solutionsDir))
+      // Claude runs in the solutions folder, so it sees the same files the editor shows.
+      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir }))
     },
   }
 }

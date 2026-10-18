@@ -1,5 +1,5 @@
 import { saveWorkspace, type WorkspaceData } from '@/lib/storage'
-import { hydrateFromDisk } from './hydrate'
+import { hydrateFromDisk, refreshFromDisk } from './hydrate'
 import { useWorkspace } from './workspace'
 
 const ws = () => useWorkspace.getState()
@@ -70,4 +70,49 @@ test('files API unavailable → keeps browser files, reports not ok, still ready
   expect(result.ok).toBe(false)
   expect(ws().ready).toBe(true)
   expect(ws().files).toEqual([{ id: 'b', name: 'b.cpp', content: 'kept' }])
+})
+
+describe('refreshFromDisk (after Claude edits files)', () => {
+  beforeEach(() => {
+    useWorkspace.setState({
+      version: 1,
+      files: [
+        { id: 'a', name: 'a.cpp', content: 'old' },
+        { id: 'b', name: 'b.py', content: 'same' },
+        { id: 'c', name: 'c.java', content: 'gone' },
+      ],
+      openIds: ['a', 'c'],
+      activeId: 'c',
+      ready: true,
+    })
+  })
+
+  test('updates changed files, adds new ones, drops deleted ones, keeps ids', async () => {
+    await refreshFromDisk(
+      diskWith([
+        { name: 'a.cpp', content: 'new' },
+        { name: 'b.py', content: 'same' },
+        { name: 'd.py', content: 'created by Claude' },
+      ]),
+    )
+    expect(ws().files.map((f) => [f.id, f.name, f.content])).toEqual([
+      ['a', 'a.cpp', 'new'],
+      ['b', 'b.py', 'same'],
+      [expect.any(String), 'd.py', 'created by Claude'],
+    ])
+    expect(ws().openIds).toEqual(['a'])
+    expect(ws().activeId).toBe('a')
+  })
+
+  test('unchanged files keep the same object (no needless re-render or re-save)', async () => {
+    const before = ws().files[1]
+    await refreshFromDisk(diskWith([{ name: 'a.cpp', content: 'old' }, { name: 'b.py', content: 'same' }, { name: 'c.java', content: 'gone' }]))
+    expect(ws().files[1]).toBe(before)
+  })
+
+  test('API failure leaves the editor alone', async () => {
+    const before = ws().files
+    await refreshFromDisk(vi.fn(async () => new Response('', { status: 500 })))
+    expect(ws().files).toBe(before)
+  })
 })

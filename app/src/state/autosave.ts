@@ -4,6 +4,13 @@ import { useWorkspace } from './workspace'
 
 const DEBOUNCE_MS = 500
 
+let flushNow: (() => Promise<void>) | null = null
+
+/** Writes any pending change immediately and resolves once it is saved (used before asking Claude). */
+export function flushAutosave(): Promise<void> {
+  return flushNow?.() ?? Promise.resolve()
+}
+
 interface DiskOptions {
   /** Files as they currently are on disk. */
   synced: CodeFile[]
@@ -46,6 +53,11 @@ export function startAutosave({ disk }: { disk?: DiskOptions } = {}): () => void
     save(opts)
   }
 
+  flushNow = async () => {
+    flush()
+    await queue
+  }
+
   const unsubscribe = useWorkspace.subscribe((s, prev) => {
     if (s.files === prev.files && s.openIds === prev.openIds && s.activeId === prev.activeId) return
     if (timer !== null) clearTimeout(timer)
@@ -66,6 +78,7 @@ export function startAutosave({ disk }: { disk?: DiskOptions } = {}): () => void
   if (disk && disk.synced !== useWorkspace.getState().files) save()
 
   return () => {
+    flushNow = null
     unsubscribe()
     if (timer !== null) clearTimeout(timer)
     timer = null

@@ -27,7 +27,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true })
+  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -70,7 +70,7 @@ test('Run button disabled and busy while running', () => {
   expect(run).toHaveAttribute('aria-busy', 'true')
 })
 
-test.each(['History', 'AI help'])('rail placeholder %s shows "Coming soon" tooltip', async (label) => {
+test.each(['History'])('rail placeholder %s shows "Coming soon" tooltip', async (label) => {
   renderShell()
   await userEvent.hover(screen.getByRole('button', { name: label }))
   expect(await screen.findByRole('tooltip')).toHaveTextContent(/coming soon/i)
@@ -225,4 +225,22 @@ test('hiding and showing the output keeps the same editor mounted (cursor and sc
   act(() => useSettings.getState().setOutputOpen(false))
   await userEvent.click(screen.getByRole('button', { name: /show output/i }))
   expect(mounts).toHaveBeenCalledTimes(1)
+})
+
+test('Claude button opens and closes the Claude panel', async () => {
+  renderShell()
+  const button = screen.getByRole('button', { name: 'Claude' })
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+  await userEvent.click(button)
+  expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
+  expect(button).toHaveAttribute('aria-pressed', 'true')
+  await userEvent.click(button)
+  expect(screen.queryByRole('complementary', { name: 'Claude' })).not.toBeInTheDocument()
+})
+
+test('Claude panel stays open while you click into the code', async () => {
+  useSettings.setState({ aiOpen: true })
+  renderShell()
+  await userEvent.click(screen.getByText('EDITOR'))
+  expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
 })

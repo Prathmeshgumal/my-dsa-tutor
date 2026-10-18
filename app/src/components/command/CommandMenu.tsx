@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Eye, EyeOff, FilePlus2, Moon, PanelBottom, PanelRight, Play, Settings, Sun } from 'lucide-react'
+import { Eye, EyeOff, FilePlus2, Moon, PanelBottom, PanelRight, Play, Settings, Sparkles, Sun } from 'lucide-react'
 import { create } from 'zustand'
 import { focusEditor } from '@/components/editor/editorFocus'
 import { openNewFileDialog } from '@/components/editor/FileDialogs'
@@ -86,6 +86,9 @@ export function CommandMenu() {
           <CommandGroup heading="Actions">
             <CommandItem value="New file" onSelect={run(openNewFileDialog)}>
               <FilePlus2 /> New file
+            </CommandItem>
+            <CommandItem value="Ask Claude" onSelect={run(() => useSettings.getState().setAiOpen(true))}>
+              <Sparkles /> Ask Claude
             </CommandItem>
             <CommandItem value="Run" onSelect={run(() => void useRun.getState().runActiveFile())}>
               <Play /> Run
