@@ -25,7 +25,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston' })
+  useSettings.setState({ runner: 'piston', filesPanelOpen: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
 })
@@ -67,7 +67,7 @@ test('Run button disabled and busy while running', () => {
   expect(run).toHaveAttribute('aria-busy', 'true')
 })
 
-test.each(['Files', 'History', 'AI help'])('rail placeholder %s shows "Coming soon" tooltip', async (label) => {
+test.each(['History', 'AI help'])('rail placeholder %s shows "Coming soon" tooltip', async (label) => {
   renderShell()
   await userEvent.hover(screen.getByRole('button', { name: label }))
   expect(await screen.findByRole('tooltip')).toHaveTextContent(/coming soon/i)
@@ -134,4 +134,23 @@ test('status bar names Judge0 when that runner is selected', () => {
   useSettings.setState({ runner: 'judge0' })
   renderShell({ connection: 'connected' })
   expect(screen.getByText('Judge0 connected')).toBeInTheDocument()
+})
+
+test('Files button toggles the files panel and reflects its state', async () => {
+  renderShell()
+  const button = screen.getByRole('button', { name: 'Files' })
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+  await userEvent.click(button)
+  expect(button).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
+  expect(useSettings.getState().filesPanelOpen).toBe(true)
+  await userEvent.click(button)
+  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+})
+
+test('files panel stays open across reloads (persisted setting)', () => {
+  useSettings.setState({ filesPanelOpen: true })
+  renderShell()
+  expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
 })

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { FilesPanel } from '@/components/files/FilesPanel'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useSettings } from '@/state/settings'
 import { IconRail } from './IconRail'
@@ -24,6 +25,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const narrow = useMediaQuery(NARROW_QUERY)
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
+  const filesOpen = useSettings((s) => s.filesPanelOpen)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -32,6 +34,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
         <TopBar narrow={narrow} onRun={onRun} running={running} canRun={canRun} onOpenCommand={onOpenCommand} />
         <div className="flex min-h-0 flex-1">
           <IconRail />
+          {filesOpen && <FilesPanel />}
           <ResizablePanelGroup
             key={narrow ? 'vertical' : 'horizontal'}
             data-testid="workspace-panels"

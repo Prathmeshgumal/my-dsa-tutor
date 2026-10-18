@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { FileCode2, FilePlus2, Moon, Play, Settings, Sun } from 'lucide-react'
+import { FilePlus2, Moon, Play, Settings, Sun } from 'lucide-react'
 import { create } from 'zustand'
 import { openNewFileDialog } from '@/components/editor/FileDialogs'
+import { LanguageIcon } from '@/components/LanguageIcon'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
 import {
   Command,
@@ -14,7 +15,6 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command'
-import { languageFromFilename, type LanguageId } from '@/lib/languages'
 import { shortcut } from '@/lib/platform'
 import { useRun } from '@/state/run'
 import { useSettings } from '@/state/settings'
@@ -30,12 +30,6 @@ export const useCommandMenu = create<CommandMenuState>()((set) => ({
   open: false,
   setOpen: (open) => set({ open }),
 }))
-
-const LANGUAGE_COLOR: Record<LanguageId, string> = {
-  cpp: 'text-blue-500',
-  java: 'text-orange-500',
-  python: 'text-yellow-500',
-}
 
 export function CommandMenu() {
   const { open, setOpen } = useCommandMenu()
@@ -68,16 +62,13 @@ export function CommandMenu() {
         <CommandList>
           <CommandEmpty>Nothing found.</CommandEmpty>
           <CommandGroup heading="Files">
-            {files.map((file) => {
-              const lang = languageFromFilename(file.name)
-              return (
-                <CommandItem key={file.id} value={file.name} onSelect={run(() => useWorkspace.getState().openFile(file.id))}>
-                  <FileCode2 className={lang ? LANGUAGE_COLOR[lang.id] : undefined} />
-                  <span className="font-mono">{file.name}</span>
-                  {file.id === activeId && <CommandShortcut>current</CommandShortcut>}
-                </CommandItem>
-              )
-            })}
+            {files.map((file) => (
+              <CommandItem key={file.id} value={file.name} onSelect={run(() => useWorkspace.getState().openFile(file.id))}>
+                <LanguageIcon fileName={file.name} />
+                <span className="font-mono">{file.name}</span>
+                {file.id === activeId && <CommandShortcut>current</CommandShortcut>}
+              </CommandItem>
+            ))}
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Actions">

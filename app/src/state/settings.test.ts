@@ -2,7 +2,7 @@ import { useSettings } from './settings'
 
 beforeEach(() => {
   localStorage.clear()
-  useSettings.setState({ apiKey: '', theme: 'system', panelLayout: null, runner: 'piston' })
+  useSettings.setState({ apiKey: '', theme: 'system', panelLayout: null, runner: 'piston', filesPanelOpen: false })
 })
 
 test('defaults', () => {
@@ -23,4 +23,9 @@ test('stores api key and panel layout', () => {
 test('stores the runner choice', () => {
   useSettings.getState().setRunner('judge0')
   expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.runner).toBe('judge0')
+})
+
+test('remembers whether the files panel is open', () => {
+  useSettings.getState().setFilesPanelOpen(true)
+  expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.filesPanelOpen).toBe(true)
 })

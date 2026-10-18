@@ -1,9 +1,10 @@
 import { Code2, FolderOpen, History, Settings, Sparkles, type LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
 const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
-  { label: 'Files', icon: FolderOpen },
   { label: 'History', icon: History },
   { label: 'AI help', icon: Sparkles },
 ]
@@ -11,6 +12,9 @@ const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
 export function IconRail() {
+  const filesOpen = useSettings((s) => s.filesPanelOpen)
+  const setFilesOpen = useSettings((s) => s.setFilesPanelOpen)
+
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
       <Tooltip>
@@ -25,6 +29,26 @@ export function IconRail() {
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">Editor</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Files"
+            aria-pressed={filesOpen}
+            onClick={() => setFilesOpen(!filesOpen)}
+            className={cn(
+              item,
+              filesOpen
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <FolderOpen />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{filesOpen ? 'Hide files' : 'Show files'}</TooltipContent>
       </Tooltip>
 
       {PLACEHOLDERS.map(({ label, icon: Icon }) => (
