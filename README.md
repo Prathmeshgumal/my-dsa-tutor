@@ -14,7 +14,7 @@ docker compose up -d
 # 3. Start the editor
 cd app
 npm install   # first time only
-npm run dev   # then open the printed localhost URL
+npm run dev   # then open http://localhost:5199
 ```
 
 Code runs on [Piston](https://github.com/engineer-man/piston) in a local Docker
