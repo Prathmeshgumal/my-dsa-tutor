@@ -86,8 +86,8 @@ test('empty key → RunnerError no_key, no fetch', async () => {
 })
 
 test.each([
-  [401, 'auth', 'Invalid API key — check it in Settings.'],
-  [403, 'auth', 'Invalid API key — check it in Settings.'],
+  [401, 'auth', 'Invalid API key — check it in Settings, and make sure you’re subscribed to Judge0 CE.'],
+  [403, 'auth', 'Invalid API key — check it in Settings, and make sure you’re subscribed to Judge0 CE.'],
   [429, 'quota', 'Daily Judge0 quota used up. Try again tomorrow.'],
   [500, 'http', 'Judge0 error (HTTP 500).'],
 ])('HTTP %i → %s', async (status, kind, message) => {

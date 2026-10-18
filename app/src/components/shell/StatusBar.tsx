@@ -10,7 +10,7 @@ export type { Connection }
 const CONNECTION: Record<Connection, { text: string; dot: string }> = {
   no_key: { text: 'No API key', dot: 'bg-amber-500 shadow-[0_0_8px] shadow-amber-500' },
   connected: { text: 'Judge0 connected', dot: 'bg-violet-500 shadow-[0_0_8px] shadow-violet-500' },
-  failed: { text: 'Judge0 unreachable', dot: 'bg-red-500 shadow-[0_0_8px] shadow-red-500' },
+  failed: { text: 'Last run failed', dot: 'bg-red-500 shadow-[0_0_8px] shadow-red-500' },
 }
 
 function useNow(intervalMs: number): number {

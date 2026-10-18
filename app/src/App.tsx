@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
 import { CommandMenu, useCommandMenu } from '@/components/command/CommandMenu'
 import { EditorPanel } from '@/components/editor/EditorPanel'
-import { FileDialogs } from '@/components/editor/FileDialogs'
+import { FileDialogs, useFileDialogs } from '@/components/editor/FileDialogs'
 import { OutputPanel } from '@/components/output/OutputPanel'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { AppShell } from '@/components/shell/AppShell'
 import { Toaster } from '@/components/ui/sonner'
 import { startAutosave } from '@/state/autosave'
 import { useRun } from '@/state/run'
+import { useSettingsDialog } from '@/state/settingsDialog'
 import { useWorkspace } from '@/state/workspace'
 
 const runActiveFile = () => void useRun.getState().runActiveFile()
+
+const modalOpen = () =>
+  useFileDialogs.getState().kind !== null || useSettingsDialog.getState().open || useCommandMenu.getState().open
 
 export default function App() {
   const [cursor, setCursor] = useState<{ line: number; col: number } | null>(null)
@@ -23,7 +27,7 @@ export default function App() {
   // ⌘/Ctrl+Enter while focus is outside Monaco (Monaco handles its own copy of the shortcut).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !modalOpen()) {
         e.preventDefault()
         runActiveFile()
       }

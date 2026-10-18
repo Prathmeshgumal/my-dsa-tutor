@@ -23,7 +23,7 @@ function toRunStatus(id: number): RunStatus {
 }
 
 function httpError(status: number): RunnerError {
-  if (status === 401 || status === 403) return new RunnerError('auth', 'Invalid API key — check it in Settings.')
+  if (status === 401 || status === 403) return new RunnerError('auth', 'Invalid API key — check it in Settings, and make sure you’re subscribed to Judge0 CE.')
   if (status === 429) return new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.')
   return new RunnerError('http', `Judge0 error (HTTP ${status}).`)
 }

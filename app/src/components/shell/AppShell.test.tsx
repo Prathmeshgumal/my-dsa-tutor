@@ -97,7 +97,7 @@ test('status bar shows minutes since last save', () => {
 test.each([
   ['no_key', 'No API key'],
   ['connected', 'Judge0 connected'],
-  ['failed', 'Judge0 unreachable'],
+  ['failed', 'Last run failed'],
 ] as const)('status bar connection %s', (connection, text) => {
   renderShell({ connection })
   expect(screen.getByText(text)).toBeInTheDocument()
