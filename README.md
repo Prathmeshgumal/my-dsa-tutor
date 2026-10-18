@@ -44,10 +44,11 @@ the left bar).
 | ⌘/Ctrl + J | Show or hide the output |
 
 The **Files** button in the left bar opens a drawer listing every file; it closes
-when you click outside it, press Escape, or pick a file. The button at the top
-right of the output panel moves the output **below the editor (default) or to the
-right**, and ✕ hides it; the output button next to Run (or ⌘/Ctrl + J) brings it
-back. Running code always reopens it. These choices are remembered.
+when you click outside it, press Escape, or pick a file. The output sits **below the
+editor by default**. Its "⋯" menu moves it to the right (or back), and the chevron
+collapses it to a thin strip that still shows the last result; click the strip
+(or press ⌘/Ctrl + J) to bring it back. Running code always reopens it. These
+choices are remembered.
 
 ## Develop
 

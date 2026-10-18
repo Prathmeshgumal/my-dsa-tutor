@@ -5,7 +5,11 @@ import { useSettings } from '@/state/settings'
 import { mockMatchMedia } from '@/test/matchMedia'
 import { RunnerError, type RunResult } from '@/lib/runner/types'
 import { useRun } from '@/state/run'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { OutputPanel } from './OutputPanel'
+
+vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
+
 
 // The app provides tooltips from AppShell; isolated renders need the provider too.
 const render = (ui: React.ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
@@ -66,7 +70,12 @@ test('success with empty stdout says so', () => {
 })
 
 test('compile_error switches to Errors tab and shows compileOutput; badge count 1', () => {
-  showResult({ status: 'compile_error', statusText: 'Compilation Error', stdout: '', compileOutput: "error: expected ';'" })
+  showResult({
+    status: 'compile_error',
+    statusText: 'Compilation Error',
+    stdout: '',
+    compileOutput: "error: expected ';'",
+  })
   render(<OutputPanel />)
   expect(screen.getByRole('tab', { name: /errors/i })).toHaveAttribute('aria-selected', 'true')
   expect(screen.getByRole('tab', { name: /errors/i })).toHaveTextContent('1')
@@ -83,7 +92,12 @@ test('time_limit shows amber "Time limit exceeded"', () => {
 })
 
 test('runtime_error shows red badge with statusText and stderr', () => {
-  showResult({ status: 'runtime_error', statusText: 'Runtime Error (SIGSEGV)', stdout: '', stderr: 'Segmentation fault' })
+  showResult({
+    status: 'runtime_error',
+    statusText: 'Runtime Error (SIGSEGV)',
+    stdout: '',
+    stderr: 'Segmentation fault',
+  })
   render(<OutputPanel />)
   expect(screen.getByTestId('status-badge')).toHaveTextContent('Runtime Error (SIGSEGV)')
   expect(screen.getByTestId('status-badge')).toHaveAttribute('data-tone', 'error')
@@ -98,28 +112,54 @@ test('Errors tab count is 0 on success', () => {
 })
 
 test('runner error shows message inline', () => {
-  useRun.setState({ state: 'error', error: new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.') })
+  useRun.setState({
+    state: 'error',
+    error: new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.'),
+  })
   render(<OutputPanel />)
   expect(screen.getByRole('alert')).toHaveTextContent('Daily Judge0 quota used up. Try again tomorrow.')
 })
 
-test('layout button moves the output to the bottom and back', async () => {
+test('⋯ menu moves the output to the right and back', async () => {
+  useSettings.setState({ outputPosition: 'bottom' })
   render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Move output to the bottom' }))
-  expect(useSettings.getState().outputPosition).toBe('bottom')
-  await userEvent.click(screen.getByRole('button', { name: 'Move output to the right' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Move output to the right' }))
   expect(useSettings.getState().outputPosition).toBe('right')
+  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Move output to the bottom' }))
+  expect(useSettings.getState().outputPosition).toBe('bottom')
 })
 
-test('narrow window: no layout button (output is always at the bottom there)', () => {
-  mockMatchMedia((q) => q === '(max-width: 899px)')
-  render(<OutputPanel />)
-  expect(screen.queryByRole('button', { name: /move output/i })).not.toBeInTheDocument()
-})
-
-test('close button hides the output', async () => {
+test('⋯ menu can hide the output', async () => {
   useSettings.setState({ outputOpen: true })
   render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Hide output' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: /hide output/i }))
   expect(useSettings.getState().outputOpen).toBe(false)
+})
+
+test('narrow window: no move option (output is always at the bottom there)', async () => {
+  mockMatchMedia((q) => q === '(max-width: 899px)')
+  render(<OutputPanel />)
+  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
+  await screen.findByRole('menuitem', { name: /hide output/i })
+  expect(screen.queryByRole('menuitem', { name: /move output/i })).not.toBeInTheDocument()
+})
+
+test('chevron collapses the output', async () => {
+  useSettings.setState({ outputOpen: true })
+  render(<OutputPanel />)
+  await userEvent.click(screen.getByRole('button', { name: 'Collapse output' }))
+  expect(useSettings.getState().outputOpen).toBe(false)
+})
+
+test('collapsing or hiding returns the cursor to the editor', async () => {
+  vi.mocked(focusEditor).mockClear()
+  render(<OutputPanel />)
+  await userEvent.click(screen.getByRole('button', { name: 'Collapse output' }))
+  expect(focusEditor).toHaveBeenCalledTimes(1)
+  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: /hide output/i }))
+  expect(focusEditor).toHaveBeenCalledTimes(2)
 })

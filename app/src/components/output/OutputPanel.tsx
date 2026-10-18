@@ -1,39 +1,40 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Clock, Cpu, KeyRound, Loader2, PanelBottom, PanelRight, Terminal, X } from 'lucide-react'
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Cpu,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  MoreHorizontal,
+  PanelBottom,
+  PanelRight,
+  Terminal,
+} from 'lucide-react'
+import { focusEditor } from '@/components/editor/editorFocus'
 import { GlowBorder } from '@/components/glow/GlowBorder'
 import { Kbd } from '@/components/Kbd'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { shortcut } from '@/lib/platform'
-import type { RunResult } from '@/lib/runner/types'
 import { cn } from '@/lib/utils'
 import { useRun } from '@/state/run'
 import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
-
-type Tone = 'success' | 'warning' | 'error'
-
-function badgeFor(result: RunResult): { tone: Tone; label: string } {
-  switch (result.status) {
-    case 'success':
-      return { tone: 'success', label: 'Success' }
-    case 'time_limit':
-      return { tone: 'warning', label: 'Time limit exceeded' }
-    case 'compile_error':
-      return { tone: 'error', label: 'Compilation error' }
-    default:
-      return { tone: 'error', label: result.statusText }
-  }
-}
-
-const TONE_CLASSES: Record<Tone, string> = {
-  success: 'border-green-500/25 bg-green-500/12 text-green-600 dark:text-green-400',
-  warning: 'border-amber-500/30 bg-amber-500/12 text-amber-600 dark:text-amber-400',
-  error: 'border-red-500/30 bg-red-500/12 text-red-600 dark:text-red-400',
-}
+import { badgeFor, ToneBadge } from './ResultBadge'
 
 function formatMemory(kb: number): string {
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`
@@ -57,28 +58,57 @@ function Terminalbox({ label, testId, children }: { label: string; testId: strin
   )
 }
 
-/** Switches the output between the right side and below the editor (wide windows only). */
-function LayoutToggle() {
+/** Header controls: a "⋯" menu (position, hide) and a chevron that collapses the output to a strip. */
+function OutputControls() {
   const narrow = useMediaQuery(NARROW_QUERY)
   const position = useSettings((s) => s.outputPosition)
-  if (narrow) return null
-  const next = position === 'right' ? 'bottom' : 'right'
-  const label = next === 'bottom' ? 'Move output to the bottom' : 'Move output to the right'
+  const { setOutputPosition, setOutputOpen } = useSettings.getState()
+  // The control that was clicked disappears with the panel, so hand the cursor back to the code.
+  const hide = () => {
+    setOutputOpen(false)
+    focusEditor()
+  }
+  const right = position === 'right' && !narrow
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={() => useSettings.getState().setOutputPosition(next)}
-          className="text-muted-foreground"
-        >
-          {next === 'bottom' ? <PanelBottom /> : <PanelRight />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <div className="ml-auto flex items-center gap-0.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="Output options" className="text-muted-foreground">
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {!narrow && (
+            <>
+              <DropdownMenuItem onSelect={() => setOutputPosition(right ? 'bottom' : 'right')}>
+                {right ? <PanelBottom /> : <PanelRight />}
+                {right ? 'Move output to the bottom' : 'Move output to the right'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuItem onSelect={hide}>
+            <EyeOff /> Hide output
+            <DropdownMenuShortcut>{shortcut('J')}</DropdownMenuShortcut>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Collapse output"
+            onClick={hide}
+            className="text-muted-foreground"
+          >
+            {right ? <ChevronRight /> : <ChevronDown />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Collapse ({shortcut('J')})</TooltipContent>
+      </Tooltip>
+    </div>
   )
 }
 
@@ -121,23 +151,7 @@ export function OutputPanel() {
             </span>
           </TabsTrigger>
         </TabsList>
-        <div className="ml-auto flex items-center gap-0.5">
-          <LayoutToggle />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Hide output"
-                onClick={() => useSettings.getState().setOutputOpen(false)}
-                className="text-muted-foreground"
-              >
-                <X />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Hide output ({shortcut('J')})</TooltipContent>
-          </Tooltip>
-        </div>
+        <OutputControls />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
@@ -177,17 +191,7 @@ export function OutputPanel() {
         {state === 'done' && result && badge && (
           <>
             <div className="mb-3.5 flex shrink-0 flex-wrap items-center gap-2.5">
-              <span
-                data-testid="status-badge"
-                data-tone={badge.tone}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                  TONE_CLASSES[badge.tone],
-                )}
-              >
-                <span className="size-1.5 rounded-full bg-current" aria-hidden />
-                {badge.label}
-              </span>
+              <ToneBadge testId="status-badge" tone={badge.tone} label={badge.label} />
               {result.timeMs !== null && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3.5" aria-hidden />

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
 import { useFilesPanel } from '@/state/filesPanel'
@@ -201,16 +201,18 @@ test('hidden output: the editor takes the whole area and the output slot is gone
   expect(screen.getByText('EDITOR')).toBeInTheDocument()
 })
 
-test('top-bar Output button hides and shows the output', async () => {
+test('no output button in the top bar', () => {
   renderShell()
-  const toggle = screen.getByRole('button', { name: 'Output' })
-  expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await userEvent.click(toggle)
-  expect(useSettings.getState().outputOpen).toBe(false)
-  expect(screen.queryByText('OUTPUT')).not.toBeInTheDocument()
-  expect(toggle).toHaveAttribute('aria-pressed', 'false')
-  await userEvent.click(toggle)
+  expect(screen.queryByRole('button', { name: 'Output' })).not.toBeInTheDocument()
+})
+
+test('hidden output leaves a strip that brings it back', async () => {
+  useSettings.setState({ outputOpen: false })
+  renderShell()
+  await userEvent.click(screen.getByRole('button', { name: /show output/i }))
+  expect(useSettings.getState().outputOpen).toBe(true)
   expect(screen.getByText('OUTPUT')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /show output/i })).not.toBeInTheDocument()
 })
 
 test('hiding and showing the output keeps the same editor mounted (cursor and scroll survive)', async () => {
@@ -220,7 +222,7 @@ test('hiding and showing the output keeps the same editor mounted (cursor and sc
     return <div>EDITOR</div>
   }
   renderShell({ editor: <EditorProbe /> })
-  await userEvent.click(screen.getByRole('button', { name: 'Output' }))
-  await userEvent.click(screen.getByRole('button', { name: 'Output' }))
+  act(() => useSettings.getState().setOutputOpen(false))
+  await userEvent.click(screen.getByRole('button', { name: /show output/i }))
   expect(mounts).toHaveBeenCalledTimes(1)
 })

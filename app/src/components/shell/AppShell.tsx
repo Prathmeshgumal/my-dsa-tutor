@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { FilesPanel } from '@/components/files/FilesPanel'
+import { OutputStrip } from '@/components/output/OutputStrip'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
@@ -38,37 +39,40 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
         <div className="relative flex min-h-0 flex-1">
           <IconRail />
           {filesOpen && <FilesPanel />}
-          {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}
-          <ResizablePanelGroup
-            key={vertical ? 'vertical' : 'horizontal'}
-            data-testid="workspace-panels"
-            orientation={vertical ? 'vertical' : 'horizontal'}
-            defaultLayout={outputOpen ? { editor: editorSize, output: outputSize } : { editor: 100 }}
-            onLayoutChanged={(l) => {
-              if (l.output !== undefined) setPanelLayout([l.editor, l.output])
-            }}
-            className="min-w-0 flex-1"
-          >
-            <ResizablePanel id="editor" minSize="25" className="flex min-h-0 min-w-0 flex-col">
-              {editor}
-            </ResizablePanel>
-            {outputOpen && (
-              <>
-                <ResizableHandle
-                  withHandle
-                  className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
-                />
-                <ResizablePanel
-                  id="output"
-                  minSize="25"
-                  defaultSize={`${outputSize}`}
-                  className="flex min-h-0 min-w-0 flex-col"
-                >
-                  {output}
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}
+            <ResizablePanelGroup
+              key={vertical ? 'vertical' : 'horizontal'}
+              data-testid="workspace-panels"
+              orientation={vertical ? 'vertical' : 'horizontal'}
+              defaultLayout={outputOpen ? { editor: editorSize, output: outputSize } : { editor: 100 }}
+              onLayoutChanged={(l) => {
+                if (l.output !== undefined) setPanelLayout([l.editor, l.output])
+              }}
+              className="min-w-0 flex-1"
+            >
+              <ResizablePanel id="editor" minSize="25" className="flex min-h-0 min-w-0 flex-col">
+                {editor}
+              </ResizablePanel>
+              {outputOpen && (
+                <>
+                  <ResizableHandle
+                    withHandle
+                    className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
+                  />
+                  <ResizablePanel
+                    id="output"
+                    minSize="25"
+                    defaultSize={`${outputSize}`}
+                    className="flex min-h-0 min-w-0 flex-col"
+                  >
+                    {output}
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+            {!outputOpen && <OutputStrip />}
+          </div>
         </div>
         <StatusBar connection={connection} cursor={cursor} />
       </div>
