@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CommandMenu, useCommandMenu } from '@/components/command/CommandMenu'
 import { EditorPanel } from '@/components/editor/EditorPanel'
 import { FileDialogs } from '@/components/editor/FileDialogs'
 import { OutputPanel } from '@/components/output/OutputPanel'
@@ -41,10 +42,11 @@ export default function App() {
         canRun={hasActiveFile}
         connection={connection}
         cursor={hasActiveFile ? cursor : null}
-        onOpenCommand={() => {}}
+        onOpenCommand={() => useCommandMenu.getState().setOpen(true)}
       />
       <FileDialogs />
       <SettingsDialog />
+      <CommandMenu />
       <Toaster position="bottom-right" richColors />
     </>
   )
