@@ -45,10 +45,9 @@ the left bar).
 
 The **Files** button in the left bar opens a drawer listing every file; it closes
 when you click outside it, press Escape, or pick a file. The output sits **below the
-editor by default**. Its "⋯" menu moves it to the right (or back), and the chevron
-collapses it to a thin strip that still shows the last result; click the strip
-(or press ⌘/Ctrl + J) to bring it back. Running code always reopens it. These
-choices are remembered.
+editor by default**. The small switch at the bottom-right of the status bar puts it
+at the bottom, on the right, or hides it (⌘/Ctrl + J also shows or hides it).
+Running code always reopens it. These choices are remembered.
 
 ## Ask Claude
 

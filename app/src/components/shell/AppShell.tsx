@@ -3,7 +3,6 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
 import { FilesPanel } from '@/components/files/FilesPanel'
-import { OutputStrip } from '@/components/output/OutputStrip'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
@@ -73,7 +72,6 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
                 </>
               )}
             </ResizablePanelGroup>
-            {!outputOpen && <OutputStrip />}
           </div>
           {aiOpen && <AiPanel />}
         </div>

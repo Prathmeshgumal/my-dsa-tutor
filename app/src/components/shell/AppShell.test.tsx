@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
 import { useFilesPanel } from '@/state/filesPanel'
@@ -206,13 +206,32 @@ test('no output button in the top bar', () => {
   expect(screen.queryByRole('button', { name: 'Output' })).not.toBeInTheDocument()
 })
 
-test('hidden output leaves a strip that brings it back', async () => {
+test('layout switch in the status bar: bottom, right, hidden', async () => {
+  renderShell()
+  const group = screen.getByRole('radiogroup', { name: 'Output layout' })
+  expect(within(group).getByRole('radio', { name: 'Output on the right' })).toBeChecked()
+
+  await userEvent.click(within(group).getByRole('radio', { name: 'Hide output' }))
+  expect(useSettings.getState().outputOpen).toBe(false)
+  expect(screen.queryByText('OUTPUT')).not.toBeInTheDocument()
+  expect(within(group).getByRole('radio', { name: 'Hide output' })).toBeChecked()
+
+  await userEvent.click(within(group).getByRole('radio', { name: 'Output at the bottom' }))
+  expect(useSettings.getState()).toMatchObject({ outputOpen: true, outputPosition: 'bottom' })
+  expect(screen.getByText('OUTPUT')).toBeInTheDocument()
+})
+
+test('hidden output leaves nothing behind (no strip)', () => {
   useSettings.setState({ outputOpen: false })
   renderShell()
-  await userEvent.click(screen.getByRole('button', { name: /show output/i }))
-  expect(useSettings.getState().outputOpen).toBe(true)
-  expect(screen.getByText('OUTPUT')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /show output/i })).not.toBeInTheDocument()
+})
+
+test('narrow window: the switch has no "right" choice', () => {
+  mockMatchMedia((q) => q === '(max-width: 899px)')
+  renderShell()
+  expect(screen.queryByRole('radio', { name: 'Output on the right' })).not.toBeInTheDocument()
+  expect(screen.getByRole('radio', { name: 'Output at the bottom' })).toBeChecked()
 })
 
 test('hiding and showing the output keeps the same editor mounted (cursor and scroll survive)', async () => {
@@ -223,7 +242,7 @@ test('hiding and showing the output keeps the same editor mounted (cursor and sc
   }
   renderShell({ editor: <EditorProbe /> })
   act(() => useSettings.getState().setOutputOpen(false))
-  await userEvent.click(screen.getByRole('button', { name: /show output/i }))
+  await userEvent.click(screen.getByRole('radio', { name: 'Output on the right' }))
   expect(mounts).toHaveBeenCalledTimes(1)
 })
 

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import type { Connection } from '@/state/run'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
+import { LayoutSwitch } from './LayoutSwitch'
 
 export type { Connection }
 
@@ -60,6 +61,7 @@ export function StatusBar({ connection, cursor }: Props) {
       <span className="flex-1" />
       {cursor && <span>{`Ln ${cursor.line}, Col ${cursor.col}`}</span>}
       {language && <span>{language.compilerLabel}</span>}
+      <LayoutSwitch />
     </footer>
   )
 }

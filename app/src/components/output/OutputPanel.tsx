@@ -1,38 +1,13 @@
 import { useEffect, useState } from 'react'
-import {
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  Cpu,
-  EyeOff,
-  KeyRound,
-  Loader2,
-  MoreHorizontal,
-  PanelBottom,
-  PanelRight,
-  Terminal,
-} from 'lucide-react'
-import { focusEditor } from '@/components/editor/editorFocus'
+import { AlertCircle, Clock, Cpu, KeyRound, Loader2, Terminal } from 'lucide-react'
 import { GlowBorder } from '@/components/glow/GlowBorder'
 import { Kbd } from '@/components/Kbd'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { shortcut } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { useRun } from '@/state/run'
-import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 import { badgeFor, ToneBadge } from './ResultBadge'
 
@@ -55,60 +30,6 @@ function Terminalbox({ label, testId, children }: { label: string; testId: strin
         </pre>
       </ScrollArea>
     </GlowBorder>
-  )
-}
-
-/** Header controls: a "⋯" menu (position, hide) and a chevron that collapses the output to a strip. */
-function OutputControls() {
-  const narrow = useMediaQuery(NARROW_QUERY)
-  const position = useSettings((s) => s.outputPosition)
-  const { setOutputPosition, setOutputOpen } = useSettings.getState()
-  // The control that was clicked disappears with the panel, so hand the cursor back to the code.
-  const hide = () => {
-    setOutputOpen(false)
-    focusEditor()
-  }
-  const right = position === 'right' && !narrow
-
-  return (
-    <div className="ml-auto flex items-center gap-0.5">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Output options" className="text-muted-foreground">
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          {!narrow && (
-            <>
-              <DropdownMenuItem onSelect={() => setOutputPosition(right ? 'bottom' : 'right')}>
-                {right ? <PanelBottom /> : <PanelRight />}
-                {right ? 'Move output to the bottom' : 'Move output to the right'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          <DropdownMenuItem onSelect={hide}>
-            <EyeOff /> Hide output
-            <DropdownMenuShortcut>{shortcut('J')}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Collapse output"
-            onClick={hide}
-            className="text-muted-foreground"
-          >
-            {right ? <ChevronRight /> : <ChevronDown />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Collapse ({shortcut('J')})</TooltipContent>
-      </Tooltip>
-    </div>
   )
 }
 
@@ -151,7 +72,6 @@ export function OutputPanel() {
             </span>
           </TabsTrigger>
         </TabsList>
-        <OutputControls />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">

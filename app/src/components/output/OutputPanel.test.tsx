@@ -1,11 +1,9 @@
 import { render as rtlRender, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import userEvent from '@testing-library/user-event'
 import { useSettings } from '@/state/settings'
 import { mockMatchMedia } from '@/test/matchMedia'
 import { RunnerError, type RunResult } from '@/lib/runner/types'
 import { useRun } from '@/state/run'
-import { focusEditor } from '@/components/editor/editorFocus'
 import { OutputPanel } from './OutputPanel'
 
 vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
@@ -120,46 +118,7 @@ test('runner error shows message inline', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Daily Judge0 quota used up. Try again tomorrow.')
 })
 
-test('⋯ menu moves the output to the right and back', async () => {
-  useSettings.setState({ outputPosition: 'bottom' })
+test('the output panel has no layout buttons (they live in the status bar)', () => {
   render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Move output to the right' }))
-  expect(useSettings.getState().outputPosition).toBe('right')
-  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Move output to the bottom' }))
-  expect(useSettings.getState().outputPosition).toBe('bottom')
-})
-
-test('⋯ menu can hide the output', async () => {
-  useSettings.setState({ outputOpen: true })
-  render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: /hide output/i }))
-  expect(useSettings.getState().outputOpen).toBe(false)
-})
-
-test('narrow window: no move option (output is always at the bottom there)', async () => {
-  mockMatchMedia((q) => q === '(max-width: 899px)')
-  render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
-  await screen.findByRole('menuitem', { name: /hide output/i })
-  expect(screen.queryByRole('menuitem', { name: /move output/i })).not.toBeInTheDocument()
-})
-
-test('chevron collapses the output', async () => {
-  useSettings.setState({ outputOpen: true })
-  render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Collapse output' }))
-  expect(useSettings.getState().outputOpen).toBe(false)
-})
-
-test('collapsing or hiding returns the cursor to the editor', async () => {
-  vi.mocked(focusEditor).mockClear()
-  render(<OutputPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Collapse output' }))
-  expect(focusEditor).toHaveBeenCalledTimes(1)
-  await userEvent.click(screen.getByRole('button', { name: 'Output options' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: /hide output/i }))
-  expect(focusEditor).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole('button', { name: /output options|collapse output/i })).not.toBeInTheDocument()
 })
