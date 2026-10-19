@@ -5,10 +5,11 @@ A local, browser-based code editor for practising DSA in C++, Java and Python.
 ## Run it
 
 ```sh
-docker compose up -d   # then open http://localhost:5199
+./start.sh   # starts everything, then prints: Editor ready at http://localhost:5199
 ```
 
-That one command starts everything, and it all restarts by itself after a reboot:
+(`./start.sh` is `docker compose up -d` plus waiting for the editor and printing its
+link; plain `docker compose up -d` works too.) That starts everything, and it all restarts by itself after a reboot:
 
 - **editor**: the editor itself, which also saves your files and talks to Claude
   Code. Your edits to `app/` show up live without rebuilding.
