@@ -56,7 +56,8 @@ export function EditorPanel({ onCursorChange, onRunShortcut }: Props) {
             options={{
               fontFamily: "'Geist Mono', ui-monospace, monospace",
               fontSize: 14,
-              lineHeight: 1.75,
+              // 0 = automatic, the same as VS Code: 1.35× the font size on Linux/Windows, 1.5× on Mac.
+              lineHeight: 0,
               fontLigatures: true,
               minimap: { enabled: false },
               cursorBlinking: 'smooth',

@@ -62,3 +62,8 @@ test('shows a loading state until files have loaded from disk', () => {
   expect(screen.queryByTestId('monaco')).not.toBeInTheDocument()
   expect(screen.getByText(/loading files/i)).toBeInTheDocument()
 })
+
+test('line spacing follows VS Code (automatic: 1.35× font size on Linux/Windows, 1.5× on Mac)', () => {
+  renderPanel()
+  expect(screen.getByTestId('monaco')).toHaveAttribute('data-line-height', '0')
+})
