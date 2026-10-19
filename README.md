@@ -55,8 +55,10 @@ Click the ✦ button in the left rail (or ⌘/Ctrl + K → "Ask Claude") to chat
 Claude Code. It runs on this machine using your existing Claude Code login (no API
 key), works inside `solutions/`, and every message includes the file you have open
 with its latest code. Claude can read and edit your files, and edited files reload in
-the editor. It can't run shell commands; use Run for that. Use "New chat" to start
-over; otherwise follow-up questions continue the same conversation.
+the editor. It can't run shell commands; use Run for that. You can keep several chats:
+"New chat" starts a fresh one, and clicking the chat title at the top lists them all
+so you can switch back (each keeps its own conversation) or delete one (click the bin,
+then "Delete").
 
 ## Develop
 

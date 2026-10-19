@@ -34,14 +34,39 @@ interface SendDeps {
   afterEdits?: () => Promise<void>
 }
 
-interface AiChatState {
-  /** Claude Code session to resume, so follow-up questions keep the conversation's context. */
+export interface Chat {
+  id: string
+  title: string
+  /** Claude Code session to resume, so follow-up questions keep this chat's context. */
   sessionId: string | null
   messages: ChatMessage[]
+  updatedAt: number
+}
+
+interface AiChatState {
+  /** Most recently used first. */
+  chats: Chat[]
+  /** null = a fresh chat that becomes a real one when its first message is sent. */
+  activeChatId: string | null
+  /** The chat Claude is replying in; only one reply runs at a time. */
+  streamingChatId: string | null
   status: 'idle' | 'streaming'
   send(text: string, deps?: SendDeps): Promise<void>
   stop(): void
   newChat(): void
+  selectChat(id: string): void
+  deleteChat(id: string): void
+}
+
+const TITLE_MAX = 48
+
+function titleFrom(text: string): string {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1).trimEnd()}…` : line
+}
+
+export function activeChat(state: Pick<AiChatState, 'chats' | 'activeChatId'>): Chat | null {
+  return state.chats.find((c) => c.id === state.activeChatId) ?? null
 }
 
 let controller: AbortController | null = null
@@ -58,34 +83,46 @@ function editorContext(): ChatRequest['context'] {
 export const useAiChat = create<AiChatState>()(
   persist(
     (set, get) => ({
-      sessionId: null,
-      messages: [],
+      chats: [],
+      activeChatId: null,
+      streamingChatId: null,
       status: 'idle',
 
       async send(text, { stream = streamChat, beforeSend = flushAutosave, afterEdits = refreshFromDisk } = {}) {
         const message = text.trim()
         if (!message || get().status === 'streaming') return
 
+        const existing = activeChat(get())
+        const chatId = existing?.id ?? crypto.randomUUID()
         const replyId = crypto.randomUUID()
-        set((s) => ({
-          status: 'streaming',
-          messages: [
-            ...s.messages,
-            { id: crypto.randomUUID(), role: 'user', text: message, tools: [] },
-            { id: replyId, role: 'assistant', text: '', tools: [] },
-          ],
-        }))
+        const newMessages: ChatMessage[] = [
+          { id: crypto.randomUUID(), role: 'user', text: message, tools: [] },
+          { id: replyId, role: 'assistant', text: '', tools: [] },
+        ]
+        set((s) => {
+          const base: Chat = existing ?? { id: chatId, title: titleFrom(message), sessionId: null, messages: [], updatedAt: 0 }
+          const updated = { ...base, messages: [...base.messages, ...newMessages], updatedAt: Date.now() }
+          return {
+            status: 'streaming',
+            streamingChatId: chatId,
+            activeChatId: chatId,
+            chats: [updated, ...s.chats.filter((c) => c.id !== chatId)],
+          }
+        })
+        // Events always land in the chat that asked, even if the user has switched away or deleted it.
+        const patchChat = (patch: (c: Chat) => Partial<Chat>) =>
+          set((s) => ({ chats: s.chats.map((c) => (c.id === chatId ? { ...c, ...patch(c) } : c)) }))
         const patchReply = (patch: (m: ChatMessage) => Partial<ChatMessage>) =>
-          set((s) => ({ messages: s.messages.map((m) => (m.id === replyId ? { ...m, ...patch(m) } : m)) }))
+          patchChat((c) => ({ messages: c.messages.map((m) => (m.id === replyId ? { ...m, ...patch(m) } : m)) }))
 
         controller = new AbortController()
         let edited = false
         try {
           await beforeSend()
           await stream(
-            { message, sessionId: get().sessionId, context: editorContext() },
+            { message, sessionId: existing?.sessionId ?? null, context: editorContext() },
             (event) => {
-              if (event.type === 'session') set({ sessionId: event.sessionId })
+              if (event.type === 'session') patchChat(() => ({ sessionId: event.sessionId }))
               else if (event.type === 'text') patchReply((m) => ({ text: m.text + event.text }))
               else if (event.type === 'tool') {
                 if (EDIT_TOOLS.has(event.name)) edited = true
@@ -97,7 +134,7 @@ export const useAiChat = create<AiChatState>()(
           if (edited) await afterEdits()
         } finally {
           controller = null
-          set({ status: 'idle' })
+          set({ status: 'idle', streamingChatId: null })
         }
       },
 
@@ -106,13 +143,43 @@ export const useAiChat = create<AiChatState>()(
       },
 
       newChat() {
-        controller?.abort()
-        set({ sessionId: null, messages: [], status: 'idle' })
+        set({ activeChatId: null })
+      },
+
+      selectChat(id) {
+        if (get().chats.some((c) => c.id === id)) set({ activeChatId: id })
+      },
+
+      deleteChat(id) {
+        if (get().streamingChatId === id) controller?.abort()
+        set((s) => {
+          const chats = s.chats.filter((c) => c.id !== id)
+          return { chats, activeChatId: s.activeChatId === id ? (chats[0]?.id ?? null) : s.activeChatId }
+        })
       },
     }),
     {
       name: 'dsa-editor:ai',
-      partialize: ({ sessionId, messages }) => ({ sessionId, messages }),
+      version: 1,
+      partialize: ({ chats, activeChatId }) => ({ chats, activeChatId }),
+      // v0 held a single conversation: { sessionId, messages }.
+      migrate: (persisted, version) => {
+        if (version === 0) {
+          const old = (persisted ?? {}) as { sessionId?: string | null; messages?: ChatMessage[] }
+          const messages = Array.isArray(old.messages) ? old.messages : []
+          if (!messages.length) return { chats: [], activeChatId: null }
+          const first = messages.find((m) => m.role === 'user')
+          const chat: Chat = {
+            id: crypto.randomUUID(),
+            title: titleFrom(first?.text ?? 'Chat'),
+            sessionId: old.sessionId ?? null,
+            messages,
+            updatedAt: Date.now(),
+          }
+          return { chats: [chat], activeChatId: chat.id }
+        }
+        return persisted as Pick<AiChatState, 'chats' | 'activeChatId'>
+      },
     },
   ),
 )

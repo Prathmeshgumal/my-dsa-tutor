@@ -1,9 +1,10 @@
 import type { ChatEvent } from '@/lib/claudeClient'
 import { defaultWorkspace } from '@/lib/storage'
-import { useAiChat } from './aiChat'
+import { activeChat, useAiChat } from './aiChat'
 import { useWorkspace } from './workspace'
 
 const chat = () => useAiChat.getState()
+const quiet = { beforeSend: async () => {}, afterEdits: async () => {} }
 
 function fakeStream(events: ChatEvent[]) {
   return vi.fn(async (_req: unknown, onEvent: (e: ChatEvent) => void) => {
@@ -14,10 +15,10 @@ function fakeStream(events: ChatEvent[]) {
 beforeEach(() => {
   localStorage.clear()
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
-  useAiChat.setState({ sessionId: null, messages: [], status: 'idle' })
+  useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle' })
 })
 
-test('sending adds the user message and builds the assistant reply from the stream', async () => {
+test('the first message starts a chat titled after it, and the reply is built from the stream', async () => {
   const stream = fakeStream([
     { type: 'session', sessionId: 's1' },
     { type: 'text', text: 'Use a ' },
@@ -25,19 +26,27 @@ test('sending adds the user message and builds the assistant reply from the stre
     { type: 'text', text: 'hash map.' },
     { type: 'done' },
   ])
-  await chat().send('How do I make this faster?', { stream, beforeSend: async () => {}, afterEdits: async () => {} })
-  const [user, assistant] = chat().messages
+  await chat().send('How do I make this faster?', { stream, ...quiet })
+  expect(chat().chats).toHaveLength(1)
+  const current = activeChat(chat())!
+  expect(current).toMatchObject({ title: 'How do I make this faster?', sessionId: 's1' })
+  const [user, assistant] = current.messages
   expect(user).toMatchObject({ role: 'user', text: 'How do I make this faster?' })
   expect(assistant).toMatchObject({ role: 'assistant', text: 'Use a hash map.', tools: [{ name: 'Read', detail: 'main.cpp' }] })
-  expect(chat().sessionId).toBe('s1')
   expect(chat().status).toBe('idle')
 })
 
-test('sends the open file, its code and the open tabs as context, and resumes the session', async () => {
-  useAiChat.setState({ sessionId: 'old' })
+test('long first messages make a short title', async () => {
+  await chat().send('a'.repeat(100), { stream: fakeStream([{ type: 'done' }]), ...quiet })
+  expect(activeChat(chat())!.title.length).toBeLessThanOrEqual(48)
+})
+
+test('follow-ups stay in the same chat and resume its session, with the open file as context', async () => {
+  await chat().send('first', { stream: fakeStream([{ type: 'session', sessionId: 'old' }, { type: 'done' }]), ...quiet })
   useWorkspace.getState().createFile('two.py')
   const stream = fakeStream([{ type: 'done' }])
-  await chat().send('hi', { stream, beforeSend: async () => {}, afterEdits: async () => {} })
+  await chat().send('hi', { stream, ...quiet })
+  expect(chat().chats).toHaveLength(1)
   expect(stream.mock.calls[0][0]).toEqual({
     message: 'hi',
     sessionId: 'old',
@@ -46,6 +55,74 @@ test('sends the open file, its code and the open tabs as context, and resumes th
       openFiles: ['main.cpp', 'two.py'],
     },
   })
+})
+
+test('new chat starts fresh (no session) and keeps the old chat in the list', async () => {
+  await chat().send('one', { stream: fakeStream([{ type: 'session', sessionId: 's1' }, { type: 'done' }]), ...quiet })
+  chat().newChat()
+  expect(activeChat(chat())).toBeNull()
+  const stream = fakeStream([{ type: 'session', sessionId: 's2' }, { type: 'done' }])
+  await chat().send('two', { stream, ...quiet })
+  expect(stream.mock.calls[0][0]).toMatchObject({ sessionId: null })
+  expect(chat().chats.map((c) => c.title)).toEqual(['two', 'one'])
+})
+
+test('switching chats resumes that chat’s own session', async () => {
+  await chat().send('one', { stream: fakeStream([{ type: 'session', sessionId: 's1' }, { type: 'done' }]), ...quiet })
+  const first = chat().activeChatId!
+  chat().newChat()
+  await chat().send('two', { stream: fakeStream([{ type: 'session', sessionId: 's2' }, { type: 'done' }]), ...quiet })
+  chat().selectChat(first)
+  const stream = fakeStream([{ type: 'done' }])
+  await chat().send('back to one', { stream, ...quiet })
+  expect(stream.mock.calls[0][0]).toMatchObject({ sessionId: 's1' })
+  expect(activeChat(chat())!.messages).toHaveLength(4)
+})
+
+test('a reply keeps going to its own chat if you switch away mid-reply', async () => {
+  let emit!: (e: ChatEvent) => void
+  let finish!: () => void
+  const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void) => {
+    emit = onEvent
+    await new Promise<void>((r) => (finish = r))
+  })
+  const pending = chat().send('slow one', { stream, ...quiet })
+  await vi.waitFor(() => expect(emit).toBeDefined())
+  const slow = chat().activeChatId!
+  chat().newChat()
+  emit({ type: 'text', text: 'late text' })
+  finish()
+  await pending
+  expect(chat().chats.find((c) => c.id === slow)!.messages[1].text).toBe('late text')
+  expect(activeChat(chat())).toBeNull()
+})
+
+test('deleting a chat removes it; deleting the open one opens the most recent other', async () => {
+  await chat().send('one', { stream: fakeStream([{ type: 'done' }]), ...quiet })
+  const first = chat().activeChatId!
+  chat().newChat()
+  await chat().send('two', { stream: fakeStream([{ type: 'done' }]), ...quiet })
+  chat().deleteChat(chat().activeChatId!)
+  expect(chat().chats.map((c) => c.title)).toEqual(['one'])
+  expect(chat().activeChatId).toBe(first)
+  chat().deleteChat(first)
+  expect(chat().chats).toEqual([])
+  expect(chat().activeChatId).toBeNull()
+})
+
+test('deleting a chat while Claude is replying in it stops the reply', async () => {
+  let seen: AbortSignal | undefined
+  const stream = vi.fn(async (_r: unknown, _e: unknown, opts?: { signal?: AbortSignal }) => {
+    seen = opts?.signal
+    await new Promise((r) => opts!.signal!.addEventListener('abort', r))
+  })
+  const pending = chat().send('hi', { stream, ...quiet })
+  await vi.waitFor(() => expect(seen).toBeDefined())
+  chat().deleteChat(chat().activeChatId!)
+  await pending
+  expect(seen!.aborted).toBe(true)
+  expect(chat().chats).toEqual([])
+  expect(chat().status).toBe('idle')
 })
 
 test('saves pending edits before sending so Claude reads the latest code', async () => {
@@ -66,16 +143,17 @@ test('reloads files from disk only when Claude edited something', async () => {
 })
 
 test('error events are shown on the reply', async () => {
-  await chat().send('hi', { stream: fakeStream([{ type: 'error', message: 'not logged in' }]), beforeSend: async () => {}, afterEdits: async () => {} })
-  expect(chat().messages[1]).toMatchObject({ role: 'assistant', error: 'not logged in' })
+  await chat().send('hi', { stream: fakeStream([{ type: 'error', message: 'not logged in' }]), ...quiet })
+  expect(activeChat(chat())!.messages[1]).toMatchObject({ role: 'assistant', error: 'not logged in' })
 })
 
 test('ignores empty messages and sends while a reply is streaming', async () => {
   const stream = fakeStream([{ type: 'done' }])
-  await chat().send('   ', { stream, beforeSend: async () => {}, afterEdits: async () => {} })
+  await chat().send('   ', { stream, ...quiet })
   useAiChat.setState({ status: 'streaming' })
-  await chat().send('hi', { stream, beforeSend: async () => {}, afterEdits: async () => {} })
+  await chat().send('hi', { stream, ...quiet })
   expect(stream).not.toHaveBeenCalled()
+  expect(chat().chats).toEqual([])
 })
 
 test('stop aborts the running request', async () => {
@@ -84,7 +162,7 @@ test('stop aborts the running request', async () => {
     seen = opts?.signal
     await new Promise((r) => opts!.signal!.addEventListener('abort', r))
   })
-  const pending = chat().send('hi', { stream, beforeSend: async () => {}, afterEdits: async () => {} })
+  const pending = chat().send('hi', { stream, ...quiet })
   await vi.waitFor(() => expect(seen).toBeDefined())
   chat().stop()
   await pending
@@ -92,16 +170,26 @@ test('stop aborts the running request', async () => {
   expect(chat().status).toBe('idle')
 })
 
-test('new chat forgets the session and messages', () => {
-  useAiChat.setState({ sessionId: 's', messages: [{ id: '1', role: 'user', text: 'x', tools: [] }] })
-  chat().newChat()
-  expect(chat()).toMatchObject({ sessionId: null, messages: [] })
+test('chats survive a reload (persisted)', async () => {
+  await chat().send('hi', { stream: fakeStream([{ type: 'session', sessionId: 's9' }, { type: 'text', text: 'yo' }, { type: 'done' }]), ...quiet })
+  const saved = JSON.parse(localStorage.getItem('dsa-editor:ai')!).state
+  expect(saved.chats).toHaveLength(1)
+  expect(saved.chats[0].sessionId).toBe('s9')
+  expect(saved.activeChatId).toBe(saved.chats[0].id)
+  expect(saved.status).toBeUndefined()
+  expect(saved.streamingChatId).toBeUndefined()
 })
 
-test('conversation survives a reload (persisted)', async () => {
-  await chat().send('hi', { stream: fakeStream([{ type: 'session', sessionId: 's9' }, { type: 'text', text: 'yo' }, { type: 'done' }]), beforeSend: async () => {}, afterEdits: async () => {} })
-  const saved = JSON.parse(localStorage.getItem('dsa-editor:ai')!).state
-  expect(saved.sessionId).toBe('s9')
-  expect(saved.messages).toHaveLength(2)
-  expect(saved.status).toBeUndefined()
+test('the conversation saved before multiple chats existed becomes the first chat', async () => {
+  localStorage.setItem(
+    'dsa-editor:ai',
+    JSON.stringify({
+      version: 0,
+      state: { sessionId: 'legacy', messages: [{ id: 'u', role: 'user', text: 'old question', tools: [] }] },
+    }),
+  )
+  await useAiChat.persist.rehydrate()
+  const current = activeChat(chat())!
+  expect(current).toMatchObject({ title: 'old question', sessionId: 'legacy' })
+  expect(current.messages).toHaveLength(1)
 })
