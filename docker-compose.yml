@@ -1,5 +1,6 @@
-# Local code runner for the editor: https://github.com/engineer-man/piston
+# Everything the editor needs: `docker compose up -d`, then open http://localhost:5199
 services:
+  # Runs submitted code: https://github.com/engineer-man/piston
   piston:
     image: ghcr.io/engineer-man/piston
     container_name: dsa-piston
@@ -12,5 +13,38 @@ services:
     tmpfs:
       - /piston/jobs:exec,uid=1000,gid=1000,mode=711
 
+  # One-off: installs the C++, Java and Python runtimes into Piston (skips ones already installed).
+  piston-setup:
+    image: curlimages/curl:8.11.1
+    depends_on: [piston]
+    environment:
+      PISTON_URL: http://piston:2000
+    volumes:
+      - ./scripts/piston-install.sh:/piston-install.sh:ro
+    entrypoint: ["sh", "/piston-install.sh"]
+    restart: "no"
+
+  # The editor itself, plus its file-saving and Claude chat endpoints.
+  editor:
+    build: ./app
+    container_name: dsa-editor
+    restart: unless-stopped
+    depends_on: [piston]
+    # Run as you, so files written to solutions/ stay yours.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HOME: /home/node
+      PISTON_URL: http://piston:2000
+      SOLUTIONS_DIR: /workspace/solutions
+    ports:
+      - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
+    volumes:
+      - ./app:/workspace/app
+      - editor-node-modules:/workspace/app/node_modules
+      - ./solutions:/workspace/solutions
+      # Your Claude Code login, so the Claude panel works without an API key.
+      - ${HOME}/.claude:/home/node/.claude
+
 volumes:
   piston-packages:
+  editor-node-modules:

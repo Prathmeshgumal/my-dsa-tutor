@@ -5,21 +5,25 @@ A local, browser-based code editor for practising DSA in C++, Java and Python.
 ## Run it
 
 ```sh
-# 1. Start the code runner (Docker), once per boot — it restarts automatically after that
-docker compose up -d
-
-# 2. First time only: install the C++, Java and Python runtimes into it
-./scripts/piston-install.sh
-
-# 3. Start the editor
-cd app
-npm install   # first time only
-npm run dev   # then open http://localhost:5199
+docker compose up -d   # then open http://localhost:5199
 ```
 
-Code runs on [Piston](https://github.com/engineer-man/piston) in a local Docker
-container (free, no API key). The dev server forwards `/piston` to it at
-`127.0.0.1:2000`.
+That one command starts everything, and it all restarts by itself after a reboot:
+
+- **editor**: the editor itself, which also saves your files and talks to Claude
+  Code. Your edits to `app/` show up live without rebuilding.
+- **piston**: runs your code ([Piston](https://github.com/engineer-man/piston), free,
+  no API key).
+- **piston-setup**: installs C++, Java and Python into Piston. The first run takes a
+  few minutes (`docker compose logs -f piston-setup` shows progress); after that it
+  only checks and exits.
+
+The Claude panel uses your Claude Code login from `~/.claude`, so log in once with
+`claude` on this machine. To stop everything: `docker compose down`. After changing
+`package.json` or the Dockerfile: `docker compose up -d --build`.
+
+Not using Docker for the editor? `docker compose up -d piston piston-setup`, then
+`cd app && npm install && npm run dev`.
 
 ## Where your code is saved
 
