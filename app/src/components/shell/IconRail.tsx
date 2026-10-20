@@ -19,10 +19,15 @@ export function IconRail() {
   const aiOpen = useSettings((s) => s.aiOpen)
   const notesOpen = useSettings((s) => s.notesOpen)
   const screen = useSettings((s) => s.screen)
-  const listOpen = useSettings((s) => s.playgroundListOpen)
-  // On the Playground, its button hides or shows the list of dry runs.
-  const tip = (id: Screen, label: string) =>
-    id === 'playground' && screen === 'playground' ? (listOpen ? 'Hide dry runs' : 'Show dry runs') : label
+  const playgroundListOpen = useSettings((s) => s.playgroundListOpen)
+  const problemListOpen = useSettings((s) => s.problemListOpen)
+  // On its own screen, a screen's button hides or shows that screen's list (the Editor's is the files).
+  const tip = (id: Screen, label: string) => {
+    if (id !== screen) return label
+    if (id === 'playground') return playgroundListOpen ? 'Hide dry runs' : 'Show dry runs'
+    if (id === 'problem') return problemListOpen ? 'Hide problems' : 'Show problems'
+    return filesOpen ? 'Hide files' : 'Show files'
+  }
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
@@ -33,6 +38,8 @@ export function IconRail() {
               type="button"
               aria-label={label}
               aria-current={screen === id ? 'page' : undefined}
+              // On the Editor this button opens and closes the files, so a press mustn't count as clicking outside them.
+              data-files-toggle={id === 'editor' && screen === 'editor' ? '' : undefined}
               onClick={() => useSettings.getState().pressScreen(id)}
               className={cn(
                 item,

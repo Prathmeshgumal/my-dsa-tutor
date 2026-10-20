@@ -9,6 +9,7 @@ import {
   CloudUpload,
   ListChecks,
   Loader2,
+  PanelLeftClose,
   Play,
   Plus,
   Sparkles,
@@ -114,6 +115,20 @@ function ProblemList() {
             {solved}/{entries.length} solved
           </span>
         )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Hide problems"
+              onClick={() => useSettings.getState().setProblemListOpen(false)}
+              className={cn('text-muted-foreground', !entries.length && 'ml-auto')}
+            >
+              <PanelLeftClose />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Hide the list (or click the Problems button on the left)</TooltipContent>
+        </Tooltip>
       </div>
       <ScrollArea className="min-h-0 flex-1">
         {entries.length ? (
@@ -454,6 +469,9 @@ function Empty() {
 export function ProblemScreen() {
   const entry = useProblems(activeProblem)
   const status = useProblems((s) => s.status)
+  const listOpen = useSettings((s) => s.problemListOpen)
+  // Sizes are kept separately with and without the list, so hiding it doesn't squash the others.
+  const outer = listOpen ? 'problem-outer' : 'problem-outer-no-list'
 
   useEffect(() => {
     void useProblems.getState().load()
@@ -469,20 +487,29 @@ export function ProblemScreen() {
 
   return (
     <main aria-label="Problem" className="flex min-h-0 min-w-0 flex-1">
-      {/* Remounts when a problem appears or goes, since the panels differ. */}
+      {/* Remounts when a problem appears or goes, or the list is hidden or shown, since the panels differ. */}
       <ResizablePanelGroup
-        key={entry ? 'problem' : 'empty'}
+        key={`${entry ? 'problem' : 'empty'}-${listOpen ? 'with-list' : 'no-list'}`}
         orientation="horizontal"
         defaultLayout={
-          entry ? (savedLayout('problem-outer') ?? { list: 16, description: 38, work: 46 }) : { list: 16, empty: 84 }
+          entry
+            ? (savedLayout(outer) ??
+              (listOpen ? { list: 16, description: 38, work: 46 } : { description: 45, work: 55 }))
+            : listOpen
+              ? { list: 16, empty: 84 }
+              : { empty: 100 }
         }
-        onLayoutChanged={(l) => entry && saveLayout('problem-outer')(l)}
+        onLayoutChanged={(l) => entry && saveLayout(outer)(l)}
         className="min-h-0 min-w-0 flex-1"
       >
-        <ResizablePanel id="list" minSize="10" maxSize="35" className="flex min-h-0 flex-col">
-          <ProblemList />
-        </ResizablePanel>
-        <ResizableHandle withHandle className={handle} />
+        {listOpen && (
+          <>
+            <ResizablePanel id="list" minSize="10" maxSize="35" className="flex min-h-0 flex-col">
+              <ProblemList />
+            </ResizablePanel>
+            <ResizableHandle withHandle className={handle} />
+          </>
+        )}
         {entry ? (
           <>
             <ResizablePanel id="description" minSize="20" className="flex min-h-0 min-w-0 flex-col">

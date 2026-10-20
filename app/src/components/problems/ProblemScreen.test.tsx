@@ -5,6 +5,7 @@ import { configureNotes, useNotes } from '@/state/notes'
 import { configurePlayground, usePlayground } from '@/state/playground'
 import { configureProblems, useProblems } from '@/state/problems'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useSettings } from '@/state/settings'
 import { ProblemScreen } from './ProblemScreen'
 
 const renderScreen = () =>
@@ -99,4 +100,15 @@ test('switches between versions of the code', async () => {
   expect(editor).toHaveValue('optimal code')
   fireEvent.click(screen.getByRole('tab', { name: 'brute.cpp' }))
   expect(await screen.findByDisplayValue('brute code')).toHaveAttribute('data-path', 'problem:two-sum/brute.cpp')
+})
+
+test('the problem list can be hidden, and the problem stays open', async () => {
+  useSettings.setState({ problemListOpen: true })
+  renderScreen()
+  expect(await screen.findByRole('list', { name: 'Problems' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Hide problems' }))
+  expect(useSettings.getState().problemListOpen).toBe(false)
+  expect(screen.queryByRole('list', { name: 'Problems' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Two Sum' })).toBeInTheDocument()
+  useSettings.setState({ problemListOpen: true })
 })

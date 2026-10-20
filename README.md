@@ -63,6 +63,10 @@ editor by default**. The small switch at the bottom-right of the status bar puts
 at the bottom, on the right, or hides it (⌘/Ctrl + J also shows or hides it).
 Running code always reopens it. These choices are remembered.
 
+Every button in the left bar opens and closes. Pressing the button of the screen you're already on
+hides or shows its list: the files on **Editor**, the problem list on **Problems**, the dry runs on
+**Playground**. **Files**, **Notes** and **Claude** open and close their panels.
+
 ## Notes
 
 Click the notebook button in the left bar (or ⌘/Ctrl + K → "Open notes") to keep
