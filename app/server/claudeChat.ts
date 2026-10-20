@@ -3,10 +3,19 @@
 //   POST /api/claude/approval  { id, approved }                → the user's answer to a proposed change
 // The agent can only use the editor tools in ./editorTools.ts: Claude Code's own tools, the user's
 // settings, CLAUDE.md, plugins and MCP servers are all switched off.
-import { createSdkMcpServer, query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, query, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { TOOL_PREFIX, type ChatEvent, type EditorContext, type LastRun } from '../src/lib/chatEvents.ts'
+import {
+  IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGES,
+  TOOL_PREFIX,
+  type ChatEvent,
+  type ChatImage,
+  type EditorContext,
+  type LastRun,
+} from '../src/lib/chatEvents.ts'
 import { languageFromFilename } from '../src/lib/languages.ts'
 import { createPistonRunner } from '../src/lib/runner/piston.ts'
 import type { CodeRunner } from '../src/lib/runner/types.ts'
@@ -16,7 +25,7 @@ export type { ChatEvent, EditorContext }
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
-export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIterable<SDKMessage>
+export type QueryFn = (params: { prompt: string | AsyncIterable<SDKUserMessage>; options?: Options }) => AsyncIterable<SDKMessage>
 
 const ROUTE = '/api/claude/chat'
 const APPROVAL_ROUTE = '/api/claude/approval'
@@ -116,6 +125,37 @@ function createEventMapper() {
       return [{ type: 'error', message: errors.join('\n') || 'Claude stopped with an error.' }]
     }
     return []
+  }
+}
+
+/** Images from the request, or a reason they can't be sent. */
+function parseImages(raw: unknown): ChatImage[] | string {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw)) return '"images" must be a list'
+  if (raw.length > MAX_IMAGES) return `At most ${MAX_IMAGES} images per message`
+  const images: ChatImage[] = []
+  for (const img of raw as Record<string, unknown>[]) {
+    if (!IMAGE_TYPES.includes(img?.mediaType as ChatImage['mediaType'])) return 'Images must be PNG, JPEG, GIF or WebP'
+    if (typeof img.data !== 'string' || !img.data) return 'Image data is missing'
+    // base64 → bytes is 3/4 of the length
+    if ((img.data.length * 3) / 4 > MAX_IMAGE_BYTES) return 'Each image must be under 5 MB'
+    images.push({ mediaType: img.mediaType as ChatImage['mediaType'], data: img.data })
+  }
+  return images
+}
+
+/** With images, the prompt becomes one user message whose content has the images first, then the text. */
+async function* withImages(text: string, images: ChatImage[]): AsyncIterable<SDKUserMessage> {
+  yield {
+    type: 'user',
+    parent_tool_use_id: null,
+    message: {
+      role: 'user',
+      content: [
+        ...images.map((img) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: img.mediaType, data: img.data } })),
+        { type: 'text' as const, text },
+      ],
+    },
   }
 }
 
@@ -228,9 +268,18 @@ export function createClaudeChatMiddleware({
     }
     void (async () => {
       const body = await readBody(req)
-      if (!body || typeof body.message !== 'string' || !body.message.trim()) {
+      const images = parseImages(body?.images)
+      const message = typeof body?.message === 'string' ? body.message.trim() : ''
+      const problem = !body
+        ? 'Expected a JSON body'
+        : typeof images === 'string'
+          ? images
+          : !message && !images.length
+            ? '"message" is required'
+            : null
+      if (!body || problem || typeof images === 'string') {
         res.statusCode = 400
-        res.end(JSON.stringify({ error: '"message" is required' }))
+        res.end(JSON.stringify({ error: problem }))
         return
       }
 
@@ -258,7 +307,9 @@ export function createClaudeChatMiddleware({
       let sessionSent = false
       try {
         const messages = queryImpl({
-          prompt: buildPrompt(body.message, context),
+          prompt: images.length
+            ? withImages(buildPrompt(message || 'Have a look at this image.', context), images)
+            : buildPrompt(message, context),
           options: {
             cwd,
             resume: typeof body.sessionId === 'string' ? body.sessionId : undefined,

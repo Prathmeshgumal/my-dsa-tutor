@@ -4,6 +4,7 @@ import { EDIT_TOOLS, type ApprovalKind, type ChatEvent, type ChatRequest, type L
 import { streamChat } from '@/lib/claudeClient'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
+import type { Attachment } from '@/lib/images'
 import { noteTitle, useNotes } from './notes'
 import { usePlayground } from './playground'
 import { useRun } from './run'
@@ -32,6 +33,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   tools: ToolActivity[]
+  /** Images sent with a user message: small thumbnails only. */
+  images?: { thumb?: string }[]
   approvals?: Approval[]
   /** Dry runs Claude made in this reply (open in the Playground). */
   visualizations?: { id: string; title: string; steps: number }[]
@@ -61,6 +64,8 @@ interface SendDeps {
   beforeSend?: () => Promise<void>
   /** Pull Claude's file edits back into the editor. */
   afterEdits?: () => Promise<void>
+  /** Images to send with the message. */
+  attachments?: Attachment[]
 }
 
 export interface Chat {
@@ -148,19 +153,25 @@ export const useAiChat = create<AiChatState>()(
       streamingChatId: null,
       status: 'idle',
 
-      async send(text, { stream = streamChat, beforeSend = saveEverything, afterEdits = refreshFromDisk } = {}) {
+      async send(text, { stream = streamChat, beforeSend = saveEverything, afterEdits = refreshFromDisk, attachments = [] } = {}) {
         const message = text.trim()
-        if (!message || get().status === 'streaming') return
+        if ((!message && !attachments.length) || get().status === 'streaming') return
 
         const existing = activeChat(get())
         const chatId = existing?.id ?? crypto.randomUUID()
         const replyId = crypto.randomUUID()
         const newMessages: ChatMessage[] = [
-          { id: crypto.randomUUID(), role: 'user', text: message, tools: [] },
+          {
+            id: crypto.randomUUID(),
+            role: 'user',
+            text: message,
+            tools: [],
+            ...(attachments.length ? { images: attachments.map((a) => (a.thumb ? { thumb: a.thumb } : {})) } : {}),
+          },
           { id: replyId, role: 'assistant', text: '', tools: [] },
         ]
         set((s) => {
-          const base: Chat = existing ?? { id: chatId, title: titleFrom(message), sessionId: null, messages: [], updatedAt: 0 }
+          const base: Chat = existing ?? { id: chatId, title: titleFrom(message || 'Image'), sessionId: null, messages: [], updatedAt: 0 }
           const updated = { ...base, messages: [...base.messages, ...newMessages], updatedAt: Date.now() }
           return {
             status: 'streaming',
@@ -181,7 +192,12 @@ export const useAiChat = create<AiChatState>()(
         try {
           await beforeSend()
           await stream(
-            { message, sessionId: existing?.sessionId ?? null, context: editorContext() },
+            {
+              message,
+              sessionId: existing?.sessionId ?? null,
+              context: editorContext(),
+              ...(attachments.length ? { images: attachments.map((a) => a.image) } : {}),
+            },
             (event) => {
               if (event.type === 'session') patchChat(() => ({ sessionId: event.sessionId }))
               else if (event.type === 'text') patchReply((m) => ({ text: m.text + event.text }))

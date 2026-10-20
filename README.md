@@ -97,6 +97,10 @@ It can only act through these tools:
 | `create_note` / `edit_note` | Saves a new note, or changes one (e.g. "add this to my notes") | **Yes** |
 | `create_visualization` | Makes a step-by-step dry run of your code for the Playground | No |
 
+You can also send it images (up to 5 per message, PNG/JPEG/GIF/WebP, under 5 MB each):
+click 📎, paste a screenshot into the message box, or drop images on the panel. Chats keep
+only a small thumbnail of each image.
+
 Claude Code's own tools (shell, web, other folders) and your personal Claude Code
 settings, CLAUDE.md, plugins and MCP servers are all switched off for it. You can keep
 several chats: "New chat" starts a fresh one, and clicking the chat title at the top lists

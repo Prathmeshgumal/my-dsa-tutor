@@ -1,4 +1,4 @@
-import { act, render as rtlRender, screen, within } from '@testing-library/react'
+import { act, fireEvent, render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { defaultWorkspace } from '@/lib/storage'
@@ -327,4 +327,56 @@ test('a stopped reply says so', () => {
   ])
   render(<AiPanel />)
   expect(screen.getByText('Stopped by you.')).toBeInTheDocument()
+})
+
+describe('images', () => {
+  const png = () => new File([new Uint8Array([137, 80, 78, 71])], 'shot.png', { type: 'image/png' })
+
+  test('attach an image with the button; it shows as a removable preview and is sent', async () => {
+    render(<AiPanel />)
+    await userEvent.upload(screen.getByLabelText('Attach image'), png())
+    const previews = await screen.findByRole('list', { name: 'Attached images' })
+    expect(within(previews).getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(send).toHaveBeenCalledWith('', {
+      attachments: [{ image: { mediaType: 'image/png', data: btoa(String.fromCharCode(137, 80, 78, 71)) }, thumb: undefined }],
+    })
+    expect(screen.queryByRole('list', { name: 'Attached images' })).not.toBeInTheDocument()
+  })
+
+  test('remove an attached image', async () => {
+    render(<AiPanel />)
+    await userEvent.upload(screen.getByLabelText('Attach image'), png())
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove image 1' }))
+    expect(screen.queryByRole('list', { name: 'Attached images' })).not.toBeInTheDocument()
+  })
+
+  test('paste a screenshot into the message box', async () => {
+    render(<AiPanel />)
+    fireEvent.paste(screen.getByRole('textbox', { name: 'Message Claude' }), { clipboardData: { files: [png()], getData: () => '' } })
+    expect(await screen.findByRole('list', { name: 'Attached images' })).toBeInTheDocument()
+  })
+
+  test('drop an image on the panel', async () => {
+    render(<AiPanel />)
+    fireEvent.drop(screen.getByRole('complementary', { name: 'Claude' }), { dataTransfer: { files: [png()], types: ['Files'] } })
+    expect(await screen.findByRole('list', { name: 'Attached images' })).toBeInTheDocument()
+  })
+
+  test('other files are refused with a message', async () => {
+    render(<AiPanel />)
+    fireEvent.paste(screen.getByRole('textbox', { name: 'Message Claude' }), {
+      clipboardData: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })], getData: () => '' },
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PNG, JPEG, GIF or WebP/)
+    expect(screen.queryByRole('list', { name: 'Attached images' })).not.toBeInTheDocument()
+  })
+
+  test('sent images show in the conversation', () => {
+    showMessages([{ id: '1', role: 'user', text: 'why?', tools: [], images: [{ thumb: 'data:image/jpeg;base64,abc' }, {}] }])
+    render(<AiPanel />)
+    expect(screen.getByRole('img', { name: 'Attached image 1' })).toHaveAttribute('src', 'data:image/jpeg;base64,abc')
+    expect(screen.getByText('Image 2')).toBeInTheDocument()
+  })
 })

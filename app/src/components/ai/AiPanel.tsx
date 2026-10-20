@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, Clapperboard, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, Clapperboard, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X, Paperclip, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { IMAGE_TYPES, MAX_IMAGES } from '@/lib/chatEvents'
+import { readImage, type Attachment } from '@/lib/images'
 import { activeChat, useAiChat, type Approval, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
 import { usePlayground } from '@/state/playground'
@@ -189,8 +191,30 @@ function Working({ children }: { children: React.ReactNode }) {
 function Message({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   if (message.role === 'user') {
     return (
-      <div className="ml-8 self-end rounded-2xl rounded-br-md bg-violet-500/12 px-3.5 py-2 text-[13px] whitespace-pre-wrap text-foreground ring-1 ring-violet-500/20">
-        {message.text}
+      <div className="ml-8 flex flex-col items-end gap-1.5 self-end">
+        {message.images?.length ? (
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {message.images.map((img, i) =>
+              img.thumb ? (
+                <img
+                  key={i}
+                  src={img.thumb}
+                  alt={`Attached image ${i + 1}`}
+                  className="max-h-28 max-w-40 rounded-lg object-cover ring-1 ring-violet-500/20"
+                />
+              ) : (
+                <span key={i} className="flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-[11.5px] text-muted-foreground">
+                  <ImageIcon className="size-3.5" aria-hidden /> Image {i + 1}
+                </span>
+              ),
+            )}
+          </div>
+        ) : null}
+        {message.text && (
+          <div className="rounded-2xl rounded-br-md bg-violet-500/12 px-3.5 py-2 text-[13px] whitespace-pre-wrap text-foreground ring-1 ring-violet-500/20">
+            {message.text}
+          </div>
+        )}
       </div>
     )
   }
@@ -321,6 +345,10 @@ export function AiPanel() {
   const [showList, setShowList] = useState(false)
   const activeName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
   const [draft, setDraft] = useState('')
+  const [attachments, setAttachments] = useState<(Attachment & { id: string })[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const streaming = status === 'streaming'
@@ -334,19 +362,60 @@ export function AiPanel() {
   }, [messages])
 
   const submit = (text: string) => {
-    if (!text.trim() || streaming) return
+    if ((!text.trim() && !attachments.length) || streaming) return
     setDraft('')
     setShowList(false)
-    void send(text)
+    if (attachments.length) {
+      void send(text, { attachments: attachments.map(({ image, thumb }) => ({ image, thumb })) })
+      setAttachments([])
+    } else void send(text)
+    setAttachError(null)
     inputRef.current?.focus()
   }
+
+  const addFiles = async (files: File[]) => {
+    if (!files.length) return
+    setAttachError(null)
+    const room = MAX_IMAGES - attachments.length
+    if (files.length > room) setAttachError(`Up to ${MAX_IMAGES} images per message.`)
+    for (const file of files.slice(0, Math.max(0, room))) {
+      try {
+        const read = await readImage(file)
+        setAttachments((list) => [...list, { ...read, id: crypto.randomUUID() }])
+      } catch (e) {
+        setAttachError(e instanceof Error ? e.message : String(e))
+      }
+    }
+    inputRef.current?.focus()
+  }
+
+  const canSend = Boolean(draft.trim() || attachments.length)
 
   return (
     <aside
       aria-label="Claude"
       style={{ width }}
       className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files?.length) return
+        e.preventDefault()
+        setDragging(false)
+        void addFiles([...e.dataTransfer.files])
+      }}
     >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-xl border-2 border-dashed border-violet-500 bg-violet-500/10 text-[13px] font-medium text-violet-600 backdrop-blur-sm dark:text-violet-300">
+          Drop images to send to Claude
+        </div>
+      )}
       <SidePanelResizer />
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
@@ -430,13 +499,75 @@ export function AiPanel() {
           <FileCode2 className="size-3 shrink-0" aria-hidden />
           <span className="truncate font-mono">{activeName ?? 'No file open'}</span>
         </div>
+        {attachments.length > 0 && (
+          <ul aria-label="Attached images" className="mb-1.5 flex flex-wrap gap-1.5">
+            {attachments.map((a, i) => (
+              <li key={a.id} className="group relative">
+                {a.thumb ? (
+                  <img src={a.thumb} alt={`Image ${i + 1}`} className="size-14 rounded-lg object-cover ring-1 ring-border" />
+                ) : (
+                  <span className="grid size-14 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
+                    <ImageIcon className="size-5" aria-hidden />
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Remove image ${i + 1}`}
+                  onClick={() => setAttachments((list) => list.filter((x) => x.id !== a.id))}
+                  className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full bg-foreground text-background shadow ring-2 ring-background"
+                >
+                  <X className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {attachError && (
+          <p role="alert" className="mb-1.5 text-[12px] text-red-600 dark:text-red-400">
+            {attachError}
+          </p>
+        )}
         <div className="flex items-end gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={IMAGE_TYPES.join(',')}
+            multiple
+            aria-label="Attach image"
+            className="sr-only"
+            tabIndex={-1}
+            onChange={(e) => {
+              void addFiles([...(e.target.files ?? [])])
+              e.target.value = ''
+            }}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Add images"
+                onClick={() => fileRef.current?.click()}
+                className="text-muted-foreground"
+              >
+                <Paperclip />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add images (or paste / drop them)</TooltipContent>
+          </Tooltip>
           <textarea
             ref={inputRef}
             aria-label="Message Claude"
             rows={1}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onPaste={(e) => {
+              const files = [...(e.clipboardData?.files ?? [])]
+              if (!files.length) return
+              e.preventDefault()
+              void addFiles(files)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
@@ -455,8 +586,8 @@ export function AiPanel() {
               type="submit"
               size="icon-sm"
               aria-label="Send"
-              disabled={!draft.trim()}
-              className={cn('glow-shimmer border-white/15 text-white', !draft.trim() && 'opacity-40')}
+              disabled={!canSend}
+              className={cn('glow-shimmer border-white/15 text-white', !canSend && 'opacity-40')}
             >
               <ArrowUp />
             </Button>

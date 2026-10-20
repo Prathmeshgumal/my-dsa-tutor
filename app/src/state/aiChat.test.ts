@@ -314,6 +314,22 @@ describe('agent tools', () => {
     expect(activeChat(chat())!.messages[1]).toMatchObject({ text: 'Working on it', stopped: true })
   })
 
+  test('images go to Claude with the message; the chat keeps only small thumbnails', async () => {
+    const stream = fakeStream([{ type: 'done' }])
+    const image = { mediaType: 'image/png' as const, data: 'AAAA'.repeat(1000) }
+    await chat().send('what is wrong here?', { stream, ...quiet, attachments: [{ image, thumb: 'data:image/jpeg;base64,thumb' }] })
+    expect((stream.mock.calls[0][0] as ChatRequest).images).toEqual([image])
+    expect(activeChat(chat())!.messages[0].images).toEqual([{ thumb: 'data:image/jpeg;base64,thumb' }])
+    expect(localStorage.getItem('dsa-editor:ai')).not.toContain('AAAA')
+  })
+
+  test('an image can be sent without any text', async () => {
+    const stream = fakeStream([{ type: 'done' }])
+    await chat().send('', { stream, ...quiet, attachments: [{ image: { mediaType: 'image/png', data: 'x' } }] })
+    expect(stream).toHaveBeenCalled()
+    expect(activeChat(chat())!.title).toBe('Image')
+  })
+
   test('an applied change reloads the files straight away', async () => {
     const afterEdits = vi.fn(async () => {})
     await chat().send('fix it', { stream: fakeStream([{ type: 'file_changed', file: 'main.cpp' }]), beforeSend: async () => {}, afterEdits })

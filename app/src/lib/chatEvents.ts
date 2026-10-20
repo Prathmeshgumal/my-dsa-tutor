@@ -36,10 +36,24 @@ export interface EditorContext {
   openNote: { name: string; title: string } | null
 }
 
+/** Image types Claude accepts. */
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+export type ImageType = (typeof IMAGE_TYPES)[number]
+export const MAX_IMAGES = 5
+/** Claude's limit is 5 MB per image; base64 makes that about 6.7M characters. */
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+/** An image sent with a message, as base64 (no data: prefix). */
+export interface ChatImage {
+  mediaType: ImageType
+  data: string
+}
+
 export interface ChatRequest {
   message: string
   sessionId: string | null
   context: EditorContext
+  images?: ChatImage[]
 }
 
 /** The agent's tools live on an in-process MCP server named "editor". */

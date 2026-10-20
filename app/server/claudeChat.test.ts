@@ -1,15 +1,15 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http'
-import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { buildPrompt, createApprovals, createClaudeChatMiddleware, type Approvals, type ChatEvent, type QueryFn } from './claudeChat'
 
 let server: Server
 let base: string
-let calls: { prompt: string; options: Options }[]
+let calls: { prompt: string | AsyncIterable<SDKUserMessage>; options: Options }[]
 
 function fakeQuery(messages: SDKMessage[] | ((options: Options) => AsyncGenerator<SDKMessage>)): QueryFn {
   return ({ prompt, options }) => {
-    calls.push({ prompt: prompt as string, options: options! })
+    calls.push({ prompt, options: options! })
     if (typeof messages === 'function') return messages(options!)
     return (async function* () {
       for (const m of messages) yield m
@@ -290,5 +290,44 @@ describe('approvals', () => {
     const decision = approvals.request(() => {}, controller.signal, change)
     controller.abort()
     expect(await decision).toBe(false)
+  })
+})
+
+describe('images', () => {
+  const png = { mediaType: 'image/png', data: Buffer.from('fake png').toString('base64') }
+
+  async function promptBlocks() {
+    const prompt = calls[0].prompt
+    expect(typeof prompt).not.toBe('string')
+    const messages: SDKUserMessage[] = []
+    for await (const msg of prompt as AsyncIterable<SDKUserMessage>) messages.push(msg)
+    expect(messages).toHaveLength(1)
+    return messages[0].message.content as { type: string; text?: string; source?: unknown }[]
+  }
+
+  test('images are sent to Claude with the message and the editor context', async () => {
+    await start(fakeQuery([success]))
+    await chat({ ...body, images: [png] })
+    const blocks = await promptBlocks()
+    expect(blocks[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.data } })
+    expect(blocks[1].type).toBe('text')
+    expect(blocks[1].text).toContain('Why is this O(n^2)?')
+    expect(blocks[1].text).toContain('<editor_context>')
+  })
+
+  test('an image on its own (no text) is fine', async () => {
+    await start(fakeQuery([success]))
+    await chat({ ...body, message: '', images: [png] })
+    expect((await promptBlocks())[0].type).toBe('image')
+  })
+
+  test.each([
+    ['an unsupported type', [{ mediaType: 'image/bmp', data: png.data }]],
+    ['too many images', Array.from({ length: 6 }, () => png)],
+    ['a huge image', [{ mediaType: 'image/png', data: 'A'.repeat(7_000_001) }]],
+  ])('rejects %s with 400', async (_label, images) => {
+    await start(fakeQuery([success]))
+    const res = await fetch(`${base}/api/claude/chat`, { method: 'POST', body: JSON.stringify({ ...body, images }) })
+    expect(res.status).toBe(400)
   })
 })
