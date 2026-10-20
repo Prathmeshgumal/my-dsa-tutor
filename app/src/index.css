@@ -192,3 +192,46 @@
     @apply font-sans;
     }
 }
+
+/* Thin, theme-coloured scrollbars everywhere (code blocks, text areas, lists).
+   Chromium: the ::-webkit-scrollbar rules (they also drop the arrow buttons, which the
+   standard properties can't, and Chromium ignores them once the standard ones are set).
+   Firefox: the standard properties. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: var(--scrollbar-thumb) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover) padding-box;
+}
+::-webkit-scrollbar-thumb:active {
+  background: oklch(0.606 0.25 292.717 / 0.6) padding-box;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
+:root {
+  --scrollbar-thumb: oklch(0.55 0.015 286 / 0.28);
+  --scrollbar-thumb-hover: oklch(0.55 0.015 286 / 0.5);
+}
+
+.dark {
+  --scrollbar-thumb: oklch(1 0 0 / 0.14);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 0.28);
+}

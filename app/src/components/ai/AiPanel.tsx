@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -25,6 +25,10 @@ const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: type
   run_code: { label: (d) => `Ran ${d || 'the open file'}`, icon: Play },
   edit_file: { label: (d) => `Proposed a change to ${d}`, icon: Pencil },
   create_file: { label: (d) => `Proposed new file ${d}`, icon: FilePlus2 },
+  list_notes: { label: () => 'Listed notes', icon: NotebookPen },
+  read_note: { label: (d) => `Read note ${d}`, icon: NotebookPen },
+  create_note: { label: () => 'Proposed a new note', icon: NotebookPen },
+  edit_note: { label: (d) => `Proposed a change to note ${d}`, icon: NotebookPen },
 }
 
 function ToolList({ tools }: { tools: ToolActivity[] }) {
@@ -77,7 +81,15 @@ function DiffLines({ text, sign }: { text: string; sign: '-' | '+' }) {
 
 /** A change Claude wants to make; nothing is written until the user applies it. */
 function ApprovalCard({ approval }: { approval: Approval }) {
-  const title = approval.kind === 'create' ? `Proposed new file ${approval.file}` : `Proposed change to ${approval.file}`
+  const isNote = approval.kind === 'create_note' || approval.kind === 'edit_note'
+  const isNew = approval.kind === 'create' || approval.kind === 'create_note'
+  const title = isNote
+    ? isNew
+      ? `Proposed new note ${approval.file}`
+      : `Proposed change to note ${approval.file}`
+    : isNew
+      ? `Proposed new file ${approval.file}`
+      : `Proposed change to ${approval.file}`
   const decided = approval.state === 'pending' ? null : DECIDED[approval.state]
   return (
     <div
@@ -89,8 +101,14 @@ function ApprovalCard({ approval }: { approval: Approval }) {
       )}
     >
       <div className="flex items-center gap-1.5 border-b bg-muted/40 px-2.5 py-1.5 text-[12px]">
-        {approval.kind === 'create' ? <FilePlus2 className="size-3.5" aria-hidden /> : <Pencil className="size-3.5" aria-hidden />}
-        <span className="font-medium">{approval.kind === 'create' ? 'New file' : 'Edit'}</span>
+        {isNote ? (
+          <NotebookPen className="size-3.5" aria-hidden />
+        ) : isNew ? (
+          <FilePlus2 className="size-3.5" aria-hidden />
+        ) : (
+          <Pencil className="size-3.5" aria-hidden />
+        )}
+        <span className="font-medium">{isNote ? (isNew ? 'New note' : 'Edit note') : isNew ? 'New file' : 'Edit'}</span>
         <span className="truncate font-mono text-muted-foreground">{approval.file}</span>
         {decided && (
           <span className={cn('ml-auto flex shrink-0 items-center gap-1', decided.className)}>
@@ -100,8 +118,11 @@ function ApprovalCard({ approval }: { approval: Approval }) {
       </div>
       {approval.explanation && <p className="px-2.5 pt-2 text-[12.5px] text-muted-foreground">{approval.explanation}</p>}
       <div className="m-2.5 max-h-64 overflow-auto rounded-md border font-mono text-[11.5px] leading-relaxed">
-        <DiffLines text={approval.before} sign="-" />
-        <DiffLines text={approval.after} sign="+" />
+        {/* min-w-max: row colours run under text that scrolls sideways */}
+        <div className="min-w-max">
+          <DiffLines text={approval.before} sign="-" />
+          <DiffLines text={approval.after} sign="+" />
+        </div>
       </div>
       {approval.state === 'pending' && (
         <div className="flex justify-end gap-2 px-2.5 pb-2.5">

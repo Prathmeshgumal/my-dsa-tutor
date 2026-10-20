@@ -5,6 +5,7 @@ import { activeChat, useAiChat } from './aiChat'
 import { useWorkspace } from './workspace'
 import { useRun } from './run'
 import { useSettings } from './settings'
+import { useNotes } from './notes'
 import type { RunResult } from '@/lib/runner/types'
 
 const runResult: RunResult = { status: 'success', statusText: 'Accepted', stdout: '1', stderr: '', compileOutput: '', timeMs: 3, memoryKb: 100 }
@@ -23,6 +24,7 @@ beforeEach(() => {
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle' })
   useRun.setState({ state: 'idle', result: null, error: null, lastFile: null })
+  useSettings.setState({ notesOpen: false })
 })
 
 test('the first message starts a chat titled after it, and the reply is built from the stream', async () => {
@@ -61,6 +63,7 @@ test('follow-ups stay in the same chat and resume its session, with the open fil
       activeFile: { name: 'two.py', content: useWorkspace.getState().activeFile()!.content },
       openFiles: ['main.cpp', 'two.py'],
       lastRun: null,
+      openNote: null,
     },
   })
 })
@@ -255,6 +258,21 @@ describe('agent tools', () => {
     await chat().send('test it', { stream: fakeStream([{ type: 'run', file: 'bfs.py', result: runResult }]), ...quiet })
     expect(useRun.getState()).toMatchObject({ state: 'done', result: runResult, lastFile: 'bfs.py' })
     expect(useSettings.getState().outputOpen).toBe(true)
+  })
+
+  test('an applied note change reloads the notes panel', async () => {
+    const load = vi.fn(async () => {})
+    useNotes.setState({ load })
+    await chat().send('save it as a note', { stream: fakeStream([{ type: 'note_changed', note: 'note-2.md' }]), ...quiet })
+    expect(load).toHaveBeenCalled()
+  })
+
+  test('tells Claude which note is open in the Notes panel', async () => {
+    useSettings.setState({ notesOpen: true })
+    useNotes.setState({ notes: [{ name: 'note-1.md', content: '# Two pointers' }], activeName: 'note-1.md' })
+    const stream = fakeStream([{ type: 'done' }])
+    await chat().send('hi', { stream, ...quiet })
+    expect((stream.mock.calls[0][0] as ChatRequest).context.openNote).toEqual({ name: 'note-1.md', title: 'Two pointers' })
   })
 
   test('an applied change reloads the files straight away', async () => {

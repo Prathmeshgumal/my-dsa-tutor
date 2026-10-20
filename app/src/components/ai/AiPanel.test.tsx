@@ -255,3 +255,30 @@ describe('proposed changes', () => {
     expect(screen.getByRole('group', { name: 'Proposed new file brute.cpp' })).toBeInTheDocument()
   })
 })
+
+test('note proposals and note tools are labelled as notes', () => {
+  showMessages(
+    [
+      {
+        id: '2',
+        role: 'assistant',
+        text: '',
+        tools: [
+          { name: 'list_notes', detail: '' },
+          { name: 'create_note', detail: '' },
+        ],
+        approvals: [
+          { id: 'n1', kind: 'create_note', file: 'note-2.md', before: '', after: '# Two Sum', explanation: '', state: 'pending' },
+          { id: 'n2', kind: 'edit_note', file: 'note-1.md', before: 'a', after: 'b', explanation: '', state: 'pending' },
+        ],
+      },
+    ],
+    { status: 'streaming', streamingChatId: 'c1' },
+  )
+  render(<AiPanel />)
+  expect(screen.getByRole('group', { name: 'Proposed new note note-2.md' })).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Proposed change to note note-1.md' })).toBeInTheDocument()
+  const tools = screen.getByRole('list', { name: 'What Claude did' })
+  expect(within(tools).getByText('Listed notes')).toBeInTheDocument()
+  expect(within(tools).getByText('Proposed a new note')).toBeInTheDocument()
+})

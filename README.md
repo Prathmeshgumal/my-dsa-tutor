@@ -81,6 +81,8 @@ It can only act through these tools:
 | `run_code` | Runs a file, optionally with input, to test it; the result shows in your output panel | No |
 | `edit_file` | Replaces one exact piece of a file | **Yes**: you see the change and click Apply or Reject |
 | `create_file` | Creates a new solution file | **Yes** |
+| `list_notes` / `read_note` | Your Markdown notes | No |
+| `create_note` / `edit_note` | Saves a new note, or changes one (e.g. "add this to my notes") | **Yes** |
 
 Claude Code's own tools (shell, web, other folders) and your personal Claude Code
 settings, CLAUDE.md, plugins and MCP servers are all switched off for it. You can keep

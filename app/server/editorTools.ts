@@ -1,15 +1,16 @@
 // The only things the editor's Claude agent can do. Each tool works on the solutions folder or on
 // what the editor sent with the message; nothing else (no shell, no web, no other folders).
 import { tool } from '@anthropic-ai/claude-agent-sdk'
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
-import type { EditorContext } from '../src/lib/chatEvents.ts'
+import type { ApprovalKind, EditorContext } from '../src/lib/chatEvents.ts'
 import { languageFromFilename } from '../src/lib/languages.ts'
+import { nextNoteName, noteTitle } from '../src/lib/noteTitle.ts'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
 
 export interface ApprovalRequest {
-  kind: 'edit' | 'create'
+  kind: ApprovalKind
   file: string
   before: string
   after: string
@@ -18,6 +19,8 @@ export interface ApprovalRequest {
 
 export interface EditorToolDeps {
   dir: string
+  /** Where the user's Markdown notes live. */
+  notesDir: string
   context: EditorContext
   runner: CodeRunner
   /** Shows the change to the user and resolves with their decision. */
@@ -26,6 +29,8 @@ export interface EditorToolDeps {
   onRun(file: string, result: RunResult): void
   /** Called after an approved change is written, so the editor reloads it. */
   onFileChanged(file: string): void
+  /** Called after an approved note change is written, so the notes panel reloads it. */
+  onNoteChanged(note: string): void
 }
 
 export interface ToolText {
@@ -67,8 +72,36 @@ function describeRun(file: string | null, result: RunResult): string {
   return lines.join('\n')
 }
 
+/** A plain .md file name directly inside the notes folder. */
+function checkNoteName(name: string): void {
+  const ok = /^[^/\\\0]+\.md$/i.test(name) && !name.startsWith('.') && path.basename(name) === name && name.length <= 255
+  if (!ok) throw new ToolError(`"${name}" isn't a note name; use list_notes to see them (e.g. note-1.md).`)
+}
+
+/** Replaces text that must appear exactly once; explains what to do otherwise. */
+function uniqueCount(content: string, oldText: string, where: string): void {
+  if (!oldText) throw new ToolError('old_text is empty; copy the exact lines you want to replace.')
+  const count = content.split(oldText).length - 1
+  if (count === 0) throw new ToolError(`old_text wasn't found in ${where}. Read it again and copy the lines exactly.`)
+  if (count > 1) throw new ToolError(`old_text appears ${count} times in ${where}; include more surrounding lines so it is unique.`)
+}
+
 export function createEditorTools(deps: EditorToolDeps) {
-  const { dir, context } = deps
+  const { dir, notesDir, context } = deps
+
+  async function readNote(name: string): Promise<string> {
+    checkNoteName(name)
+    try {
+      return await readFile(path.join(notesDir, name), 'utf8')
+    } catch {
+      throw new ToolError(`${name} doesn't exist. Use list_notes to see the notes.`)
+    }
+  }
+
+  const noteNames = async () => {
+    await mkdir(notesDir, { recursive: true })
+    return (await readdir(notesDir)).filter((n) => /\.md$/i.test(n) && !n.startsWith('.'))
+  }
 
   async function readSolution(name: string): Promise<string> {
     checkName(name)
@@ -150,11 +183,7 @@ export function createEditorTools(deps: EditorToolDeps) {
 
     edit_file: guard(
       async ({ name, old_text, new_text, explanation }: { name: string; old_text: string; new_text: string; explanation: string }) => {
-        const content = await readSolution(name)
-        if (!old_text) throw new ToolError('old_text is empty; copy the exact lines you want to replace from read_file.')
-        const count = content.split(old_text).length - 1
-        if (count === 0) throw new ToolError(`old_text wasn't found in ${name}. Read the file again and copy the lines exactly.`)
-        if (count > 1) throw new ToolError(`old_text appears ${count} times in ${name}; include more surrounding lines so it is unique.`)
+        uniqueCount(await readSolution(name), old_text, name)
         const approved = await deps.requestApproval({ kind: 'edit', file: name, before: old_text, after: new_text, explanation })
         if (!approved) return { text: `The user declined this edit to ${name}. Don't apply it another way; ask what they'd prefer.` }
         // Re-read: the user may have typed while deciding.
@@ -175,6 +204,37 @@ export function createEditorTools(deps: EditorToolDeps) {
       deps.onFileChanged(name)
       return { text: `Created ${name}.` }
     }),
+
+    list_notes: guard(async (_: Record<string, never>) => {
+      const names = (await noteNames()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      if (!names.length) return { text: 'There are no notes yet.' }
+      const rows = await Promise.all(names.map(async (n) => `${n}: ${noteTitle(await readFile(path.join(notesDir, n), 'utf8'))}`))
+      return { text: rows.join('\n') }
+    }),
+
+    read_note: guard(async ({ name }: { name: string }) => ({ text: clip(await readNote(name)) || `${name} is empty.` })),
+
+    create_note: guard(async ({ content, explanation }: { content: string; explanation: string }) => {
+      const name = nextNoteName(await noteNames())
+      const approved = await deps.requestApproval({ kind: 'create_note', file: name, before: '', after: content, explanation })
+      if (!approved) return { text: 'The user declined creating this note.' }
+      await writeFile(path.join(notesDir, name), content, { encoding: 'utf8', flag: 'wx' })
+      deps.onNoteChanged(name)
+      return { text: `Saved the note as ${name}; it shows in the Notes panel.` }
+    }),
+
+    edit_note: guard(
+      async ({ name, old_text, new_text, explanation }: { name: string; old_text: string; new_text: string; explanation: string }) => {
+        uniqueCount(await readNote(name), old_text, name)
+        const approved = await deps.requestApproval({ kind: 'edit_note', file: name, before: old_text, after: new_text, explanation })
+        if (!approved) return { text: `The user declined this change to ${name}. Ask what they'd prefer.` }
+        const latest = await readNote(name)
+        if (!latest.includes(old_text)) throw new ToolError(`${name} changed while waiting for approval; read it again.`)
+        await writeFile(path.join(notesDir, name), latest.replace(old_text, () => new_text), 'utf8')
+        deps.onNoteChanged(name)
+        return { text: `Updated ${name}.` }
+      },
+    ),
   }
 }
 
@@ -188,6 +248,10 @@ export const TOOL_NAMES = [
   'run_code',
   'edit_file',
   'create_file',
+  'list_notes',
+  'read_note',
+  'create_note',
+  'edit_note',
 ] as const satisfies readonly (keyof EditorTools)[]
 
 const asResult = (t: ToolText) => ({ content: [{ type: 'text' as const, text: t.text }], isError: t.isError })
@@ -244,6 +308,29 @@ export function toSdkTools(tools: EditorTools) {
       'Propose a new solution file (.cpp, .java or .py). The user must approve it. Never overwrites.',
       { name: z.string(), content: z.string(), explanation },
       async (args) => asResult(await tools.create_file(args)),
+    ),
+    tool('list_notes', "List the user's Markdown notes (file name and title). Notes are separate from code files.", {}, async () =>
+      asResult(await tools.list_notes({})),
+    ),
+    tool('read_note', 'Read one of the user\'s Markdown notes.', { name: z.string().describe('e.g. note-1.md') }, async (args) =>
+      asResult(await tools.read_note(args)),
+    ),
+    tool(
+      'create_note',
+      'Propose a new Markdown note in the Notes panel. Start it with a "# Title" line. The user must approve it.',
+      { content: z.string().describe('The whole note in Markdown, starting with a # title'), explanation },
+      async (args) => asResult(await tools.create_note(args)),
+    ),
+    tool(
+      'edit_note',
+      'Propose replacing one exact, unique piece of a note (e.g. to add to it). The user must approve it.',
+      {
+        name: z.string(),
+        old_text: z.string().describe('Exact text to replace, copied from read_note; must appear exactly once'),
+        new_text: z.string(),
+        explanation,
+      },
+      async (args) => asResult(await tools.edit_note(args)),
     ),
   ]
 }

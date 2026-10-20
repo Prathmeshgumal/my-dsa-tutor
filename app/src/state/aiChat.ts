@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { EDIT_TOOLS, type ChatEvent, type ChatRequest, type LastRun } from '@/lib/chatEvents'
+import { EDIT_TOOLS, type ApprovalKind, type ChatEvent, type ChatRequest, type LastRun } from '@/lib/chatEvents'
 import { streamChat } from '@/lib/claudeClient'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
+import { noteTitle, useNotes } from './notes'
 import { useRun } from './run'
+import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
 export interface ToolActivity {
@@ -15,7 +17,7 @@ export interface ToolActivity {
 /** A change Claude proposed; it is only applied if the user approves it. */
 export interface Approval {
   id: string
-  kind: 'edit' | 'create'
+  kind: ApprovalKind
   file: string
   before: string
   after: string
@@ -99,7 +101,20 @@ function editorContext(): ChatRequest['context'] {
     activeFile: active ? { name: active.name, content: active.content } : null,
     openFiles: openIds.flatMap((id) => files.filter((f) => f.id === id).map((f) => f.name)),
     lastRun: lastRun(),
+    openNote: openNote(),
   }
+}
+
+function openNote(): ChatRequest['context']['openNote'] {
+  if (!useSettings.getState().notesOpen) return null
+  const { notes, activeName } = useNotes.getState()
+  const note = notes.find((n) => n.name === activeName)
+  return note ? { name: note.name, title: noteTitle(note.content) } : null
+}
+
+/** Save code and notes, so Claude reads what the user sees. */
+async function saveEverything() {
+  await Promise.all([flushAutosave(), useNotes.getState().flush()])
 }
 
 function lastRun(): LastRun {
@@ -126,7 +141,7 @@ export const useAiChat = create<AiChatState>()(
       streamingChatId: null,
       status: 'idle',
 
-      async send(text, { stream = streamChat, beforeSend = flushAutosave, afterEdits = refreshFromDisk } = {}) {
+      async send(text, { stream = streamChat, beforeSend = saveEverything, afterEdits = refreshFromDisk } = {}) {
         const message = text.trim()
         if (!message || get().status === 'streaming') return
 
@@ -170,6 +185,7 @@ export const useAiChat = create<AiChatState>()(
                 patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
               } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result)
               else if (event.type === 'file_changed') void afterEdits()
+              else if (event.type === 'note_changed') void useNotes.getState().load()
               else if (event.type === 'error') patchReply(() => ({ error: event.message }))
             },
             { signal: controller.signal },
@@ -195,7 +211,7 @@ export const useAiChat = create<AiChatState>()(
         if (get().chats.some((c) => c.id === id)) set({ activeChatId: id })
       },
 
-      async answerApproval(id, approved, { post = (url: string, init: RequestInit) => fetch(url, init), beforeAnswer = flushAutosave } = {}) {
+      async answerApproval(id, approved, { post = (url: string, init: RequestInit) => fetch(url, init), beforeAnswer = saveEverything } = {}) {
         await beforeAnswer()
         let found = false
         try {

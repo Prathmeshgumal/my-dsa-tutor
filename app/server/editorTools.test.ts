@@ -6,6 +6,7 @@ import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
 import { createEditorTools, type ApprovalRequest, type EditorToolDeps } from './editorTools'
 
 let dir: string
+let notesDir: string
 const ok: RunResult = {
   status: 'success',
   statusText: 'Accepted',
@@ -20,14 +21,20 @@ beforeEach(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'agent-'))
   await writeFile(path.join(dir, 'sort.cpp'), 'int main() {\n  int a = 1;\n  return 0;\n}\n')
   await writeFile(path.join(dir, 'bfs.py'), 'print("bfs")\n')
+  notesDir = await mkdtemp(path.join(tmpdir(), 'agent-notes-'))
+  await writeFile(path.join(notesDir, 'note-1.md'), '# Two pointers\n\n- works on sorted arrays\n')
 })
-afterEach(() => rm(dir, { recursive: true, force: true }))
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+  await rm(notesDir, { recursive: true, force: true })
+})
 
 function setup(overrides: Partial<EditorToolDeps> = {}) {
   const runner = { run: vi.fn(async () => ok) } satisfies CodeRunner
   const approvals: ApprovalRequest[] = []
   const deps: EditorToolDeps = {
     dir,
+    notesDir,
     context: {
       activeFile: { name: 'sort.cpp', content: 'ignored: tools read from disk' },
       openFiles: ['sort.cpp', 'bfs.py'],
@@ -40,6 +47,7 @@ function setup(overrides: Partial<EditorToolDeps> = {}) {
     }),
     onRun: vi.fn(),
     onFileChanged: vi.fn(),
+    onNoteChanged: vi.fn(),
     ...overrides,
   }
   return { tools: createEditorTools(deps), deps, runner, approvals }
@@ -148,5 +156,44 @@ describe('changing files (always asks first)', () => {
     expect(await readFile(path.join(dir, 'brute.cpp'), 'utf8')).toBe('int main(){}')
     expect((await tools.create_file({ name: 'sort.cpp', content: 'x', explanation: '' })).isError).toBe(true)
     expect((await tools.create_file({ name: '../escape.cpp', content: 'x', explanation: '' })).isError).toBe(true)
+  })
+})
+
+describe('notes', () => {
+  test('list_notes shows each note with its title', async () => {
+    const text = (await setup().tools.list_notes({})).text
+    expect(text).toContain('note-1.md')
+    expect(text).toContain('Two pointers')
+  })
+
+  test('read_note returns the markdown', async () => {
+    expect((await setup().tools.read_note({ name: 'note-1.md' })).text).toContain('- works on sorted arrays')
+    expect((await setup().tools.read_note({ name: '../x.md' })).isError).toBe(true)
+    expect((await setup().tools.read_note({ name: 'main.cpp' })).isError).toBe(true)
+  })
+
+  test('create_note asks first, then saves it under the next free name', async () => {
+    const { tools, approvals, deps } = setup()
+    const result = await tools.create_note({ content: '# Two Sum approaches\n\n1. Brute force', explanation: 'save the plan' })
+    expect(approvals[0]).toMatchObject({ kind: 'create_note', file: 'note-2.md', before: '', after: '# Two Sum approaches\n\n1. Brute force' })
+    expect(await readFile(path.join(notesDir, 'note-2.md'), 'utf8')).toBe('# Two Sum approaches\n\n1. Brute force')
+    expect(deps.onNoteChanged).toHaveBeenCalledWith('note-2.md')
+    expect(result.text).toContain('note-2.md')
+  })
+
+  test('edit_note asks first, then replaces the exact text', async () => {
+    const { tools, approvals, deps } = setup()
+    await tools.edit_note({ name: 'note-1.md', old_text: '- works on sorted arrays', new_text: '- works on sorted arrays\n- O(n)', explanation: '' })
+    expect(approvals[0]).toMatchObject({ kind: 'edit_note', file: 'note-1.md' })
+    expect(await readFile(path.join(notesDir, 'note-1.md'), 'utf8')).toContain('- O(n)')
+    expect(deps.onNoteChanged).toHaveBeenCalledWith('note-1.md')
+  })
+
+  test('declined note changes are not written', async () => {
+    const { tools, deps } = setup({ requestApproval: async () => false })
+    await tools.create_note({ content: '# x', explanation: '' })
+    await tools.edit_note({ name: 'note-1.md', old_text: '# Two pointers', new_text: '# Changed', explanation: '' })
+    expect(await readFile(path.join(notesDir, 'note-1.md'), 'utf8')).toContain('# Two pointers')
+    expect(deps.onNoteChanged).not.toHaveBeenCalled()
   })
 })

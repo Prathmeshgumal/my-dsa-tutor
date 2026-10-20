@@ -29,6 +29,8 @@ You can only act through these tools:
 - get_last_run: what the output panel shows (last result, output, compiler errors)
 - run_code: compile and run a file, optionally with stdin, to test it; the student sees the result in their output panel
 - edit_file / create_file: propose a change; the student sees it and must approve it before it is applied
+- list_notes / read_note: the student's Markdown notes (shown in the editor's Notes panel)
+- create_note / edit_note: propose a new note or a change to one; also needs approval. When the student asks you to save or add something to their notes, use these (not comments in code).
 
 How to help:
 - Each message starts with an <editor_context> block naming the open file, with its current code. Treat that code as current.
@@ -48,6 +50,7 @@ export function buildPrompt(message: string, context: EditorContext): string {
   }
   const others = context.openFiles.filter((n) => n !== context.activeFile?.name)
   if (others.length) lines.push(`Other open tabs: ${others.join(', ')}`)
+  if (context.openNote) lines.push(`Open in the Notes panel: ${context.openNote.name} (${context.openNote.title})`)
   lines.push('</editor_context>', '', message)
   return lines.join('\n')
 }
@@ -118,7 +121,9 @@ function parseContext(raw: unknown): EditorContext {
   const activeFile =
     file && typeof file.name === 'string' && typeof file.content === 'string' ? { name: file.name, content: file.content } : null
   const openFiles = Array.isArray(ctx.openFiles) ? ctx.openFiles.filter((n): n is string => typeof n === 'string') : []
-  return { activeFile, openFiles, lastRun: parseLastRun(ctx.lastRun) }
+  const note = ctx.openNote as Record<string, unknown> | null | undefined
+  const openNote = note && typeof note.name === 'string' && typeof note.title === 'string' ? { name: note.name, title: note.title } : null
+  return { activeFile, openFiles, lastRun: parseLastRun(ctx.lastRun), openNote }
 }
 
 /** Proposed changes waiting for the user's yes/no, shared between the chat stream and the approval endpoint. */
@@ -153,6 +158,8 @@ export type Approvals = ReturnType<typeof createApprovals>
 
 interface MiddlewareOptions {
   cwd: string
+  /** The Markdown notes folder, for the notes tools. */
+  notesDir: string
   queryImpl?: QueryFn
   /** Runs code for the run_code tool. */
   runner?: CodeRunner
@@ -161,6 +168,7 @@ interface MiddlewareOptions {
 
 export function createClaudeChatMiddleware({
   cwd,
+  notesDir,
   queryImpl = query,
   runner = createPistonRunner({ baseUrl: `${process.env.PISTON_URL ?? 'http://127.0.0.1:2000'}/api/v2` }),
   approvals = createApprovals(),
@@ -194,11 +202,13 @@ export function createClaudeChatMiddleware({
       const context = parseContext(body.context)
       const tools = createEditorTools({
         dir: cwd,
+        notesDir,
         context,
         runner,
         requestApproval: (change) => approvals.request(send, abortController.signal, change),
         onRun: (file, result) => send({ type: 'run', file, result }),
         onFileChanged: (file) => send({ type: 'file_changed', file }),
+        onNoteChanged: (note) => send({ type: 'note_changed', note }),
       })
 
       let sessionSent = false

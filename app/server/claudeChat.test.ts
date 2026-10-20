@@ -19,7 +19,7 @@ function fakeQuery(messages: SDKMessage[] | ((options: Options) => AsyncGenerato
 
 async function start(queryImpl: QueryFn, approvals: Approvals = createApprovals()) {
   calls = []
-  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', queryImpl, approvals })
+  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', notesDir: '/tmp/notes', queryImpl, approvals })
   server = createServer((req, res) =>
     middleware(req, res, () => {
       res.statusCode = 418
@@ -124,10 +124,13 @@ test('the agent only gets the editor tools: no built-ins, no personal settings, 
   expect(options.strictMcpConfig).toBe(true)
   expect(Object.keys(options.mcpServers!)).toEqual(['editor'])
   expect(options.allowedTools).toEqual(
-    ['get_editor_state', 'list_files', 'read_file', 'get_last_run', 'run_code', 'edit_file', 'create_file'].map((n) => `mcp__editor__${n}`),
+    ['get_editor_state', 'list_files', 'read_file', 'get_last_run', 'run_code', 'edit_file', 'create_file', 'list_notes', 'read_note', 'create_note', 'edit_note'].map(
+      (n) => `mcp__editor__${n}`,
+    ),
   )
   expect(typeof options.systemPrompt).toBe('string')
   expect(options.systemPrompt).toContain('edit_file')
+  expect(options.systemPrompt).toContain('create_note')
   expect(prompt).toContain('Why is this O(n^2)?')
   expect(prompt).toContain('two_sum.cpp')
 })
@@ -205,6 +208,12 @@ describe('buildPrompt', () => {
     expect(p).toContain('```python\nprint(1)\n```')
     expect(p).toContain('b.cpp')
     expect(p.trimEnd().endsWith('Explain this')).toBe(true)
+  })
+
+  test('mentions the note open in the Notes panel', () => {
+    expect(buildPrompt('Hi', { activeFile: null, openFiles: [], lastRun: null, openNote: { name: 'note-1.md', title: 'Two pointers' } })).toContain(
+      'note-1.md (Two pointers)',
+    )
   })
 
   test('no active file → just says so', () => {

@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import { nextNoteName, noteTitle } from '@/lib/noteTitle'
+
+export { noteTitle }
 
 /** Markdown notes, stored as .md files in the notes folder via /api/notes. Disk is the only copy. */
 export interface Note {
@@ -46,20 +49,7 @@ const writeNote = (note: Note, keepalive = false) =>
     keepalive,
   )
 
-export function noteTitle(content: string): string {
-  const first = content
-    .split('\n')
-    .map((l) => l.replace(/^\s*#+\s*/, '').trim())
-    .find(Boolean)
-  return first ?? 'Untitled note'
-}
-
-function nextName(notes: Note[]): string {
-  const taken = new Set(notes.map((n) => n.name.toLowerCase()))
-  let i = 1
-  while (taken.has(`note-${i}.md`)) i++
-  return `note-${i}.md`
-}
+const nextName = (notes: Note[]) => nextNoteName(notes.map((n) => n.name))
 
 // The note waiting to be written, and its timer.
 let pending: Note | null = null

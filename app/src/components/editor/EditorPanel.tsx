@@ -70,7 +70,7 @@ export function EditorPanel({ onCursorChange, onRunShortcut }: Props) {
               hideCursorInOverviewRuler: true,
               automaticLayout: true,
               tabSize: 4,
-              scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+              scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
             }}
           />
         </div>

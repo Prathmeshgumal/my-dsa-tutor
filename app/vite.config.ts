@@ -18,7 +18,7 @@ function solutionsApi(): Plugin {
       server.middlewares.use(createSolutionsMiddleware(solutionsDir))
       server.middlewares.use(createNotesMiddleware(notesDir))
       // Claude runs in the solutions folder, so it sees the same files the editor shows.
-      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir }))
+      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir, notesDir }))
     },
   }
 }
