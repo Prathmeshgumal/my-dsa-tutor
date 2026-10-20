@@ -49,6 +49,7 @@ Practice problems:
 - To explain the question, work from its description and examples. Don't hand out the solution unless asked.
 - If their code misses an edge case, show it with add_test_case rather than putting tests in their code.
 - Use run_tests to check claims about their solution. Only the student's Submit records an attempt or marks a problem solved.
+- Everything about a problem belongs to it: while it's open, notes you create, dry runs (pass "problem" to create_visualization so it traces their solution) and this chat are linked to it automatically. A problem can have several versions of the code (e.g. brute force and optimal): save_code_version adds one, and edit_solution / run_tests take a "file".
 
 Dry runs:
 - When the student asks for a dry run, asks why their code is wrong, or would understand something better by seeing it, use create_visualization.
@@ -79,7 +80,10 @@ export function buildPrompt(message: string, context: EditorContext): string {
   if (others.length) lines.push(`Other open tabs: ${others.join(', ')}`)
   if (context.openNote) lines.push(`Open in the Notes panel: ${context.openNote.name} (${context.openNote.title})`)
   if (context.openProblem) {
-    lines.push(`The Problem screen is showing "${context.openProblem.title}" (slug ${context.openProblem.slug}); use get_problem to read it.`)
+    const { title, slug, file } = context.openProblem
+    lines.push(
+      `The Problem screen is showing "${title}" (slug ${slug})${file && file !== 'solution.cpp' ? `, with its ${file} open in the editor` : ''}; use get_problem to read it.`,
+    )
   }
   lines.push('</editor_context>', '', message)
   return lines.join('\n')
@@ -216,7 +220,9 @@ function parseContext(raw: unknown): EditorContext {
   const openNote = note && typeof note.name === 'string' && typeof note.title === 'string' ? { name: note.name, title: note.title } : null
   const prob = ctx.openProblem as Record<string, unknown> | null | undefined
   const openProblem =
-    prob && typeof prob.slug === 'string' && typeof prob.title === 'string' ? { slug: prob.slug, title: prob.title } : null
+    prob && typeof prob.slug === 'string' && typeof prob.title === 'string'
+      ? { slug: prob.slug, title: prob.title, ...(typeof prob.file === 'string' ? { file: prob.file } : {}) }
+      : null
   return { activeFile, openFiles, lastRun: parseLastRun(ctx.lastRun), openNote, openProblem }
 }
 

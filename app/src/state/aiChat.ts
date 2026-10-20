@@ -76,6 +76,8 @@ export interface Chat {
   sessionId: string | null
   messages: ChatMessage[]
   updatedAt: number
+  /** The practice problem this chat is about (started while it was open). */
+  problemSlug?: string | null
 }
 
 interface AiChatState {
@@ -91,6 +93,8 @@ interface AiChatState {
   newChat(): void
   selectChat(id: string): void
   deleteChat(id: string): void
+  /** Shows the latest chat about this problem (or a fresh one), unless a chat about it is already showing. */
+  followProblem(slug: string): void
   answerApproval(id: string, approved: boolean, deps?: AnswerDeps): Promise<void>
 }
 
@@ -121,8 +125,9 @@ function editorContext(): ChatRequest['context'] {
 
 function openProblem(): ChatRequest['context']['openProblem'] {
   if (useSettings.getState().screen !== 'problem') return null
-  const entry = activeProblem(useProblems.getState())
-  return entry ? { slug: entry.slug, title: entry.problem.title } : null
+  const state = useProblems.getState()
+  const entry = activeProblem(state)
+  return entry ? { slug: entry.slug, title: entry.problem.title, file: state.activeFile } : null
 }
 
 function openNote(): ChatRequest['context']['openNote'] {
@@ -179,7 +184,15 @@ export const useAiChat = create<AiChatState>()(
           { id: replyId, role: 'assistant', text: '', tools: [] },
         ]
         set((s) => {
-          const base: Chat = existing ?? { id: chatId, title: titleFrom(message || 'Image'), sessionId: null, messages: [], updatedAt: 0 }
+          const base: Chat = existing ?? {
+            id: chatId,
+            title: titleFrom(message || 'Image'),
+            sessionId: null,
+            messages: [],
+            updatedAt: 0,
+            // A chat started while a problem is open belongs to that problem.
+            problemSlug: openProblem()?.slug ?? null,
+          }
           const updated = { ...base, messages: [...base.messages, ...newMessages], updatedAt: Date.now() }
           return {
             status: 'streaming',
@@ -221,6 +234,8 @@ export const useAiChat = create<AiChatState>()(
               else if (event.type === 'note_changed') void useNotes.getState().load()
               else if (event.type === 'problem_changed') {
                 const { slug, open } = event
+                // The chat that set up a problem is about that problem (so it stays in view when the problem opens).
+                if (open) patchChat((c) => (c.problemSlug ? {} : { problemSlug: slug }))
                 void useProblems
                   .getState()
                   .load()
@@ -278,6 +293,12 @@ export const useAiChat = create<AiChatState>()(
         set((s) => ({ chats: setApprovalState(s.chats, id, found ? (approved ? 'approved' : 'rejected') : 'expired') }))
       },
 
+      followProblem(slug) {
+        if (activeChat(get())?.problemSlug === slug) return
+        const latest = get().chats.find((c) => c.problemSlug === slug)
+        set({ activeChatId: latest?.id ?? null })
+      },
+
       deleteChat(id) {
         if (get().streamingChatId === id) controller?.abort()
         set((s) => {
@@ -311,3 +332,8 @@ export const useAiChat = create<AiChatState>()(
     },
   ),
 )
+
+// Opening a different problem shows its chats. The user can still pick any chat afterwards.
+useProblems.subscribe((state, prev) => {
+  if (state.activeSlug && state.activeSlug !== prev.activeSlug) useAiChat.getState().followProblem(state.activeSlug)
+})

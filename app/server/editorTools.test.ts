@@ -324,4 +324,33 @@ describe('problems', () => {
     expect((await tools.get_problem({})).text).toContain('No problem is open')
     expect((await tools.get_problem({ slug: 'nope' })).text).toContain('list_problems')
   })
+
+  test('dry runs and notes made while a problem is open belong to it', async () => {
+    await setup().tools.create_problem(twoSum)
+    const open = { activeFile: null, openFiles: [], lastRun: null, openNote: null, openProblem: { slug: 'two-sum', title: 'Two Sum' } }
+    const { tools, deps } = setup({ context: open })
+    const viz = await tools.create_visualization({ title: 'Dry run', problem: 'two-sum', steps: [{ line: 3, note: 'start' }] })
+    expect(viz.isError).toBeFalsy()
+    const run = (deps.onVisualization as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(run).toMatchObject({ problem: 'two-sum', file: 'solution.cpp', code: twoSum.starter })
+    await tools.create_note({ content: '# Two Sum tricks\n', explanation: 'save' })
+    expect((await readEntry(problemsDir, 'two-sum')).problem.notes).toEqual(['note-2.md'])
+    const text = (await tools.get_problem({})).text
+    expect(text).toContain('Notes linked to it: note-2.md')
+    expect(text).toContain('Dry runs of it: "Dry run" (1 steps)')
+  })
+
+  test('save_code_version adds a version that edit_solution and run_tests can use', async () => {
+    await setup().tools.create_problem(twoSum)
+    const runner = { run: vi.fn(async () => ({ ...ok, stdout: out('[0,1]') })) }
+    const { tools, approvals } = setup({ runner })
+    await tools.save_code_version({ slug: 'two-sum', name: 'brute-force.cpp', content: 'class Solution { int x; };', explanation: 'compare' })
+    expect(approvals[0]).toMatchObject({ kind: 'create', file: 'two-sum/brute-force.cpp' })
+    await tools.edit_solution({ slug: 'two-sum', file: 'brute-force.cpp', old_text: 'int x;', new_text: 'int y;', explanation: 'rename' })
+    expect((await readEntry(problemsDir, 'two-sum')).versions).toEqual([{ name: 'brute-force.cpp', content: 'class Solution { int y; };' }])
+    const run = await tools.run_tests({ slug: 'two-sum', file: 'brute-force.cpp' })
+    expect(run.text).toMatch(/^brute-force\.cpp: Accepted/)
+    expect(runner.run.mock.calls.at(-1)![0].source).toContain('int y;')
+    expect((await tools.run_tests({ slug: 'two-sum', file: 'nope.cpp' })).text).toContain('its code files are solution.cpp, brute-force.cpp')
+  })
 })

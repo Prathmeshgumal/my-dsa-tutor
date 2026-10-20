@@ -128,3 +128,24 @@ into a problem when asked, using `create_problem` with the file's text.
   each new tool, store autosave.
 - Real check in the browser with a real Claude turn: paste a problem, see it open,
   Run, fail a case, fix, Submit, see ✓ in the list. Probe problems deleted afterwards.
+
+## Addition: everything linked to its problem
+
+The user asked for each problem to hold its dry runs, notes, code files and chats.
+
+- **Linked automatically.** Anything made while a problem is open belongs to it: notes created by the
+  user or by Claude, dry runs, and chats started there. The chat that creates a problem also belongs to it.
+- **Where the links live.** Notes stay in `notes/`, and `problem.json` lists their names (`notes`).
+  Dry runs stay in `playground/` with a `problem` field. Chats stay in the browser with `problemSlug`.
+  Code versions are extra `.cpp` files in the problem folder, next to `solution.cpp`.
+- **Problem page.** Description, Notes, Dry runs, Chats and Submissions tabs. Code versions are file
+  tabs above the editor rather than a left-hand tab (builder's call: switching code belongs next to the
+  code). **+** copies the open version.
+- **Claude panel.** Opening a different problem switches to its latest chat, or a fresh one. Any chat
+  can still be picked from the list, and the pick stays until another problem is opened.
+- **Elsewhere.** Notes, dry runs and chats show a tag with their problem's name.
+- **Claude tools.** create_visualization takes `problem` and traces that problem's code. create_note
+  links to the open problem. edit_solution and run_tests take `file`. New save_code_version.
+  get_problem lists versions, linked notes and dry runs.
+- **Deleting a problem** removes its folder (code, tests, attempts). Its notes, dry runs and chats are
+  kept and simply lose their tag (builder's call: never delete the user's notes as a side effect).

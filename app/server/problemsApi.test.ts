@@ -92,3 +92,23 @@ test('rejects bad names and unknown problems', async () => {
 test('leaves other routes alone', async () => {
   expect((await fetch(base.replace('problems', 'files'))).status).toBe(418)
 })
+
+test('saves and deletes other versions of the code, but never solution.cpp', async () => {
+  const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: 'main', driver: '' })
+  expect((await send(`${base}/${slug}/files/brute-force.cpp`, 'PUT', { content: 'brute' })).status).toBe(204)
+  const [entry] = await (await fetch(base)).json()
+  expect(entry.versions).toEqual([{ name: 'brute-force.cpp', content: 'brute' }])
+  expect(entry.solution).toBe('main')
+  expect((await fetch(`${base}/${slug}/files/solution.cpp`, { method: 'DELETE' })).status).toBe(400)
+  expect((await fetch(`${base}/${slug}/files/driver.cpp`, { method: 'DELETE' })).status).toBe(400)
+  expect((await send(`${base}/${slug}/files/..%2Fx.cpp`, 'PUT', { content: '' })).status).toBe(400)
+  expect((await fetch(`${base}/${slug}/files/brute-force.cpp`, { method: 'DELETE' })).status).toBe(204)
+  expect((await (await fetch(base)).json())[0].versions).toEqual([])
+})
+
+test('stores which notes belong to a problem', async () => {
+  const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: '', driver: '' })
+  expect((await send(`${base}/${slug}/notes`, 'PUT', { notes: ['note-1.md', 'note-1.md', 'note-3.md'] })).status).toBe(204)
+  const [entry] = await (await fetch(base)).json()
+  expect(entry.problem.notes).toEqual(['note-1.md', 'note-3.md'])
+})

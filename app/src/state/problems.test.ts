@@ -19,6 +19,7 @@ const entry = (slug: string, extra: Partial<ProblemEntry> = {}): ProblemEntry =>
     createdAt: 1,
   },
   solution: 'class Solution {};',
+  versions: [],
   driver: 'int main(){}',
   solved: false,
   attempts: 0,
@@ -70,7 +71,7 @@ test('typing saves the solution after a pause', async () => {
   useProblems.getState().editSolution('new code')
   expect(useProblems.getState().saveStatus).toBe('pending')
   await vi.waitFor(() => expect(useProblems.getState().saveStatus).toBe('saved'))
-  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/solution', method: 'PUT', body: { content: 'new code' } })
+  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/files/solution.cpp', method: 'PUT', body: { content: 'new code' } })
 })
 
 test('a reload while typing keeps the unsaved code', async () => {
@@ -120,4 +121,52 @@ test('deleting the open problem moves to the next one', async () => {
   await useProblems.getState().remove('two-sum')
   expect(calls).toContainEqual({ url: '/api/problems/two-sum', method: 'DELETE', body: undefined })
   expect(useProblems.getState().activeSlug).toBe('three-sum')
+})
+
+test('a new version copies the open code, opens it, and edits save to it', async () => {
+  await useProblems.getState().load()
+  await useProblems.getState().newVersion()
+  expect(useProblems.getState().activeFile).toBe('solution-2.cpp')
+  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/files/solution-2.cpp', method: 'PUT', body: { content: 'class Solution {};' } })
+  useProblems.getState().editSolution('brute force')
+  await useProblems.getState().flush()
+  expect(calls.at(-1)).toMatchObject({ url: '/api/problems/two-sum/files/solution-2.cpp', body: { content: 'brute force' } })
+  expect(useProblems.getState().entries[0]).toMatchObject({ solution: 'class Solution {};', versions: [{ name: 'solution-2.cpp', content: 'brute force' }] })
+})
+
+test('Submit tests the open version and records which file it was', async () => {
+  server = [entry('two-sum', { versions: [{ name: 'brute.cpp', content: 'brute code' }] })]
+  await useProblems.getState().load()
+  await useProblems.getState().selectFile('brute.cpp')
+  let source = ''
+  const runner: CodeRunner = {
+    async run(req) {
+      source = req.source
+      return runnerReturning(out('1', '2')).run(req)
+    },
+  }
+  await useProblems.getState().test('submit', runner)
+  expect(source).toContain('brute code')
+  expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ attempt: { file: 'brute.cpp', code: 'brute code' } })
+})
+
+test('deleting the open version goes back to solution.cpp; solution.cpp cannot be deleted', async () => {
+  server = [entry('two-sum', { versions: [{ name: 'brute.cpp', content: 'x' }] })]
+  await useProblems.getState().load()
+  await useProblems.getState().selectFile('brute.cpp')
+  await useProblems.getState().deleteVersion('brute.cpp')
+  expect(useProblems.getState().activeFile).toBe('solution.cpp')
+  expect(useProblems.getState().entries[0].versions).toEqual([])
+  await useProblems.getState().deleteVersion('solution.cpp')
+  expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(1)
+})
+
+test('notes can be linked to and unlinked from the open problem', async () => {
+  await useProblems.getState().load()
+  await useProblems.getState().linkNote('note-1.md')
+  await useProblems.getState().linkNote('note-1.md')
+  expect(useProblems.getState().entries[0].problem.notes).toEqual(['note-1.md'])
+  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/notes', method: 'PUT', body: { notes: ['note-1.md'] } })
+  await useProblems.getState().unlinkNote('note-1.md')
+  expect(useProblems.getState().entries[0].problem.notes).toEqual([])
 })

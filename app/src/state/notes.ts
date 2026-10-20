@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { nextNoteName, noteTitle } from '@/lib/noteTitle'
+import { useProblems } from './problems'
+import { useSettings } from './settings'
 
 export { noteTitle }
 
@@ -92,6 +94,8 @@ export const useNotes = create<NotesState>()((set, get) => {
       const note = { name: nextName(get().notes), content: NEW_NOTE }
       set((s) => ({ notes: [...s.notes, note], activeName: note.name }))
       await save(note)
+      // A note started while a problem is open belongs to that problem.
+      if (useSettings.getState().screen === 'problem') await useProblems.getState().linkNote(note.name).catch(() => {})
     },
 
     async select(name) {

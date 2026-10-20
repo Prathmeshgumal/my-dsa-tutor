@@ -1,16 +1,35 @@
 import { useEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, CloudUpload, ListChecks, Loader2, Play, Sparkles, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Circle,
+  CloudUpload,
+  ListChecks,
+  Loader2,
+  Play,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { Markdown } from '@/components/ai/Markdown'
 import { registerGlowThemes } from '@/components/editor/monacoThemes'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { Attempt, Difficulty, ProblemEntry } from '@/lib/problems'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { codeOf, SOLUTION_FILE, type Attempt, type Difficulty, type ProblemEntry } from '@/lib/problems'
 import { cn } from '@/lib/utils'
 import { activeProblem, flushProblemsOnUnload, useProblems } from '@/state/problems'
 import { useSettings } from '@/state/settings'
+import { useAiChat } from '@/state/aiChat'
+import { useNotes } from '@/state/notes'
+import { usePlayground } from '@/state/playground'
+import { ProblemChats, ProblemDryRuns, ProblemNotes } from './ProblemLinks'
 import { TestPanel } from './TestPanel'
 
 const DIFFICULTY: Record<Difficulty, { label: string; className: string }> = {
@@ -51,7 +70,9 @@ function ProblemRow({ entry, active }: { entry: ProblemEntry; active: boolean })
         )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12.5px] text-foreground">{title}</span>
-          <span className={cn('block text-[11px]', DIFFICULTY[difficulty].className)}>{DIFFICULTY[difficulty].label}</span>
+          <span className={cn('block text-[11px]', DIFFICULTY[difficulty].className)}>
+            {DIFFICULTY[difficulty].label}
+          </span>
         </span>
       </button>
       {confirming ? (
@@ -119,15 +140,24 @@ function AttemptView({ attempt, onBack }: { attempt: Attempt; onBack(): void }) 
         <ArrowLeft /> All submissions
       </Button>
       <div className="flex items-baseline gap-2">
-        <span className={cn('text-[15px] font-semibold', accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+        <span
+          className={cn(
+            'text-[15px] font-semibold',
+            accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+          )}
+        >
           {attempt.statusText}
         </span>
         <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
           {attempt.passed}/{attempt.total} cases
         </span>
       </div>
-      <span className="text-[12px] text-muted-foreground">{timeAgo(attempt.at)}</span>
-      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[12px] leading-relaxed">{attempt.code}</pre>
+      <span className="text-[12px] text-muted-foreground">
+        {[attempt.file ?? SOLUTION_FILE, timeAgo(attempt.at)].join(' · ')}
+      </span>
+      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[12px] leading-relaxed">
+        {attempt.code}
+      </pre>
     </div>
   )
 }
@@ -137,7 +167,11 @@ function Submissions() {
   const [open, setOpen] = useState<Attempt | null>(null)
   if (open) return <AttemptView attempt={open} onBack={() => setOpen(null)} />
   if (!attempts.length) {
-    return <p className="p-4 text-[12.5px] text-muted-foreground">No submissions yet. Submit runs every test case and saves your code here.</p>
+    return (
+      <p className="p-4 text-[12.5px] text-muted-foreground">
+        No submissions yet. Submit runs every test case and saves your code here.
+      </p>
+    )
   }
   return (
     <ul aria-label="Submissions" className="flex flex-col gap-0.5 p-2">
@@ -150,7 +184,12 @@ function Submissions() {
               onClick={() => setOpen(a)}
               className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-muted"
             >
-              <span className={cn('w-36 shrink-0 text-[12.5px] font-medium', accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+              <span
+                className={cn(
+                  'w-36 shrink-0 text-[12.5px] font-medium',
+                  accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                )}
+              >
                 {a.statusText}
               </span>
               <span className="font-mono text-[11.5px] text-muted-foreground tabular-nums">
@@ -165,14 +204,24 @@ function Submissions() {
   )
 }
 
+type Tab = 'description' | 'notes' | 'dry runs' | 'chats' | 'submissions'
+
 function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
-  const [tab, setTab] = useState<'description' | 'submissions'>('description')
+  const [tab, setTab] = useState<Tab>('description')
   const attempts = useProblems((s) => s.attempts.length)
+  // Selectors return numbers, not new arrays, so the panel doesn't re-render forever.
+  const linkedNotes = entry.problem.notes ?? []
+  const counts: Partial<Record<Tab, number>> = {
+    notes: useNotes((s) => s.notes.filter((n) => linkedNotes.includes(n.name)).length),
+    'dry runs': usePlayground((s) => s.runs.filter((r) => r.problem === entry.slug).length),
+    chats: useAiChat((s) => s.chats.filter((c) => c.problemSlug === entry.slug).length),
+    submissions: attempts,
+  }
   const { problem } = entry
   return (
     <section aria-label="Problem description" className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" className="flex gap-1 border-b px-2 pt-1.5">
-        {(['description', 'submissions'] as const).map((t) => (
+      <div role="tablist" className="flex shrink-0 overflow-x-auto border-b px-1.5 pt-1.5 [scrollbar-width:none]">
+        {(['description', 'notes', 'dry runs', 'chats', 'submissions'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -180,12 +229,14 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
             aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={cn(
-              '-mb-px border-b-2 px-2.5 py-1.5 text-[12.5px] capitalize transition-colors',
-              tab === t ? 'border-violet-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+              '-mb-px shrink-0 border-b-2 px-2 py-1.5 text-[12.5px] whitespace-nowrap capitalize transition-colors',
+              tab === t
+                ? 'border-violet-500 text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {t}
-            {t === 'submissions' && attempts > 0 && <span className="ml-1 text-muted-foreground tabular-nums">{attempts}</span>}
+            {!!counts[t] && <span className="ml-1 text-muted-foreground tabular-nums">{counts[t]}</span>}
           </button>
         ))}
       </div>
@@ -194,7 +245,12 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
           <div className="flex flex-col gap-3 p-4">
             <h1 className="text-[18px] leading-tight font-semibold text-balance">{problem.title}</h1>
             <div className="flex items-center gap-3 text-[12px]">
-              <span className={cn('rounded-full bg-muted px-2 py-0.5 font-medium', DIFFICULTY[problem.difficulty].className)}>
+              <span
+                className={cn(
+                  'rounded-full bg-muted px-2 py-0.5 font-medium',
+                  DIFFICULTY[problem.difficulty].className,
+                )}
+              >
                 {DIFFICULTY[problem.difficulty].label}
               </span>
               {entry.solved && (
@@ -207,6 +263,12 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
               <Markdown>{problem.description}</Markdown>
             </div>
           </div>
+        ) : tab === 'notes' ? (
+          <ProblemNotes entry={entry} />
+        ) : tab === 'dry runs' ? (
+          <ProblemDryRuns entry={entry} />
+        ) : tab === 'chats' ? (
+          <ProblemChats entry={entry} />
         ) : (
           <Submissions />
         )}
@@ -217,8 +279,80 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
 
 const SAVE_TEXT = { saved: 'Saved', pending: 'Saving…', saving: 'Saving…', error: 'Couldn’t save' } as const
 
+/** solution.cpp and any other versions (brute force, optimal…); + copies the open one. */
+function FileTabs({ entry }: { entry: ProblemEntry }) {
+  const activeFile = useProblems((s) => s.activeFile)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const names = [SOLUTION_FILE, ...entry.versions.map((v) => v.name)]
+  return (
+    <div className="flex min-w-0 items-center gap-0.5">
+      <div
+        role="tablist"
+        aria-label="Code files"
+        className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
+      >
+        {names.map((name) => (
+          <span
+            key={name}
+            className={cn(
+              'group flex shrink-0 items-center rounded-md',
+              name === activeFile ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60',
+            )}
+            onMouseLeave={() => setConfirming(null)}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={name === activeFile}
+              onClick={() => void useProblems.getState().selectFile(name)}
+              className="px-2 py-0.5 font-mono text-[12px]"
+            >
+              {name}
+            </button>
+            {name !== SOLUTION_FILE &&
+              (confirming === name ? (
+                <button
+                  type="button"
+                  aria-label={`Confirm delete ${name}`}
+                  onClick={() => void useProblems.getState().deleteVersion(name)}
+                  className="mr-1 rounded bg-red-500 px-1.5 text-[10.5px] text-white"
+                >
+                  Delete
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  aria-label={`Delete ${name}`}
+                  onClick={() => setConfirming(name)}
+                  className="mr-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:text-red-500 focus-visible:opacity-100"
+                >
+                  <X className="size-3" />
+                </button>
+              ))}
+          </span>
+        ))}
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New version"
+            onClick={() => void useProblems.getState().newVersion()}
+            className="shrink-0 text-muted-foreground"
+          >
+            <Plus />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>New version (a copy of this code, e.g. to try another approach)</TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 function SolutionEditor({ entry }: { entry: ProblemEntry }) {
   const theme = useResolvedTheme()
+  const activeFile = useProblems((s) => s.activeFile)
   const saveStatus = useProblems((s) => s.saveStatus)
   const testing = useProblems((s) => s.testing)
 
@@ -230,17 +364,25 @@ function SolutionEditor({ entry }: { entry: ProblemEntry }) {
 
   return (
     <section aria-label="Solution" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b px-3 py-1.5">
-        <span className="font-mono text-[12px]">solution.cpp</span>
+      <div className="flex items-center gap-2 border-b px-2 py-1.5">
+        <FileTabs entry={entry} />
         <span
-          className={cn('flex items-center gap-1 text-[11px]', saveStatus === 'error' ? 'text-red-500' : 'text-muted-foreground')}
+          className={cn(
+            'flex shrink-0 items-center gap-1 text-[11px]',
+            saveStatus === 'error' ? 'text-red-500' : 'text-muted-foreground',
+          )}
           aria-live="polite"
         >
           {saveStatus === 'error' && <AlertTriangle className="size-3" aria-hidden />}
           {SAVE_TEXT[saveStatus]}
         </span>
-        <div className="ml-auto flex gap-2">
-          <Button size="sm" variant="outline" disabled={testing !== null} onClick={() => void useProblems.getState().test('run')}>
+        <div className="ml-auto flex shrink-0 gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={testing !== null}
+            onClick={() => void useProblems.getState().test('run')}
+          >
             {testing === 'run' ? <Loader2 className="animate-spin" /> : <Play />} Run
           </Button>
           <Button
@@ -255,9 +397,9 @@ function SolutionEditor({ entry }: { entry: ProblemEntry }) {
       </div>
       <div className="min-h-0 flex-1 bg-card">
         <Editor
-          path={`problem:${entry.slug}/solution.cpp`}
+          path={`problem:${entry.slug}/${activeFile}`}
           language="cpp"
-          value={entry.solution}
+          value={codeOf(entry, activeFile) ?? ''}
           onChange={(v) => useProblems.getState().editSolution(v ?? '')}
           theme={theme === 'dark' ? 'glow-dark' : 'glow-light'}
           beforeMount={registerGlowThemes}
@@ -296,9 +438,9 @@ function Empty() {
       <div className="max-w-md space-y-1.5">
         <p className="text-[15px] font-medium">Solve problems LeetCode style</p>
         <p className="text-[13px] text-muted-foreground">
-          Paste a question into Claude, or send a screenshot of it, from LeetCode, codehelp or anywhere. Claude sets it up here
-          with the description, a <code className="font-mono">class Solution</code> to fill in, and test cases that check
-          themselves.
+          Paste a question into Claude, or send a screenshot of it, from LeetCode, codehelp or anywhere. Claude sets it
+          up here with the description, a <code className="font-mono">class Solution</code> to fill in, and test cases
+          that check themselves.
         </p>
       </div>
       <Button variant="outline" onClick={() => useSettings.getState().setAiOpen(true)}>
@@ -315,6 +457,9 @@ export function ProblemScreen() {
 
   useEffect(() => {
     void useProblems.getState().load()
+    // For the problem's Notes and Dry runs tabs (not reloaded if already there, so unsaved typing is kept).
+    if (useNotes.getState().status === 'idle') void useNotes.getState().load()
+    if (usePlayground.getState().status === 'idle') void usePlayground.getState().load()
     window.addEventListener('beforeunload', flushProblemsOnUnload)
     return () => {
       window.removeEventListener('beforeunload', flushProblemsOnUnload)
@@ -328,7 +473,9 @@ export function ProblemScreen() {
       <ResizablePanelGroup
         key={entry ? 'problem' : 'empty'}
         orientation="horizontal"
-        defaultLayout={entry ? (savedLayout('problem-outer') ?? { list: 16, description: 38, work: 46 }) : { list: 16, empty: 84 }}
+        defaultLayout={
+          entry ? (savedLayout('problem-outer') ?? { list: 16, description: 38, work: 46 }) : { list: 16, empty: 84 }
+        }
         onLayoutChanged={(l) => entry && saveLayout('problem-outer')(l)}
         className="min-h-0 min-w-0 flex-1"
       >
@@ -366,7 +513,9 @@ export function ProblemScreen() {
                 <Loader2 className="size-4 animate-spin" aria-hidden /> Loading problems…
               </div>
             ) : status === 'error' ? (
-              <p className="m-auto text-[13px] text-red-500">Couldn’t load the problems folder. Is the editor server running?</p>
+              <p className="m-auto text-[13px] text-red-500">
+                Couldn’t load the problems folder. Is the editor server running?
+              </p>
             ) : (
               <Empty />
             )}

@@ -11,8 +11,11 @@ import { dryRunProblems, MAX_STEPS, type DryRun, type DryRunStep } from '../src/
 import { randomUUID } from 'node:crypto'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
 import {
+  codeOf,
   DIFFICULTIES,
   describeInput,
+  isCodeName,
+  SOLUTION_FILE,
   problemProblems,
   runTests,
   type Compare,
@@ -22,7 +25,7 @@ import {
   type TestCase,
   type TestRun,
 } from '../src/lib/problems.ts'
-import { createProblem, listAttempts, listEntries, ProblemNotFound, readEntry, writeSolution, writeTests } from './problemStore.ts'
+import { createProblem, linkNote, listAttempts, listEntries, ProblemNotFound, readEntry, writeCode, writeTests } from './problemStore.ts'
 
 export interface ApprovalRequest {
   kind: ApprovalKind
@@ -109,7 +112,7 @@ function uniqueCount(content: string, oldText: string, where: string): void {
   if (count > 1) throw new ToolError(`old_text appears ${count} times in ${where}; include more surrounding lines so it is unique.`)
 }
 
-function describeProblem(entry: ProblemEntry): string {
+function describeProblem(entry: ProblemEntry, extras: { notes: string[]; dryRuns: string[] }): string {
   const { problem } = entry
   const lines = [
     `# ${problem.title} (${problem.difficulty}) — ${entry.slug}${entry.solved ? ', solved' : ''}`,
@@ -126,6 +129,11 @@ function describeProblem(entry: ProblemEntry): string {
     '',
     'solution.cpp (the student\'s code, with line numbers):',
     ...entry.solution.split('\n').map((l, i) => `${i + 1}\t${l}`),
+    '',
+    ...entry.versions.flatMap((v) => ['', `${v.name} (another version of their code):`, ...v.content.split('\n').map((l, i) => `${i + 1}\t${l}`)]),
+    '',
+    `Notes linked to it: ${extras.notes.join(', ') || '(none)'}`,
+    `Dry runs of it: ${extras.dryRuns.join('; ') || '(none)'}`,
     '',
     'driver.cpp (hidden from the student):',
     entry.driver,
@@ -154,6 +162,34 @@ export function createEditorTools(deps: EditorToolDeps) {
     const s = slug ?? context.openProblem?.slug
     if (!s) throw new ToolError('No problem is open; pass its slug (see list_problems).')
     return s
+  }
+
+  /** Which code file of a problem a tool means: the one asked for, else the one open on screen, else solution.cpp. */
+  function codeFile(entry: ProblemEntry, file?: string): { name: string; code: string } {
+    const open = context.openProblem?.slug === entry.slug ? context.openProblem.file : undefined
+    const name = file ?? open ?? SOLUTION_FILE
+    const code = codeOf(entry, name)
+    if (code === null) {
+      const names = [SOLUTION_FILE, ...entry.versions.map((v) => v.name)].join(', ')
+      throw new ToolError(`${entry.slug} has no ${name}; its code files are ${names}.`)
+    }
+    return { name, code }
+  }
+
+  async function dryRunsOf(slug: string): Promise<string[]> {
+    const names = await readdir(playgroundDir).catch(() => [] as string[])
+    const runs = await Promise.all(
+      names
+        .filter((n) => n.endsWith('.json'))
+        .map(async (n) => {
+          try {
+            return JSON.parse(await readFile(path.join(playgroundDir, n), 'utf8')) as DryRun
+          } catch {
+            return null
+          }
+        }),
+    )
+    return runs.filter((r): r is DryRun => r?.problem === slug).map((r) => `"${r.title}" (${r.steps.length} steps)`)
   }
 
   async function problem(slug?: string): Promise<ProblemEntry> {
@@ -299,6 +335,13 @@ export function createEditorTools(deps: EditorToolDeps) {
       if (!approved) return { text: 'The user declined creating this note.' }
       await writeFile(path.join(notesDir, name), content, { encoding: 'utf8', flag: 'wx' })
       deps.onNoteChanged(name)
+      // A note made while a problem is open belongs to it.
+      const open = context.openProblem?.slug
+      if (open) {
+        await linkNote(problemsDir, open, name).catch(() => {})
+        deps.onProblemChanged(open, false)
+        return { text: `Saved the note as ${name} and linked it to ${open}; it shows in the Notes panel and on the problem's Notes tab.` }
+      }
       return { text: `Saved the note as ${name}; it shows in the Notes panel.` }
     }),
 
@@ -316,15 +359,38 @@ export function createEditorTools(deps: EditorToolDeps) {
     ),
 
     create_visualization: guard(
-      async ({ title, file, input, steps }: { title: string; file?: string; input?: string; steps: DryRunStep[] }) => {
+      async ({
+        title,
+        file,
+        problem: slug,
+        input,
+        steps,
+      }: {
+        title: string
+        file?: string
+        problem?: string
+        input?: string
+        steps: DryRunStep[]
+      }) => {
         // The code comes from the real file, so step line numbers match what the student sees.
-        const code = file ? await readSolution(file) : undefined
+        let code: string | undefined
+        let shown = file
+        if (slug) {
+          const picked = codeFile(await problem(slug), file)
+          code = picked.code
+          shown = picked.name
+        } else if (file) {
+          code = await readSolution(file)
+        }
         const problems = dryRunProblems({ code, steps })
         if (problems.length) return fail(`The visualization wasn't saved. Fix these and call create_visualization again:\n- ${problems.join('\n- ')}`)
+        // A dry run made while a problem is open belongs to it.
+        const belongsTo = slug ?? context.openProblem?.slug
         const run: DryRun = {
           id: randomUUID(),
           title,
-          ...(file ? { file, language: languageFromFilename(file)!.id, code } : {}),
+          ...(shown ? { file: shown, language: languageFromFilename(shown)!.id, code } : {}),
+          ...(belongsTo ? { problem: belongsTo } : {}),
           ...(input ? { input } : {}),
           createdAt: Date.now(),
           steps,
@@ -346,7 +412,12 @@ export function createEditorTools(deps: EditorToolDeps) {
       }
     }),
 
-    get_problem: guard(async ({ slug }: { slug?: string }) => ({ text: describeProblem(await problem(slug)) })),
+    get_problem: guard(async ({ slug }: { slug?: string }) => {
+      const entry = await problem(slug)
+      const notes = await noteNames()
+      const linked = (entry.problem.notes ?? []).filter((n) => notes.includes(n))
+      return { text: describeProblem(entry, { notes: linked, dryRuns: await dryRunsOf(entry.slug) }) }
+    }),
 
     create_problem: guard(
       async (args: {
@@ -426,28 +497,56 @@ export function createEditorTools(deps: EditorToolDeps) {
     ),
 
     edit_solution: guard(
-      async ({ slug, old_text, new_text, explanation }: { slug?: string; old_text: string; new_text: string; explanation: string }) => {
+      async ({
+        slug,
+        file,
+        old_text,
+        new_text,
+        explanation,
+      }: {
+        slug?: string
+        file?: string
+        old_text: string
+        new_text: string
+        explanation: string
+      }) => {
         const entry = await problem(slug)
-        const where = `${entry.slug}/solution.cpp`
-        uniqueCount(entry.solution, old_text, where)
+        const { name, code } = codeFile(entry, file)
+        const where = `${entry.slug}/${name}`
+        uniqueCount(code, old_text, where)
         const approved = await deps.requestApproval({ kind: 'edit_solution', file: where, before: old_text, after: new_text, explanation })
         if (!approved) return { text: `The user declined this edit. Don't apply it another way; ask what they'd prefer.` }
-        const latest = (await problem(entry.slug)).solution
+        const latest = codeOf(await problem(entry.slug), name) ?? ''
         if (!latest.includes(old_text)) throw new ToolError(`${where} changed while waiting for approval; read it again with get_problem.`)
-        await writeSolution(problemsDir, entry.slug, latest.replace(old_text, () => new_text))
+        await writeCode(problemsDir, entry.slug, name, latest.replace(old_text, () => new_text))
         deps.onProblemChanged(entry.slug, false)
         return { text: `Applied the edit to ${where}.` }
       },
     ),
 
-    run_tests: guard(async ({ slug, all }: { slug?: string; all?: boolean }) => {
+    run_tests: guard(async ({ slug, file, all }: { slug?: string; file?: string; all?: boolean }) => {
       const entry = await problem(slug)
+      const { name, code } = codeFile(entry, file)
       try {
-        return { text: describeTestRun(entry, await runTests(deps.runner, entry, all ? 'submit' : 'run')) }
+        const run = await runTests(deps.runner, { ...entry, solution: code }, all ? 'submit' : 'run')
+        return { text: `${name}: ${describeTestRun(entry, run)}` }
       } catch (e) {
         return fail(`Couldn't run the tests: ${e instanceof Error ? e.message : String(e)}`)
       }
     }),
+
+    save_code_version: guard(
+      async ({ slug, name, content, explanation }: { slug?: string; name: string; content: string; explanation: string }) => {
+        const entry = await problem(slug)
+        if (!isCodeName(name)) throw new ToolError(`"${name}" isn't a good name; use something like brute-force.cpp.`)
+        if (codeOf(entry, name) !== null) throw new ToolError(`${entry.slug} already has ${name}; use edit_solution with file "${name}" to change it.`)
+        const approved = await deps.requestApproval({ kind: 'create', file: `${entry.slug}/${name}`, before: '', after: content, explanation })
+        if (!approved) return { text: `The user declined saving ${name}.` }
+        await writeCode(problemsDir, entry.slug, name, content)
+        deps.onProblemChanged(entry.slug, false)
+        return { text: `Saved ${name} next to solution.cpp; the student can switch to it above the editor.` }
+      },
+    ),
 
     list_attempts: guard(async ({ slug }: { slug?: string }) => {
       const entry = await problem(slug)
@@ -485,6 +584,7 @@ export const TOOL_NAMES = [
   'add_test_case',
   'edit_solution',
   'run_tests',
+  'save_code_version',
   'list_attempts',
 ] as const satisfies readonly (keyof EditorTools)[]
 
@@ -652,7 +752,11 @@ export function toSdkTools(tools: EditorTools) {
       `Show a step-by-step dry run in the Playground: the code with the current line, a note per step, variables, and data structures drawn visually (arrays with pointers, DP grids, maps, stacks/queues, linked lists, binary trees, graphs). Use it to dry run the student's code or to explain a bug or an idea. Pass "file" to show that file's code; "line" in each step refers to it. Each step is a full snapshot (repeat structures and vars every step). One step per meaningful line; at most ${MAX_STEPS} steps. Mark the step where things go wrong with mistake: true.`,
       {
         title: z.string().describe('e.g. "Dry run: twoSum on [2,7,11,15], target 9"'),
-        file: z.string().optional().describe('Solution file the steps walk through'),
+        file: z
+          .string()
+          .optional()
+          .describe('File the steps walk through: a solutions file, or with "problem" one of its code files (default solution.cpp)'),
+        problem: z.string().optional().describe("Slug of a practice problem: trace the student's code for it (solution.cpp unless file says otherwise)"),
         input: z.string().optional().describe('The input used'),
         steps: z.array(step),
       },
@@ -727,6 +831,7 @@ For in-place problems (void), call the method and return the modified argument. 
       "Propose replacing one exact, unique piece of a problem's solution.cpp. The student must approve it. Only when they ask for a change.",
       {
         slug: z.string().optional(),
+        file: z.string().optional().describe('Which code file: solution.cpp (default: the one open on screen) or another version'),
         old_text: z.string().describe('Exact text to replace, copied from get_problem (without line numbers); must appear exactly once'),
         new_text: z.string(),
         explanation,
@@ -736,8 +841,23 @@ For in-place problems (void), call the method and return the modified argument. 
     tool(
       'run_tests',
       "Run a problem's test cases against the saved solution.cpp and see each case's result and anything it printed. By default the examples and the student's own cases; all: true runs every case. Doesn't record a submission.",
-      { slug: z.string().optional(), all: z.boolean().optional() },
+      {
+        slug: z.string().optional(),
+        file: z.string().optional().describe('Which code file to test (default: the one open on screen, else solution.cpp)'),
+        all: z.boolean().optional(),
+      },
       async (args) => asResult(await tools.run_tests(args)),
+    ),
+    tool(
+      'save_code_version',
+      'Save another version of the code for a problem next to solution.cpp, e.g. brute-force.cpp to compare with the optimal one. The student approves it.',
+      {
+        slug: z.string().optional(),
+        name: z.string().describe('e.g. brute-force.cpp'),
+        content: z.string().describe('The whole file: a class Solution like solution.cpp'),
+        explanation,
+      },
+      async (args) => asResult(await tools.save_code_version(args)),
     ),
     tool(
       'list_attempts',

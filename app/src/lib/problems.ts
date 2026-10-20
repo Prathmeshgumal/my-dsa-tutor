@@ -33,6 +33,14 @@ export interface Problem {
   compare: Compare
   tests: TestCase[]
   createdAt: number
+  /** Notes (in notes/) that belong to this problem */
+  notes?: string[]
+}
+
+/** A C++ file in the problem's folder: solution.cpp, or another version such as brute-force.cpp. */
+export interface CodeFile {
+  name: string
+  content: string
 }
 
 /** Everything the browser needs for one problem. */
@@ -40,6 +48,8 @@ export interface ProblemEntry {
   slug: string
   problem: Problem
   solution: string
+  /** Other versions of the code, besides solution.cpp */
+  versions: CodeFile[]
   driver: string
   solved: boolean
   attempts: number
@@ -72,6 +82,8 @@ export interface TestRun {
 
 export interface Attempt {
   at: number
+  /** Which code file was submitted (solution.cpp if missing) */
+  file?: string
   code: string
   passed: number
   total: number
@@ -105,6 +117,25 @@ export function uniqueSlug(title: string, taken: string[]): string {
 }
 
 export const isSlug = (s: string) => /^[a-z0-9][a-z0-9-]{0,79}$/.test(s)
+
+export const SOLUTION_FILE = 'solution.cpp'
+
+/** A code file name in a problem folder: brute-force.cpp, solution-2.cpp. Not the hidden driver. */
+export const isCodeName = (name: string) => /^[a-z0-9][\w-]{0,59}\.cpp$/i.test(name) && name !== 'driver.cpp'
+
+/** The code of one of a problem's files. */
+export function codeOf(entry: Pick<ProblemEntry, 'solution' | 'versions'>, name: string): string | null {
+  if (name === SOLUTION_FILE) return entry.solution
+  return entry.versions.find((v) => v.name === name)?.content ?? null
+}
+
+/** A free name for a new version: solution-2.cpp, solution-3.cpp… */
+export function nextVersionName(entry: Pick<ProblemEntry, 'versions'>): string {
+  const taken = new Set([SOLUTION_FILE, ...entry.versions.map((v) => v.name)])
+  let n = 2
+  while (taken.has(`solution-${n}.cpp`)) n++
+  return `solution-${n}.cpp`
+}
 
 /** Which cases a Run checks: the examples and the student's own cases. Submit checks all. */
 export function casesFor(problem: Pick<Problem, 'tests'>, kind: TestRun['kind']): number[] {

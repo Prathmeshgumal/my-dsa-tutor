@@ -1,4 +1,6 @@
 import { configureNotes, noteTitle, useNotes } from './notes'
+import { useProblems } from './problems'
+import { useSettings } from './settings'
 
 const notes = () => useNotes.getState()
 let disk: Map<string, string>
@@ -92,4 +94,16 @@ test('note titles come from the first line, without markdown heading marks', () 
   expect(noteTitle('# Graph tricks\n\nbody')).toBe('Graph tricks')
   expect(noteTitle('\n\n  plain first line')).toBe('plain first line')
   expect(noteTitle('')).toBe('Untitled note')
+})
+
+test('a note created on the Problem screen is linked to the open problem', async () => {
+  const linkNote = vi.fn(async () => {})
+  useProblems.setState({ linkNote })
+  useSettings.setState({ screen: 'problem' })
+  await notes().load()
+  await notes().create()
+  expect(linkNote).toHaveBeenCalledWith('note-1.md')
+  useSettings.setState({ screen: 'editor' })
+  await notes().create()
+  expect(linkNote).toHaveBeenCalledTimes(1)
 })

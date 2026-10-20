@@ -6,7 +6,16 @@
 // Used by the /api/problems routes and by Claude's problem tools.
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { isSlug, uniqueSlug, type Attempt, type Problem, type ProblemEntry, type TestCase } from '../src/lib/problems.ts'
+import {
+  isCodeName,
+  isSlug,
+  SOLUTION_FILE,
+  uniqueSlug,
+  type Attempt,
+  type Problem,
+  type ProblemEntry,
+  type TestCase,
+} from '../src/lib/problems.ts'
 
 export class ProblemNotFound extends Error {}
 
@@ -55,10 +64,12 @@ export async function readEntry(dir: string, slug: string): Promise<ProblemEntry
     throw new ProblemNotFound(`There's no problem called "${slug}".`)
   }
   const attempts = await listAttempts(dir, slug)
+  const names = (await readdir(base)).filter((n) => isCodeName(n) && n !== SOLUTION_FILE).sort()
   return {
     slug,
     problem,
-    solution: await readText(path.join(base, 'solution.cpp')),
+    solution: await readText(path.join(base, SOLUTION_FILE)),
+    versions: await Promise.all(names.map(async (name) => ({ name, content: await readText(path.join(base, name)) }))),
     driver: await readText(path.join(base, 'driver.cpp')),
     solved: attempts.some((a) => a.total > 0 && a.passed === a.total),
     attempts: attempts.length,
@@ -93,12 +104,46 @@ async function existing(dir: string, slug: string): Promise<string> {
 }
 
 export async function writeSolution(dir: string, slug: string, content: string): Promise<void> {
-  await writeFile(path.join(await existing(dir, slug), 'solution.cpp'), content, 'utf8')
+  await writeCode(dir, slug, SOLUTION_FILE, content)
+}
+
+function checkCodeName(name: string): void {
+  if (!isCodeName(name)) throw new BadName(`"${name}" isn't a code file name; use something like brute-force.cpp.`)
+}
+
+export class BadName extends Error {}
+
+/** Writes solution.cpp or another version (created if new). */
+export async function writeCode(dir: string, slug: string, name: string, content: string): Promise<void> {
+  checkCodeName(name)
+  await writeFile(path.join(await existing(dir, slug), name), content, 'utf8')
+}
+
+/** Deletes a version; solution.cpp always stays. */
+export async function deleteCode(dir: string, slug: string, name: string): Promise<void> {
+  checkCodeName(name)
+  if (name === SOLUTION_FILE) throw new BadName(`${SOLUTION_FILE} can't be deleted.`)
+  await rm(path.join(await existing(dir, slug), name), { force: true })
+}
+
+async function updateProblem(dir: string, slug: string, change: (p: Problem) => Problem): Promise<Problem> {
+  const { problem } = await readEntry(dir, slug)
+  const next = change(problem)
+  await writeFile(path.join(folder(dir, slug), 'problem.json'), JSON.stringify(next, null, 2), 'utf8')
+  return next
 }
 
 export async function writeTests(dir: string, slug: string, tests: TestCase[]): Promise<void> {
-  const { problem } = await readEntry(dir, slug)
-  await writeFile(path.join(folder(dir, slug), 'problem.json'), JSON.stringify({ ...problem, tests }, null, 2), 'utf8')
+  await updateProblem(dir, slug, (p) => ({ ...p, tests }))
+}
+
+/** Ties a note (by its file name in notes/) to a problem. */
+export async function linkNote(dir: string, slug: string, note: string): Promise<void> {
+  await updateProblem(dir, slug, (p) => ({ ...p, notes: [...new Set([...(p.notes ?? []), note])] }))
+}
+
+export async function writeNoteLinks(dir: string, slug: string, notes: string[]): Promise<void> {
+  await updateProblem(dir, slug, (p) => ({ ...p, notes: [...new Set(notes)] }))
 }
 
 export async function saveAttempt(dir: string, slug: string, attempt: Attempt): Promise<void> {

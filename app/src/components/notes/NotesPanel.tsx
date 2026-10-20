@@ -6,8 +6,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { flushNotesOnUnload, noteTitle, useNotes, type Note } from '@/state/notes'
+import { useNoteProblem } from '@/state/problems'
 import { useSettings } from '@/state/settings'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
+import { ProblemTag } from '@/components/problems/ProblemTag'
 
 function HeaderButton({ label, onClick, children }: { label: string; onClick(): void; children: React.ReactNode }) {
   return (
@@ -25,6 +27,7 @@ function HeaderButton({ label, onClick, children }: { label: string; onClick(): 
 function NoteRow({ note, active, onOpen }: { note: Note; active: boolean; onOpen(): void }) {
   const [confirming, setConfirming] = useState(false)
   const title = noteTitle(note.content)
+  const problem = useNoteProblem(note.name)
   return (
     <li
       className={cn(
@@ -37,7 +40,10 @@ function NoteRow({ note, active, onOpen }: { note: Note; active: boolean; onOpen
         <StickyNote className={cn('size-3.5 shrink-0', active ? 'text-violet-500' : 'text-muted-foreground')} aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12.5px] text-foreground">{title}</span>
-          <span className="block truncate font-mono text-[11px] text-muted-foreground">{note.name}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-mono text-[11px] text-muted-foreground">{note.name}</span>
+            <ProblemTag slug={problem} />
+          </span>
         </span>
       </button>
       {confirming ? (

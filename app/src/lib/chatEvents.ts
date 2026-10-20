@@ -36,8 +36,8 @@ export interface EditorContext {
   lastRun: LastRun
   /** The note open in the Notes panel, if the panel is open. */
   openNote: { name: string; title: string } | null
-  /** The practice problem on screen, if the Problem screen is showing. */
-  openProblem: { slug: string; title: string } | null
+  /** The practice problem on screen, if the Problem screen is showing, and which of its code files is open. */
+  openProblem: { slug: string; title: string; file?: string } | null
 }
 
 /** Image types Claude accepts. */

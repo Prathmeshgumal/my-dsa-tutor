@@ -1,6 +1,9 @@
 // Dev-server API for practice problems (see ./problemStore.ts for the folder layout).
 //   GET    /api/problems                    → ProblemEntry[]
 //   PUT    /api/problems/:slug/solution     { content } → save the student's code
+//   PUT    /api/problems/:slug/files/:name  { content } → save another version of the code (e.g. brute-force.cpp)
+//   DELETE /api/problems/:slug/files/:name  → delete a version (not solution.cpp)
+//   PUT    /api/problems/:slug/notes        { notes } → which notes (file names in notes/) belong to it
 //   PUT    /api/problems/:slug/tests        { tests } → replace the test cases
 //   GET    /api/problems/:slug/attempts     → Attempt[] (newest first)
 //   POST   /api/problems/:slug/attempts     { attempt } → save a Submit
@@ -8,11 +11,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Attempt, TestCase } from '../src/lib/problems.ts'
 import {
+  BadName,
+  deleteCode,
   deleteProblem,
   listAttempts,
   listEntries,
   ProblemNotFound,
   saveAttempt,
+  writeCode,
+  writeNoteLinks,
   writeSolution,
   writeTests,
 } from './problemStore.ts'
@@ -67,6 +74,7 @@ function parseAttempt(raw: unknown): Attempt {
   }
   return {
     at: Date.now(),
+    ...(isString(a.file) ? { file: a.file } : {}),
     code: a.code,
     passed: a.passed,
     total: a.total,
@@ -90,9 +98,26 @@ async function handle(dir: string, req: IncomingMessage, res: ServerResponse): P
   }
 
   const [slug, action, ...extra] = rest.slice(1).split('/')
+  if (action === 'files' && extra.length === 1) {
+    const name = decodeURIComponent(extra[0])
+    if (method === 'PUT') {
+      const { content } = await readJson(req)
+      if (!isString(content)) throw new HttpError(400, '"content" must be a string')
+      await writeCode(dir, slug, name, content)
+    } else if (method === 'DELETE') await deleteCode(dir, slug, name)
+    else throw new HttpError(405, 'Method not allowed')
+    res.statusCode = 204
+    res.end()
+    return
+  }
   if (extra.length) throw new HttpError(404, 'Not found')
 
   if (action === undefined && method === 'DELETE') await deleteProblem(dir, slug)
+  else if (action === 'notes' && method === 'PUT') {
+    const { notes } = await readJson(req)
+    if (!Array.isArray(notes) || !notes.every(isString)) throw new HttpError(400, '"notes" must be a list of note names')
+    await writeNoteLinks(dir, slug, notes)
+  }
   else if (action === 'solution' && method === 'PUT') {
     const { content } = await readJson(req)
     if (!isString(content)) throw new HttpError(400, '"content" must be a string')
@@ -115,7 +140,7 @@ export function createProblemsMiddleware(dir: string): Middleware {
     const url = req.url ?? ''
     if (url !== PREFIX && !url.startsWith(`${PREFIX}/`) && !url.startsWith(`${PREFIX}?`)) return next()
     handle(dir, req, res).catch((e: unknown) => {
-      res.statusCode = e instanceof HttpError ? e.status : e instanceof ProblemNotFound ? 404 : 500
+      res.statusCode = e instanceof HttpError ? e.status : e instanceof ProblemNotFound ? 404 : e instanceof BadName ? 400 : 500
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
     })

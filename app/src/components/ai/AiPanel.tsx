@@ -12,6 +12,7 @@ import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
 import { activeProblem, useProblems } from '@/state/problems'
+import { ProblemTag } from '@/components/problems/ProblemTag'
 import { Markdown } from './Markdown'
 
 const SUGGESTIONS = [
@@ -40,6 +41,7 @@ const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: type
   add_test_case: { label: () => 'Proposed a test case', icon: ListChecks },
   edit_solution: { label: () => 'Proposed a change to your solution', icon: Pencil },
   run_tests: { label: () => 'Ran the test cases', icon: Play },
+  save_code_version: { label: () => 'Proposed another version of your code', icon: FilePlus2 },
   list_attempts: { label: () => 'Checked your submissions', icon: ListChecks },
 }
 
@@ -299,6 +301,7 @@ function ChatRow({ chat, active, onOpen }: { chat: Chat; active: boolean; onOpen
           <span className="block text-[11px] text-muted-foreground">
             {timeAgo(chat.updatedAt)} · {chat.messages.filter((m) => m.role === 'user').length} asked
           </span>
+          <ProblemTag slug={chat.problemSlug} />
         </span>
       </button>
       {confirming ? (

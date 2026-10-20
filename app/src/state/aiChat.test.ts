@@ -7,6 +7,8 @@ import { useRun } from './run'
 import { useSettings } from './settings'
 import { useNotes } from './notes'
 import { usePlayground } from './playground'
+import { useProblems } from './problems'
+import type { ProblemEntry } from '@/lib/problems'
 import type { RunResult } from '@/lib/runner/types'
 
 const runResult: RunResult = { status: 'success', statusText: 'Accepted', stdout: '1', stderr: '', compileOutput: '', timeMs: 3, memoryKb: 100 }
@@ -335,5 +337,83 @@ describe('agent tools', () => {
     const afterEdits = vi.fn(async () => {})
     await chat().send('fix it', { stream: fakeStream([{ type: 'file_changed', file: 'main.cpp' }]), beforeSend: async () => {}, afterEdits })
     expect(afterEdits).toHaveBeenCalled()
+  })
+})
+
+describe('chats about a problem', () => {
+  const entry = (slug: string): ProblemEntry => ({
+    slug,
+    problem: { title: slug, difficulty: 'easy', description: '', params: [], compare: 'exact', tests: [], createdAt: 1 },
+    solution: '',
+    versions: [],
+    driver: '',
+    solved: false,
+    attempts: 0,
+  })
+
+  beforeEach(() => {
+    useProblems.setState({ entries: [entry('two-sum'), entry('three-sum')], activeSlug: null, activeFile: 'solution.cpp' })
+  })
+  afterEach(() => useSettings.setState({ screen: 'editor' }))
+
+  test('a chat started on the Problem screen belongs to that problem and tells Claude about it', async () => {
+    useSettings.setState({ screen: 'problem' })
+    useProblems.setState({ activeSlug: 'two-sum' })
+    const stream = fakeStream([{ type: 'done' }])
+    await chat().send('hint?', { stream, ...quiet })
+    expect(activeChat(chat())!.problemSlug).toBe('two-sum')
+    expect((stream.mock.calls[0][0] as ChatRequest).context.openProblem).toEqual({ slug: 'two-sum', title: 'two-sum', file: 'solution.cpp' })
+  })
+
+  test('a chat started elsewhere belongs to no problem', async () => {
+    useProblems.setState({ activeSlug: 'two-sum' })
+    await chat().send('hi', { stream: fakeStream([{ type: 'done' }]), ...quiet })
+    expect(activeChat(chat())!.problemSlug).toBeNull()
+  })
+
+  test('opening another problem switches to its latest chat, or a fresh one', async () => {
+    useAiChat.setState({
+      chats: [
+        { id: 'a', title: 'a', sessionId: null, messages: [], updatedAt: 2, problemSlug: 'two-sum' },
+        { id: 'b', title: 'b', sessionId: null, messages: [], updatedAt: 1, problemSlug: 'two-sum' },
+        { id: 'c', title: 'c', sessionId: null, messages: [], updatedAt: 0, problemSlug: null },
+      ],
+      activeChatId: 'c',
+    })
+    useProblems.setState({ activeSlug: 'two-sum' })
+    expect(chat().activeChatId).toBe('a')
+    // The user can still pick any chat; it stays until the problem changes.
+    chat().selectChat('c')
+    useProblems.setState({ activeFile: 'brute.cpp' })
+    expect(chat().activeChatId).toBe('c')
+    useProblems.setState({ activeSlug: 'three-sum' })
+    expect(chat().activeChatId).toBeNull()
+  })
+
+  test('a chat already about the problem stays open', () => {
+    useAiChat.setState({
+      chats: [
+        { id: 'a', title: 'a', sessionId: null, messages: [], updatedAt: 2, problemSlug: 'two-sum' },
+        { id: 'b', title: 'b', sessionId: null, messages: [], updatedAt: 1, problemSlug: 'two-sum' },
+      ],
+      activeChatId: 'b',
+    })
+    useProblems.setState({ activeSlug: 'two-sum' })
+    expect(chat().activeChatId).toBe('b')
+  })
+
+  test('the chat that creates a problem becomes its chat and stays in view', async () => {
+    useSettings.setState({ screen: 'problem' })
+    const { load, open } = useProblems.getState()
+    useProblems.setState({ load: async () => {}, open: async (slug: string) => {
+        useProblems.setState({ activeSlug: slug })
+      },
+    })
+    await chat().send('set up two sum', { stream: fakeStream([{ type: 'problem_changed', slug: 'two-sum', open: true }, { type: 'done' }]), ...quiet })
+    await vi.waitFor(() => expect(useProblems.getState().activeSlug).toBe('two-sum'))
+    const current = activeChat(chat())!
+    expect(current.title).toBe('set up two sum')
+    expect(current.problemSlug).toBe('two-sum')
+    useProblems.setState({ load, open })
   })
 })

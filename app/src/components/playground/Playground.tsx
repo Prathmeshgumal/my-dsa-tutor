@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatScalar, type DryRun, type Move } from '@/lib/dryRun'
 import { cn } from '@/lib/utils'
+import { ProblemTag } from '@/components/problems/ProblemTag'
 import { usePlayground } from '@/state/playground'
 import { useSettings } from '@/state/settings'
 import { StructureView } from './StructureView'
@@ -52,6 +53,7 @@ function RunRow({ run, active }: { run: DryRun; active: boolean }) {
         <span className="block truncate text-[11px] text-muted-foreground">
           {[`${run.steps.length} steps`, run.file, timeAgo(run.createdAt)].filter(Boolean).join(' · ')}
         </span>
+        <ProblemTag slug={run.problem} />
       </button>
       {confirming ? (
         <Button

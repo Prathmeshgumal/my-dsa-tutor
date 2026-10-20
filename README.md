@@ -81,10 +81,19 @@ themselves. You never write `main()` or compare output by eye.
 - When this screen is showing, Claude knows which problem you're on. Ask it to explain the
   question, give a hint, or check your solution.
 
+**Everything about a problem stays with it.** Notes, dry runs and chats you or Claude make while a
+problem is open are linked to it automatically. They show up on its **Notes**, **Dry runs** and
+**Chats** tabs, and are tagged with the problem's name in the Notes panel, the Playground and the
+chat list. Opening a problem switches the Claude panel to that problem's latest chat (or a fresh
+one); you can still pick any chat from the list. The **+** next to `solution.cpp` saves another
+version of your code (say, brute force next to the optimal one). Run and Submit test whichever
+version is open, and each submission remembers which one it was.
+
 Problems are C++ for now. `ListNode` and `TreeNode` are already defined, as on LeetCode. Each
 problem is a folder in **`problems/`** at the repo root (set `PROBLEMS_DIR` to use another
-folder). The folder holds `problem.json` (description and tests), `solution.cpp` (your code),
-`driver.cpp` (the hidden `main()` Claude wrote) and `attempts/`.
+folder). The folder holds `problem.json` (description, tests and linked notes), `solution.cpp` and
+any other versions (your code), `driver.cpp` (the hidden `main()` Claude wrote) and `attempts/`.
+Notes stay in `notes/` and dry runs in `playground/`.
 
 ## Playground (dry runs)
 
@@ -130,7 +139,8 @@ It can only act through these tools:
 | `list_problems` / `get_problem` / `list_attempts` | Your problems, one problem with its tests and your solution, your past submissions | No |
 | `run_tests` | Runs a problem's test cases against your solution (doesn't count as a submission) | No |
 | `add_test_case` | Adds an edge case to a problem | **Yes** |
-| `edit_solution` | Replaces one exact piece of a problem's solution | **Yes** |
+| `edit_solution` | Replaces one exact piece of a problem's solution (or another version) | **Yes** |
+| `save_code_version` | Saves another version of a problem's code, e.g. a brute-force one | **Yes** |
 
 You can also send it images (up to 5 per message, PNG/JPEG/GIF/WebP, under 5 MB each):
 click 📎, paste a screenshot into the message box, or drop images on the panel. Chats keep

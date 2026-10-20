@@ -32,6 +32,11 @@ export default function App() {
   const hasActiveFile = useWorkspace((s) => s.ready && s.activeId !== null)
   const running = onProblem ? testing : fileRunning
 
+  // Problems are loaded up front: notes, dry runs and chats show which problem they belong to.
+  useEffect(() => {
+    void useProblems.getState().load()
+  }, [])
+
   // Load files from the solutions folder, then keep it in sync. Falls back to browser-only storage.
   useEffect(() => {
     let stop: (() => void) | undefined

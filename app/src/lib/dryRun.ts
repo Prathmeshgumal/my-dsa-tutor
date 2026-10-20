@@ -142,6 +142,8 @@ export interface DryRun {
   title: string
   /** File the code came from, if any */
   file?: string
+  /** The practice problem (slug) this dry run belongs to */
+  problem?: string
   language?: 'cpp' | 'java' | 'python'
   code?: string
   input?: string

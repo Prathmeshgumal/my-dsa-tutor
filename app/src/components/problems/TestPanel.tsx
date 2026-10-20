@@ -53,7 +53,12 @@ function Summary({ run, error }: { run: TestRun | null; error: string | null }) 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className={cn('text-[15px] font-semibold', accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+        <span
+          className={cn(
+            'text-[15px] font-semibold',
+            accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+          )}
+        >
           {run.statusText}
         </span>
         {run.status !== 'compile_error' && (
@@ -104,7 +109,12 @@ function AddCase({ entry, onDone }: { entry: ProblemEntry; onDone(): void }) {
       ))}
       <label className="flex flex-col gap-1">
         <span className="text-[11px] font-medium text-muted-foreground">Expected answer</span>
-        <Input id="case-expected" value={expected} onChange={(e) => setExpected(e.target.value)} className="h-8 font-mono text-[12.5px]" />
+        <Input
+          id="case-expected"
+          value={expected}
+          onChange={(e) => setExpected(e.target.value)}
+          className="h-8 font-mono text-[12.5px]"
+        />
       </label>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!ready}>
@@ -132,7 +142,9 @@ export function TestPanel({ entry }: { entry: ProblemEntry }) {
     <section aria-label="Test cases" className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b px-3 py-1.5">
         <span className="text-[12.5px] font-medium">Test cases</span>
-        <span className="text-[11px] text-muted-foreground">Run checks the examples and yours · Submit checks all {tests.length}</span>
+        <span className="text-[11px] text-muted-foreground">
+          Run checks the examples and yours · Submit checks all {tests.length}
+        </span>
       </div>
       <ScrollArea className="min-h-0 flex-1 [&>div>div]:!block">
         <div className="flex flex-col gap-3 p-3">
@@ -156,7 +168,9 @@ export function TestPanel({ entry }: { entry: ProblemEntry }) {
                     !adding && i === index ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60',
                   )}
                 >
-                  {r && <span className={cn('size-1.5 rounded-full', DOT[r.status])} aria-label={STATUS_TEXT[r.status]} />}
+                  {r && (
+                    <span className={cn('size-1.5 rounded-full', DOT[r.status])} aria-label={STATUS_TEXT[r.status]} />
+                  )}
                   Case {i + 1}
                   {origin && <span className="text-[10.5px] opacity-70">{origin}</span>}
                 </button>
@@ -179,7 +193,16 @@ export function TestPanel({ entry }: { entry: ProblemEntry }) {
           ) : test ? (
             <div className="flex flex-col gap-2.5">
               {result && (
-                <span className={cn('text-[12px] font-medium', result.status === 'pass' ? 'text-emerald-600 dark:text-emerald-400' : result.status === 'not_run' ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400')}>
+                <span
+                  className={cn(
+                    'text-[12px] font-medium',
+                    result.status === 'pass'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : result.status === 'not_run'
+                        ? 'text-muted-foreground'
+                        : 'text-red-600 dark:text-red-400',
+                  )}
+                >
                   {STATUS_TEXT[result.status]}
                 </span>
               )}
