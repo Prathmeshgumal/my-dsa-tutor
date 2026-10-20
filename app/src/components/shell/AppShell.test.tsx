@@ -267,3 +267,12 @@ test('Claude panel stays open while you click into the code', async () => {
   await userEvent.click(screen.getByText('EDITOR'))
   expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
 })
+
+test('the Claude and Notes panels use the remembered width and can be resized', () => {
+  useSettings.setState({ aiOpen: true, sidePanelWidth: 520 })
+  renderShell()
+  expect(screen.getByRole('complementary', { name: 'Claude' })).toHaveStyle({ width: '520px' })
+  expect(screen.getByRole('separator', { name: 'Resize panel' })).toBeInTheDocument()
+  act(() => useSettings.getState().setNotesOpen(true))
+  expect(screen.getByRole('complementary', { name: 'Notes' })).toHaveStyle({ width: '520px' })
+})

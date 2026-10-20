@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { activeChat, useAiChat, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
+import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
 import { Markdown } from './Markdown'
 
@@ -169,6 +170,7 @@ function ChatList({ onPicked }: { onPicked(): void }) {
 
 /** Chat with the user's local Claude Code, which works in the solutions folder and sees the open file. */
 export function AiPanel() {
+  const width = useSettings((s) => s.sidePanelWidth)
   const { status, send, stop, newChat } = useAiChat()
   const current = useAiChat(activeChat)
   const messages = current?.messages ?? []
@@ -197,7 +199,12 @@ export function AiPanel() {
   }
 
   return (
-    <aside aria-label="Claude" className="flex w-[380px] shrink-0 flex-col border-l bg-background/60">
+    <aside
+      aria-label="Claude"
+      style={{ width }}
+      className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+    >
+      <SidePanelResizer />
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
           <Sparkles className="size-3" aria-hidden />

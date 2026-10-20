@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { flushNotesOnUnload, noteTitle, useNotes, type Note } from '@/state/notes'
 import { useSettings } from '@/state/settings'
+import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 
 function HeaderButton({ label, onClick, children }: { label: string; onClick(): void; children: React.ReactNode }) {
   return (
@@ -73,6 +74,7 @@ const SAVE_LABEL = {
 
 /** Markdown notes in the right-hand panel; each note is a .md file in notes/. */
 export function NotesPanel() {
+  const width = useSettings((s) => s.sidePanelWidth)
   const { notes, activeName, status, saveStatus, create, select, edit } = useNotes()
   const active = notes.find((n) => n.name === activeName) ?? null
   const [showList, setShowList] = useState(false)
@@ -107,7 +109,12 @@ export function NotesPanel() {
   }
 
   return (
-    <aside aria-label="Notes" className="flex w-[380px] shrink-0 flex-col border-l bg-background/60">
+    <aside
+      aria-label="Notes"
+      style={{ width }}
+      className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+    >
+      <SidePanelResizer />
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="grid size-5 shrink-0 place-items-center rounded-md bg-gradient-to-br from-amber-400 to-violet-500 text-white">
           <NotebookPen className="size-3" aria-hidden />
