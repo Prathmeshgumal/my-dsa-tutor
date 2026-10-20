@@ -5,6 +5,7 @@ import type { DryRun, Structure } from '@/lib/dryRun'
 import { usePlayground } from '@/state/playground'
 import { useDryRunFix } from '@/state/dryRunFix'
 import { useWorkspace } from '@/state/workspace'
+import { useSettings } from '@/state/settings'
 import { Playground } from './Playground'
 import { StructureView } from './StructureView'
 
@@ -293,5 +294,31 @@ describe('fixing the code from a dry run', () => {
     useWorkspace.setState({ files: [], openIds: [], activeId: null })
     render(<Playground />)
     expect(screen.queryByRole('button', { name: /edit code/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('hiding the list of dry runs', () => {
+  afterEach(() => useSettings.setState({ playgroundListOpen: true, screen: 'editor' }))
+
+  test('the list has a hide button, and stays hidden', async () => {
+    render(<Playground />)
+    await userEvent.click(screen.getByRole('button', { name: 'Hide dry runs' }))
+    expect(screen.queryByRole('list', { name: 'Dry runs' })).not.toBeInTheDocument()
+    expect(useSettings.getState().playgroundListOpen).toBe(false)
+    // The dry run itself is still showing.
+    expect(screen.getByRole('heading', { name: run.title })).toBeInTheDocument()
+  })
+
+  test('the Playground button in the left bar opens the screen, then hides and shows the list', () => {
+    useSettings.setState({ screen: 'editor', playgroundListOpen: true })
+    useSettings.getState().pressScreen('playground')
+    expect(useSettings.getState()).toMatchObject({ screen: 'playground', playgroundListOpen: true })
+    useSettings.getState().pressScreen('playground')
+    expect(useSettings.getState().playgroundListOpen).toBe(false)
+    useSettings.getState().pressScreen('playground')
+    expect(useSettings.getState().playgroundListOpen).toBe(true)
+    // Other screens just switch.
+    useSettings.getState().pressScreen('editor')
+    expect(useSettings.getState()).toMatchObject({ screen: 'editor', playgroundListOpen: true })
   })
 })

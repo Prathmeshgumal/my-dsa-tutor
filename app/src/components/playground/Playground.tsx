@@ -7,6 +7,7 @@ import {
   Clapperboard,
   FileCode2,
   Loader2,
+  PanelLeftClose,
   Pause,
   Pencil,
   Play,
@@ -482,7 +483,9 @@ function FixBar({
   const tests = useDryRunFix((s) => (s.tests?.forRuns.includes(run.id) ? s.tests : null))
   const claudeBusy = useAiChat((s) => s.status === 'streaming')
   // How much of the new dry run Claude has written so far (a long one takes a minute).
-  const written = useAiChat((s) => s.chats.find((c) => c.id === s.streamingChatId)?.messages.at(-1)?.progress?.chars ?? 0)
+  const written = useAiChat(
+    (s) => s.chats.find((c) => c.id === s.streamingChatId)?.messages.at(-1)?.progress?.chars ?? 0,
+  )
   const result = tests?.result
   const passed = result && result.status === 'success' && result.passed === result.total
 
@@ -498,26 +501,37 @@ function FixBar({
           data-testid="fix-tests"
           className={cn(
             'rounded-full px-2 py-0.5 text-[12px] font-medium',
-            passed ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/12 text-red-700 dark:text-red-300',
+            passed
+              ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+              : 'bg-red-500/12 text-red-700 dark:text-red-300',
           )}
         >
           {result.statusText}
           {result.status !== 'compile_error' && ` · ${result.passed}/${result.total} tests`}
         </span>
       )}
-      {tests?.status === 'error' && <span className="text-[12px] text-red-500">Couldn’t run the tests: {tests.error}</span>}
+      {tests?.status === 'error' && (
+        <span className="text-[12px] text-red-500">Couldn’t run the tests: {tests.error}</span>
+      )}
       {redoing ? (
         <span role="status" className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin text-violet-500" aria-hidden /> Claude is making a new dry run…
           {written > 0 && <span className="tabular-nums">{(written / 1000).toFixed(1)}k characters so far</span>}
-          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[12px]" onClick={() => useSettings.getState().setAiOpen(true)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-1.5 text-[12px]"
+            onClick={() => useSettings.getState().setAiOpen(true)}
+          >
             Show chat
           </Button>
         </span>
       ) : (
         <>
           {redoError && <span className="text-[12px] text-amber-600 dark:text-amber-400">{redoError}</span>}
-          {changed && !editing && <span className="text-[12px] text-muted-foreground">Code changed since this dry run</span>}
+          {changed && !editing && (
+            <span className="text-[12px] text-muted-foreground">Code changed since this dry run</span>
+          )}
           <Button size="sm" variant="outline" onClick={() => onEdit(!editing)}>
             {editing ? <Check /> : <Pencil />} {editing ? 'Done editing' : 'Edit code'}
           </Button>
@@ -747,6 +761,7 @@ export function Playground() {
   const { runs, activeId } = usePlayground()
   const run = runs.find((r) => r.id === activeId) ?? null
   const savedOuter = useSettings((s) => s.playgroundLayout['list-main'])
+  const listOpen = useSettings((s) => s.playgroundListOpen)
 
   useEffect(() => {
     void usePlayground.getState().load()
@@ -771,38 +786,58 @@ export function Playground() {
 
   return (
     <main aria-label="Playground" className="flex min-h-0 min-w-0 flex-1">
+      {/* Remounts when the list is hidden or shown, since the panels differ. */}
       <ResizablePanelGroup
+        key={listOpen ? 'with-list' : 'no-list'}
         orientation="horizontal"
-        defaultLayout={savedOuter ?? { list: 18, main: 82 }}
-        onLayoutChanged={(l) => useSettings.getState().setPlaygroundLayout('list-main', l)}
+        defaultLayout={listOpen ? (savedOuter ?? { list: 18, main: 82 }) : { main: 100 }}
+        onLayoutChanged={(l) => listOpen && useSettings.getState().setPlaygroundLayout('list-main', l)}
         className="min-h-0 min-w-0 flex-1"
       >
-        <ResizablePanel id="list" minSize="10" maxSize="40" className="flex min-h-0 flex-col">
-          <aside className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-              <Clapperboard className="size-4 text-violet-500" aria-hidden />
-              <span className="text-[13px] font-semibold">Playground</span>
-            </div>
-            <ScrollArea className="min-h-0 flex-1">
-              {runs.length ? (
-                <ul aria-label="Dry runs" className="flex flex-col gap-0.5 p-2 pt-0">
-                  {runs.map((r) => (
-                    <RunRow key={r.id} run={r} active={r.id === activeId} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="px-4 py-6 text-[12px] text-muted-foreground">No dry runs yet.</p>
-              )}
-            </ScrollArea>
-            <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
-              <Kbd>←</Kbd> <Kbd>→</Kbd> step · <Kbd>Space</Kbd> play
-            </p>
-          </aside>
-        </ResizablePanel>
-        <ResizableHandle
-          withHandle
-          className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
-        />
+        {listOpen && (
+          <>
+            <ResizablePanel id="list" minSize="10" maxSize="40" className="flex min-h-0 flex-col">
+              <aside className="flex min-h-0 flex-1 flex-col">
+                <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+                  <Clapperboard className="size-4 text-violet-500" aria-hidden />
+                  <span className="text-[13px] font-semibold">Playground</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Hide dry runs"
+                        onClick={() => useSettings.getState().setPlaygroundListOpen(false)}
+                        className="ml-auto text-muted-foreground"
+                      >
+                        <PanelLeftClose />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Hide the list (or click the Playground button on the left)</TooltipContent>
+                  </Tooltip>
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  {runs.length ? (
+                    <ul aria-label="Dry runs" className="flex flex-col gap-0.5 p-2 pt-0">
+                      {runs.map((r) => (
+                        <RunRow key={r.id} run={r} active={r.id === activeId} />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-4 py-6 text-[12px] text-muted-foreground">No dry runs yet.</p>
+                  )}
+                </ScrollArea>
+                <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
+                  <Kbd>←</Kbd> <Kbd>→</Kbd> step · <Kbd>Space</Kbd> play
+                </p>
+              </aside>
+            </ResizablePanel>
+            <ResizableHandle
+              withHandle
+              className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
+            />
+          </>
+        )}
         <ResizablePanel id="main" minSize="40" className="flex min-h-0 min-w-0 flex-col">
           {run ? <Viewer key={run.id} run={run} /> : <Empty />}
         </ResizablePanel>

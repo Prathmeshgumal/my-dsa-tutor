@@ -19,6 +19,8 @@ interface SettingsState {
   /** Width in px of the right-hand panel (Claude / Notes). */
   sidePanelWidth: number
   screen: Screen
+  /** The list of dry runs on the left of the Playground. */
+  playgroundListOpen: boolean
   /** Playground panel sizes (percent), per area: list|main, and code|drawing side by side or stacked. */
   playgroundLayout: Record<string, Record<string, number>>
   setApiKey(k: string): void
@@ -32,6 +34,9 @@ interface SettingsState {
   setNotesOpen(open: boolean): void
   setSidePanelWidth(width: number): void
   setScreen(screen: Screen): void
+  /** The left-bar button for a screen: switches to it, or if it's already showing, hides/shows its list. */
+  pressScreen(screen: Screen): void
+  setPlaygroundListOpen(open: boolean): void
   setPlaygroundLayout(area: string, layout: Record<string, number>): void
 }
 
@@ -48,6 +53,7 @@ export const useSettings = create<SettingsState>()(
       notesOpen: false,
       sidePanelWidth: 380,
       screen: 'editor',
+      playgroundListOpen: true,
       playgroundLayout: {},
       setApiKey: (apiKey) => set({ apiKey }),
       setTheme: (theme) => set({ theme }),
@@ -58,6 +64,13 @@ export const useSettings = create<SettingsState>()(
       setAiOpen: (aiOpen) => set(aiOpen ? { aiOpen, notesOpen: false } : { aiOpen }),
       setSidePanelWidth: (sidePanelWidth) => set({ sidePanelWidth }),
       setScreen: (screen) => set({ screen }),
+      pressScreen: (screen) =>
+        set((s) =>
+          s.screen === 'playground' && screen === 'playground'
+            ? { playgroundListOpen: !s.playgroundListOpen }
+            : { screen },
+        ),
+      setPlaygroundListOpen: (playgroundListOpen) => set({ playgroundListOpen }),
       setPlaygroundLayout: (area, layout) => set((s) => ({ playgroundLayout: { ...s.playgroundLayout, [area]: layout } })),
       setNotesOpen: (notesOpen) => set(notesOpen ? { notesOpen, aiOpen: false } : { notesOpen }),
     }),

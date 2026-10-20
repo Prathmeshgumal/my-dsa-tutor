@@ -19,6 +19,10 @@ export function IconRail() {
   const aiOpen = useSettings((s) => s.aiOpen)
   const notesOpen = useSettings((s) => s.notesOpen)
   const screen = useSettings((s) => s.screen)
+  const listOpen = useSettings((s) => s.playgroundListOpen)
+  // On the Playground, its button hides or shows the list of dry runs.
+  const tip = (id: Screen, label: string) =>
+    id === 'playground' && screen === 'playground' ? (listOpen ? 'Hide dry runs' : 'Show dry runs') : label
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
@@ -29,7 +33,7 @@ export function IconRail() {
               type="button"
               aria-label={label}
               aria-current={screen === id ? 'page' : undefined}
-              onClick={() => useSettings.getState().setScreen(id)}
+              onClick={() => useSettings.getState().pressScreen(id)}
               className={cn(
                 item,
                 screen === id
@@ -40,7 +44,7 @@ export function IconRail() {
               <Icon />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
+          <TooltipContent side="right">{tip(id, label)}</TooltipContent>
         </Tooltip>
       ))}
 
