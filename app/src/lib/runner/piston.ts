@@ -1,4 +1,4 @@
-import { RunnerError, type CodeRunner, type RunResult, type RunStatus } from './types'
+import { RunnerError, type CodeRunner, type RunResult, type RunStatus } from './types.ts'
 
 interface PistonStage {
   stdout: string

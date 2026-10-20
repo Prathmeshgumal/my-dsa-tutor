@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http'
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { buildPrompt, createClaudeChatMiddleware, type ChatEvent, type QueryFn } from './claudeChat'
+import { buildPrompt, createApprovals, createClaudeChatMiddleware, type Approvals, type ChatEvent, type QueryFn } from './claudeChat'
 
 let server: Server
 let base: string
@@ -17,9 +17,9 @@ function fakeQuery(messages: SDKMessage[] | ((options: Options) => AsyncGenerato
   }
 }
 
-async function start(queryImpl: QueryFn) {
+async function start(queryImpl: QueryFn, approvals: Approvals = createApprovals()) {
   calls = []
-  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', queryImpl })
+  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', queryImpl, approvals })
   server = createServer((req, res) =>
     middleware(req, res, () => {
       res.statusCode = 418
@@ -72,7 +72,7 @@ const success = m({ type: 'result', subtype: 'success', is_error: false, result:
 const body = {
   message: 'Why is this O(n^2)?',
   sessionId: null,
-  context: { activeFile: { name: 'two_sum.cpp', content: 'int main(){}' }, openFiles: ['two_sum.cpp', 'bfs.py'] },
+  context: { activeFile: { name: 'two_sum.cpp', content: 'int main(){}' }, openFiles: ['two_sum.cpp', 'bfs.py'], lastRun: null },
 }
 
 test('streams session id, text deltas, tool activity and done', async () => {
@@ -81,7 +81,7 @@ test('streams session id, text deltas, tool activity and done', async () => {
       m({ type: 'system', subtype: 'init', session_id: sid }),
       textDelta('Hello'),
       textDelta(' there'),
-      toolUse('Read', { file_path: '/tmp/solutions/two_sum.cpp' }),
+      toolUse('mcp__editor__read_file', { name: 'two_sum.cpp' }),
       success,
     ]),
   )
@@ -89,15 +89,15 @@ test('streams session id, text deltas, tool activity and done', async () => {
     { type: 'session', sessionId: sid },
     { type: 'text', text: 'Hello' },
     { type: 'text', text: ' there' },
-    { type: 'tool', name: 'Read', detail: 'two_sum.cpp' },
+    { type: 'tool', name: 'read_file', detail: 'two_sum.cpp' },
     { type: 'done' },
   ])
 })
 
 test('edits are reported so the editor can reload files', async () => {
-  await start(fakeQuery([toolUse('Edit', { file_path: '/tmp/solutions/two_sum.cpp' }), success]))
+  await start(fakeQuery([toolUse('mcp__editor__edit_file', { name: 'two_sum.cpp', old_text: 'a', new_text: 'b' }), success]))
   const events = await chat(body)
-  expect(events).toContainEqual({ type: 'tool', name: 'Edit', detail: 'two_sum.cpp' })
+  expect(events).toContainEqual({ type: 'tool', name: 'edit_file', detail: 'two_sum.cpp' })
 })
 
 test('subagent activity and non-text deltas are not forwarded', async () => {
@@ -112,17 +112,22 @@ test('subagent activity and non-text deltas are not forwarded', async () => {
   expect(await chat(body)).toEqual([{ type: 'session', sessionId: sid }, { type: 'done' }])
 })
 
-test('runs in the solutions folder, resumes the session and keeps edits inside it', async () => {
+test('the agent only gets the editor tools: no built-ins, no personal settings, plugins or MCP servers', async () => {
   await start(fakeQuery([success]))
   await chat({ ...body, sessionId: 'old-session' })
   const { options, prompt } = calls[0]
   expect(options.cwd).toBe('/tmp/solutions')
   expect(options.resume).toBe('old-session')
   expect(options.includePartialMessages).toBe(true)
-  expect(options.permissionMode).toBe('acceptEdits')
-  expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep'])
-  expect(options.disallowedTools).toEqual(expect.arrayContaining(['Bash', 'WebFetch', 'WebSearch']))
-  expect(options.systemPrompt).toMatchObject({ type: 'preset', preset: 'claude_code' })
+  expect(options.tools).toEqual([])
+  expect(options.settingSources).toEqual([])
+  expect(options.strictMcpConfig).toBe(true)
+  expect(Object.keys(options.mcpServers!)).toEqual(['editor'])
+  expect(options.allowedTools).toEqual(
+    ['get_editor_state', 'list_files', 'read_file', 'get_last_run', 'run_code', 'edit_file', 'create_file'].map((n) => `mcp__editor__${n}`),
+  )
+  expect(typeof options.systemPrompt).toBe('string')
+  expect(options.systemPrompt).toContain('edit_file')
   expect(prompt).toContain('Why is this O(n^2)?')
   expect(prompt).toContain('two_sum.cpp')
 })
@@ -204,5 +209,39 @@ describe('buildPrompt', () => {
 
   test('no active file → just says so', () => {
     expect(buildPrompt('Hi', { activeFile: null, openFiles: [] })).toContain('No file is open')
+  })
+})
+
+describe('approvals', () => {
+  const change = { kind: 'edit' as const, file: 'a.cpp', before: 'x', after: 'y', explanation: 'why' }
+
+  test('a change waits for the user: the browser gets an approval event, then POSTs the decision', async () => {
+    const approvals = createApprovals()
+    await start(fakeQuery([success]), approvals)
+    const sent: ChatEvent[] = []
+    const decision = approvals.request((e) => sent.push(e), new AbortController().signal, change)
+    expect(sent).toEqual([{ type: 'approval', id: expect.any(String), ...change }])
+    const id = (sent[0] as { id: string }).id
+    const res = await fetch(`${base}/api/claude/approval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, approved: true }),
+    })
+    expect(res.status).toBe(204)
+    expect(await decision).toBe(true)
+  })
+
+  test('an unknown or already-answered approval → 404', async () => {
+    await start(fakeQuery([success]))
+    const res = await fetch(`${base}/api/claude/approval`, { method: 'POST', body: JSON.stringify({ id: 'nope', approved: true }) })
+    expect(res.status).toBe(404)
+  })
+
+  test('if the reply is stopped while waiting, the change counts as declined', async () => {
+    const approvals = createApprovals()
+    const controller = new AbortController()
+    const decision = approvals.request(() => {}, controller.signal, change)
+    controller.abort()
+    expect(await decision).toBe(false)
   })
 })

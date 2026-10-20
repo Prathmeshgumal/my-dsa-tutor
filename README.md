@@ -66,14 +66,26 @@ one closes the other.
 
 ## Ask Claude
 
-Click the ✦ button in the left rail (or ⌘/Ctrl + K → "Ask Claude") to chat with
-Claude Code. It runs on this machine using your existing Claude Code login (no API
-key), works inside `solutions/`, and every message includes the file you have open
-with its latest code. Claude can read and edit your files, and edited files reload in
-the editor. It can't run shell commands; use Run for that. You can keep several chats:
-"New chat" starts a fresh one, and clicking the chat title at the top lists them all
-so you can switch back (each keeps its own conversation) or delete one (click the bin,
-then "Delete").
+Click the ✦ button in the left bar (or ⌘/Ctrl + K → "Ask Claude") to chat with a Claude
+agent built for this editor. It runs on this machine with your existing Claude Code login
+(no API key), and every message includes the file you have open with its latest code.
+
+It can only act through these tools:
+
+| Tool | What it does | Asks you first? |
+|---|---|---|
+| `get_editor_state` | Which file is open, which tabs are open | No |
+| `list_files` | Your solution files | No |
+| `read_file` | A file with line numbers (or some of its lines) | No |
+| `get_last_run` | What the output panel shows: result, output, compiler errors | No |
+| `run_code` | Runs a file, optionally with input, to test it; the result shows in your output panel | No |
+| `edit_file` | Replaces one exact piece of a file | **Yes**: you see the change and click Apply or Reject |
+| `create_file` | Creates a new solution file | **Yes** |
+
+Claude Code's own tools (shell, web, other folders) and your personal Claude Code
+settings, CLAUDE.md, plugins and MCP servers are all switched off for it. You can keep
+several chats: "New chat" starts a fresh one, and clicking the chat title at the top lists
+them so you can switch back or delete one.
 
 ## Develop
 

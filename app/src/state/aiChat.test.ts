@@ -1,7 +1,13 @@
 import type { ChatEvent } from '@/lib/claudeClient'
+import type { ChatRequest } from '@/lib/chatEvents'
 import { defaultWorkspace } from '@/lib/storage'
 import { activeChat, useAiChat } from './aiChat'
 import { useWorkspace } from './workspace'
+import { useRun } from './run'
+import { useSettings } from './settings'
+import type { RunResult } from '@/lib/runner/types'
+
+const runResult: RunResult = { status: 'success', statusText: 'Accepted', stdout: '1', stderr: '', compileOutput: '', timeMs: 3, memoryKb: 100 }
 
 const chat = () => useAiChat.getState()
 const quiet = { beforeSend: async () => {}, afterEdits: async () => {} }
@@ -16,6 +22,7 @@ beforeEach(() => {
   localStorage.clear()
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle' })
+  useRun.setState({ state: 'idle', result: null, error: null, lastFile: null })
 })
 
 test('the first message starts a chat titled after it, and the reply is built from the stream', async () => {
@@ -53,6 +60,7 @@ test('follow-ups stay in the same chat and resume its session, with the open fil
     context: {
       activeFile: { name: 'two.py', content: useWorkspace.getState().activeFile()!.content },
       openFiles: ['main.cpp', 'two.py'],
+      lastRun: null,
     },
   })
 })
@@ -136,9 +144,9 @@ test('saves pending edits before sending so Claude reads the latest code', async
 
 test('reloads files from disk only when Claude edited something', async () => {
   const afterEdits = vi.fn(async () => {})
-  await chat().send('explain', { stream: fakeStream([{ type: 'tool', name: 'Read', detail: 'a' }, { type: 'done' }]), beforeSend: async () => {}, afterEdits })
+  await chat().send('explain', { stream: fakeStream([{ type: 'tool', name: 'read_file', detail: 'a' }, { type: 'done' }]), beforeSend: async () => {}, afterEdits })
   expect(afterEdits).not.toHaveBeenCalled()
-  await chat().send('fix it', { stream: fakeStream([{ type: 'tool', name: 'Edit', detail: 'a' }, { type: 'done' }]), beforeSend: async () => {}, afterEdits })
+  await chat().send('fix it', { stream: fakeStream([{ type: 'tool', name: 'edit_file', detail: 'a' }, { type: 'done' }]), beforeSend: async () => {}, afterEdits })
   expect(afterEdits).toHaveBeenCalledOnce()
 })
 
@@ -192,4 +200,66 @@ test('the conversation saved before multiple chats existed becomes the first cha
   const current = activeChat(chat())!
   expect(current).toMatchObject({ title: 'old question', sessionId: 'legacy' })
   expect(current.messages).toHaveLength(1)
+})
+
+describe('agent tools', () => {
+  test('sends what the output panel shows (last run) with the message', async () => {
+    useRun.setState({ state: 'done', result: runResult, error: null, lastFile: 'main.cpp' })
+    const stream = fakeStream([{ type: 'done' }])
+    await chat().send('why?', { stream, ...quiet })
+    expect((stream.mock.calls[0][0] as ChatRequest).context.lastRun).toEqual({ file: 'main.cpp', result: runResult })
+  })
+
+  test('a proposed change waits for approval while Claude waits, and expires when the reply ends', async () => {
+    let finish!: () => void
+    const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void) => {
+      onEvent({ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: 'why' })
+      await new Promise<void>((r) => (finish = r))
+    })
+    const pending = chat().send('fix it', { stream, ...quiet })
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    expect(activeChat(chat())!.messages[1].approvals).toEqual([
+      { id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: 'why', state: 'pending' },
+    ])
+    finish()
+    await pending
+    expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('expired')
+  })
+
+  test('answering a proposal saves the editor first, posts the decision and marks it', async () => {
+    await chat().send('fix it', {
+      stream: fakeStream([{ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: '' }]),
+      ...quiet,
+    })
+    const order: string[] = []
+    const post = vi.fn(async (url: string, init: RequestInit) => {
+      order.push(`post ${url} ${init.body}`)
+      return new Response(null, { status: 204 })
+    })
+    await chat().answerApproval('p1', true, { post, beforeAnswer: async () => void order.push('save') })
+    expect(order).toEqual(['save', 'post /api/claude/approval {"id":"p1","approved":true}'])
+    expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('approved')
+  })
+
+  test('a proposal the server no longer waits for is marked expired', async () => {
+    await chat().send('fix it', {
+      stream: fakeStream([{ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: '' }]),
+      ...quiet,
+    })
+    await chat().answerApproval('p1', true, { post: async () => new Response(null, { status: 404 }), beforeAnswer: async () => {} })
+    expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('expired')
+  })
+
+  test('runs by Claude appear in the output panel', async () => {
+    useSettings.setState({ outputOpen: false })
+    await chat().send('test it', { stream: fakeStream([{ type: 'run', file: 'bfs.py', result: runResult }]), ...quiet })
+    expect(useRun.getState()).toMatchObject({ state: 'done', result: runResult, lastFile: 'bfs.py' })
+    expect(useSettings.getState().outputOpen).toBe(true)
+  })
+
+  test('an applied change reloads the files straight away', async () => {
+    const afterEdits = vi.fn(async () => {})
+    await chat().send('fix it', { stream: fakeStream([{ type: 'file_changed', file: 'main.cpp' }]), beforeSend: async () => {}, afterEdits })
+    expect(afterEdits).toHaveBeenCalled()
+  })
 })

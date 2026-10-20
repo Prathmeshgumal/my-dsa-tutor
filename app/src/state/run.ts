@@ -28,7 +28,11 @@ interface RunState {
   result: RunResult | null
   error: RunnerError | null
   connection: Connection
+  /** The file the shown result belongs to. */
+  lastFile: string | null
   runActiveFile(runner?: CodeRunner): Promise<void>
+  /** Shows a run made elsewhere (by Claude) in the output panel. */
+  showRun(file: string, result: RunResult): void
 }
 
 export const useRun = create<RunState>()((set, get) => ({
@@ -36,6 +40,12 @@ export const useRun = create<RunState>()((set, get) => ({
   result: null,
   error: null,
   connection: initialConnection(useSettings.getState()),
+  lastFile: null,
+
+  showRun(file, result) {
+    useSettings.getState().setOutputOpen(true)
+    set({ state: 'done', result, error: null, lastFile: file, connection: 'connected' })
+  },
 
   async runActiveFile(runner) {
     if (get().state === 'running') return
@@ -53,7 +63,7 @@ export const useRun = create<RunState>()((set, get) => ({
       return
     }
 
-    set({ state: 'running', error: null })
+    set({ state: 'running', error: null, lastFile: file.name })
     try {
       const result = await (runner ?? createRunner(settings)).run({
         language,

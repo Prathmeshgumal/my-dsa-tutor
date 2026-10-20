@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { EDIT_TOOLS, type ChatEvent, type ChatRequest } from '@/lib/chatEvents'
+import { EDIT_TOOLS, type ChatEvent, type ChatRequest, type LastRun } from '@/lib/chatEvents'
 import { streamChat } from '@/lib/claudeClient'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
+import { useRun } from './run'
 import { useWorkspace } from './workspace'
 
 export interface ToolActivity {
@@ -11,12 +12,31 @@ export interface ToolActivity {
   detail: string
 }
 
+/** A change Claude proposed; it is only applied if the user approves it. */
+export interface Approval {
+  id: string
+  kind: 'edit' | 'create'
+  file: string
+  before: string
+  after: string
+  explanation: string
+  /** expired = Claude stopped waiting (reply stopped, or the page was reloaded). */
+  state: 'pending' | 'approved' | 'rejected' | 'expired'
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
   tools: ToolActivity[]
+  approvals?: Approval[]
   error?: string
+}
+
+interface AnswerDeps {
+  post?: (url: string, init: RequestInit) => Promise<Response>
+  /** Save typing first, so Claude's change applies to the latest code. */
+  beforeAnswer?: () => Promise<void>
 }
 
 type StreamFn = (
@@ -56,6 +76,7 @@ interface AiChatState {
   newChat(): void
   selectChat(id: string): void
   deleteChat(id: string): void
+  answerApproval(id: string, approved: boolean, deps?: AnswerDeps): Promise<void>
 }
 
 const TITLE_MAX = 48
@@ -77,7 +98,24 @@ function editorContext(): ChatRequest['context'] {
   return {
     activeFile: active ? { name: active.name, content: active.content } : null,
     openFiles: openIds.flatMap((id) => files.filter((f) => f.id === id).map((f) => f.name)),
+    lastRun: lastRun(),
   }
+}
+
+function lastRun(): LastRun {
+  const { state, result, error, lastFile } = useRun.getState()
+  if (state === 'done' && result) return { file: lastFile, result }
+  if (state === 'error' && error) return { file: lastFile, error: error.message }
+  return null
+}
+
+function setApprovalState(chats: Chat[], id: string, state: Approval['state']): Chat[] {
+  return chats.map((c) => ({
+    ...c,
+    messages: c.messages.map((m) =>
+      m.approvals?.some((a) => a.id === id) ? { ...m, approvals: m.approvals.map((a) => (a.id === id ? { ...a, state } : a)) } : m,
+    ),
+  }))
 }
 
 export const useAiChat = create<AiChatState>()(
@@ -127,13 +165,20 @@ export const useAiChat = create<AiChatState>()(
               else if (event.type === 'tool') {
                 if (EDIT_TOOLS.has(event.name)) edited = true
                 patchReply((m) => ({ tools: [...m.tools, { name: event.name, detail: event.detail }] }))
-              } else if (event.type === 'error') patchReply(() => ({ error: event.message }))
+              } else if (event.type === 'approval') {
+                const { type: _, ...change } = event
+                patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
+              } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result)
+              else if (event.type === 'file_changed') void afterEdits()
+              else if (event.type === 'error') patchReply(() => ({ error: event.message }))
             },
             { signal: controller.signal },
           )
           if (edited) await afterEdits()
         } finally {
           controller = null
+          // Claude has stopped waiting for any proposal it didn't get an answer to.
+          patchReply((m) => ({ approvals: m.approvals?.map((a) => (a.state === 'pending' ? { ...a, state: 'expired' } : a)) }))
           set({ status: 'idle', streamingChatId: null })
         }
       },
@@ -148,6 +193,22 @@ export const useAiChat = create<AiChatState>()(
 
       selectChat(id) {
         if (get().chats.some((c) => c.id === id)) set({ activeChatId: id })
+      },
+
+      async answerApproval(id, approved, { post = (url: string, init: RequestInit) => fetch(url, init), beforeAnswer = flushAutosave } = {}) {
+        await beforeAnswer()
+        let found = false
+        try {
+          const res = await post('/api/claude/approval', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, approved }),
+          })
+          found = res.ok
+        } catch {
+          found = false
+        }
+        set((s) => ({ chats: setApprovalState(s.chats, id, found ? (approved ? 'approved' : 'rejected') : 'expired') }))
       },
 
       deleteChat(id) {

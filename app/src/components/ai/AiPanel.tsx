@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, FileCode2, FileSearch, MessageSquare, Pencil, Search, Sparkles, Square, SquarePen, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { activeChat, useAiChat, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
+import { activeChat, useAiChat, type Approval, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
@@ -17,13 +17,14 @@ const SUGGESTIONS = [
   'Why might this be wrong?',
 ]
 
-const TOOL_LABEL: Record<string, { verb: string; icon: typeof Pencil }> = {
-  Read: { verb: 'Read', icon: FileSearch },
-  Edit: { verb: 'Edited', icon: Pencil },
-  MultiEdit: { verb: 'Edited', icon: Pencil },
-  Write: { verb: 'Wrote', icon: Pencil },
-  Glob: { verb: 'Looked for', icon: Search },
-  Grep: { verb: 'Searched for', icon: Search },
+const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: typeof Pencil }> = {
+  get_editor_state: { label: () => 'Checked the editor', icon: Eye },
+  list_files: { label: () => 'Listed files', icon: Search },
+  read_file: { label: (d) => `Read ${d}`, icon: FileSearch },
+  get_last_run: { label: () => 'Checked the output', icon: TerminalSquare },
+  run_code: { label: (d) => `Ran ${d || 'the open file'}`, icon: Play },
+  edit_file: { label: (d) => `Proposed a change to ${d}`, icon: Pencil },
+  create_file: { label: (d) => `Proposed new file ${d}`, icon: FilePlus2 },
 }
 
 function ToolList({ tools }: { tools: ToolActivity[] }) {
@@ -31,19 +32,88 @@ function ToolList({ tools }: { tools: ToolActivity[] }) {
   return (
     <ul aria-label="What Claude did" className="mb-2 flex flex-wrap gap-1.5">
       {tools.map((t, i) => {
-        const label = TOOL_LABEL[t.name] ?? { verb: t.name, icon: Sparkles }
-        const Icon = label.icon
+        const known = TOOL_LABEL[t.name]
+        const Icon = known?.icon ?? Sparkles
         return (
           <li
             key={i}
             className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
           >
             <Icon className="size-3" aria-hidden />
-            <span>{`${label.verb} ${t.detail}`.trim()}</span>
+            <span>{known ? known.label(t.detail) : `${t.name} ${t.detail}`.trim()}</span>
           </li>
         )
       })}
     </ul>
+  )
+}
+
+const DECIDED: Record<Exclude<Approval['state'], 'pending'>, { text: string; className: string; icon: typeof Check }> = {
+  approved: { text: 'Applied', className: 'text-emerald-600 dark:text-emerald-400', icon: Check },
+  rejected: { text: 'Rejected', className: 'text-muted-foreground', icon: X },
+  expired: { text: 'No longer waiting', className: 'text-muted-foreground', icon: Clock },
+}
+
+function DiffLines({ text, sign }: { text: string; sign: '-' | '+' }) {
+  if (!text) return null
+  return (
+    <div
+      className={cn(
+        'px-2 py-1',
+        sign === '-' ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+      )}
+    >
+      {text.split('\n').map((line, i) => (
+        <div key={i} className="flex gap-2 whitespace-pre">
+          <span aria-hidden className="select-none opacity-60">
+            {sign === '-' ? '−' : '+'}
+          </span>
+          <span>{line}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A change Claude wants to make; nothing is written until the user applies it. */
+function ApprovalCard({ approval }: { approval: Approval }) {
+  const title = approval.kind === 'create' ? `Proposed new file ${approval.file}` : `Proposed change to ${approval.file}`
+  const decided = approval.state === 'pending' ? null : DECIDED[approval.state]
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      className={cn(
+        'my-2 overflow-hidden rounded-lg border',
+        approval.state === 'pending' && 'border-violet-500/40 shadow-[0_0_0_3px] shadow-violet-500/10',
+      )}
+    >
+      <div className="flex items-center gap-1.5 border-b bg-muted/40 px-2.5 py-1.5 text-[12px]">
+        {approval.kind === 'create' ? <FilePlus2 className="size-3.5" aria-hidden /> : <Pencil className="size-3.5" aria-hidden />}
+        <span className="font-medium">{approval.kind === 'create' ? 'New file' : 'Edit'}</span>
+        <span className="truncate font-mono text-muted-foreground">{approval.file}</span>
+        {decided && (
+          <span className={cn('ml-auto flex shrink-0 items-center gap-1', decided.className)}>
+            <decided.icon className="size-3.5" aria-hidden /> {decided.text}
+          </span>
+        )}
+      </div>
+      {approval.explanation && <p className="px-2.5 pt-2 text-[12.5px] text-muted-foreground">{approval.explanation}</p>}
+      <div className="m-2.5 max-h-64 overflow-auto rounded-md border font-mono text-[11.5px] leading-relaxed">
+        <DiffLines text={approval.before} sign="-" />
+        <DiffLines text={approval.after} sign="+" />
+      </div>
+      {approval.state === 'pending' && (
+        <div className="flex justify-end gap-2 px-2.5 pb-2.5">
+          <Button size="sm" variant="ghost" onClick={() => void useAiChat.getState().answerApproval(approval.id, false)}>
+            Reject
+          </Button>
+          <Button size="sm" onClick={() => void useAiChat.getState().answerApproval(approval.id, true)}>
+            <Check /> Apply change
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -58,8 +128,9 @@ function Message({ message, streaming }: { message: ChatMessage; streaming: bool
   return (
     <div className="text-[13px] leading-relaxed text-foreground">
       <ToolList tools={message.tools} />
+      {message.approvals?.map((a) => <ApprovalCard key={a.id} approval={a} />)}
       {message.text && <Markdown>{message.text}</Markdown>}
-      {streaming && !message.text && (
+      {streaming && !message.text && !message.approvals?.some((a) => a.state === 'pending') && (
         <p className="flex items-center gap-2 text-muted-foreground">
           <span className="flex gap-1" aria-hidden>
             {[0, 1, 2].map((i) => (
@@ -74,7 +145,9 @@ function Message({ message, streaming }: { message: ChatMessage; streaming: bool
           {message.error}
         </p>
       )}
-      {!streaming && !message.text && !message.error && <p className="text-muted-foreground italic">Stopped.</p>}
+      {!streaming && !message.text && !message.error && !message.approvals?.length && (
+        <p className="text-muted-foreground italic">Stopped.</p>
+      )}
     </div>
   )
 }
@@ -245,8 +318,8 @@ export function AiPanel() {
             <div className="space-y-1">
               <p className="text-sm font-medium">Ask Claude about your code</p>
               <p className="text-[12.5px] text-muted-foreground">
-                Claude Code runs on this machine with your login. It sees the file you have open and can read or edit
-                anything in <span className="font-mono">solutions/</span>.
+                Claude runs on this machine with your login. It can read your files and the output, run your code to
+                test it, and propose edits that you approve before anything changes.
               </p>
             </div>
             <div className="flex flex-col items-stretch gap-1.5 self-stretch">

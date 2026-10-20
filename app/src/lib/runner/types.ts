@@ -1,4 +1,4 @@
-import type { Language } from '@/lib/languages'
+import type { Language } from '../languages.ts'
 
 export interface RunRequest {
   language: Language

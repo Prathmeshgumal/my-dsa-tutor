@@ -11,7 +11,7 @@ function sseResponse(chunks: string[], status = 200) {
   return new Response(body, { status, headers: { 'Content-Type': 'text/event-stream' } })
 }
 
-const request = { message: 'hi', sessionId: null, context: { activeFile: null, openFiles: [] } }
+const request = { message: 'hi', sessionId: null, context: { activeFile: null, openFiles: [], lastRun: null } }
 
 test('posts the request and yields events, even when split across chunks', async () => {
   const fetchImpl = vi.fn(async () =>

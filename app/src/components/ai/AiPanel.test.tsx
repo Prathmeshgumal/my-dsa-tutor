@@ -2,7 +2,7 @@ import { act, render as rtlRender, screen, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { defaultWorkspace } from '@/lib/storage'
-import { useAiChat, type Chat, type ChatMessage } from '@/state/aiChat'
+import { useAiChat, type Approval, type Chat, type ChatMessage } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { AiPanel } from './AiPanel'
@@ -13,6 +13,7 @@ const stop = vi.fn()
 const newChat = vi.fn()
 const selectChat = vi.fn()
 const deleteChat = vi.fn()
+const answerApproval = vi.fn(async () => {})
 
 function chatWith(id: string, title: string, messages: ChatMessage[] = []): Chat {
   return { id, title, sessionId: null, messages, updatedAt: Date.now() }
@@ -29,9 +30,10 @@ beforeEach(() => {
   newChat.mockClear()
   selectChat.mockClear()
   deleteChat.mockClear()
+  answerApproval.mockClear()
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useSettings.setState({ aiOpen: true })
-  useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle', send, stop, newChat, selectChat, deleteChat })
+  useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle', send, stop, newChat, selectChat, deleteChat, answerApproval })
 })
 
 test('is a labelled side panel', () => {
@@ -78,8 +80,10 @@ test('renders the conversation: user text, markdown reply with code, and tool ac
         role: 'assistant',
         text: 'Use a **hash map**:\n\n```cpp\nunordered_map<int,int> m;\n```',
         tools: [
-          { name: 'Read', detail: 'main.cpp' },
-          { name: 'Edit', detail: 'main.cpp' },
+          { name: 'read_file', detail: 'main.cpp' },
+          { name: 'run_code', detail: 'main.cpp' },
+          { name: 'get_last_run', detail: '' },
+          { name: 'edit_file', detail: 'main.cpp' },
         ],
       },
     ])
@@ -89,7 +93,9 @@ test('renders the conversation: user text, markdown reply with code, and tool ac
   expect(screen.getByText('unordered_map<int,int> m;').closest('pre')).not.toBeNull()
   const tools = screen.getByRole('list', { name: 'What Claude did' })
   expect(within(tools).getByText('Read main.cpp')).toBeInTheDocument()
-  expect(within(tools).getByText('Edited main.cpp')).toBeInTheDocument()
+  expect(within(tools).getByText('Ran main.cpp')).toBeInTheDocument()
+  expect(within(tools).getByText('Checked the output')).toBeInTheDocument()
+  expect(within(tools).getByText('Proposed a change to main.cpp')).toBeInTheDocument()
 })
 
 test('while Claude is replying: thinking indicator and a Stop button', async () => {
@@ -184,4 +190,68 @@ test('new chat from the list view goes back to an empty conversation', async () 
   await userEvent.click(screen.getByRole('button', { name: 'New chat' }))
   expect(newChat).toHaveBeenCalled()
   expect(screen.queryByRole('list', { name: 'Chats' })).not.toBeInTheDocument()
+})
+
+describe('proposed changes', () => {
+  const proposal = (state: Approval['state']): Approval => ({
+    id: 'p1',
+    kind: 'edit',
+    file: 'array.cpp',
+    before: 'else if(arr[end] == 0 && arr[start] == 0){',
+    after: 'else if(arr[end] == 0){',
+    explanation: 'The first check already covers this case',
+    state,
+  })
+  const show = (state: Approval['state']) =>
+    showMessages(
+      [
+        { id: '1', role: 'user', text: 'simplify it', tools: [] },
+        { id: '2', role: 'assistant', text: '', tools: [], approvals: [proposal(state)] },
+      ],
+      { status: state === 'pending' ? 'streaming' : 'idle', streamingChatId: state === 'pending' ? 'c1' : null },
+    )
+
+  test('shows what would change and lets you apply it', async () => {
+    show('pending')
+    render(<AiPanel />)
+    const card = screen.getByRole('group', { name: 'Proposed change to array.cpp' })
+    expect(within(card).getByText('The first check already covers this case')).toBeInTheDocument()
+    expect(within(card).getByText('else if(arr[end] == 0 && arr[start] == 0){')).toBeInTheDocument()
+    expect(within(card).getByText('else if(arr[end] == 0){')).toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Apply change' }))
+    expect(answerApproval).toHaveBeenCalledWith('p1', true)
+  })
+
+  test('or reject it', async () => {
+    show('pending')
+    render(<AiPanel />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    expect(answerApproval).toHaveBeenCalledWith('p1', false)
+  })
+
+  test.each([
+    ['approved', 'Applied'],
+    ['rejected', 'Rejected'],
+    ['expired', 'No longer waiting'],
+  ] as const)('a %s proposal says so and has no buttons', (state, label) => {
+    show(state)
+    render(<AiPanel />)
+    const card = screen.getByRole('group', { name: 'Proposed change to array.cpp' })
+    expect(card).toHaveTextContent(label)
+    expect(within(card).queryByRole('button', { name: 'Apply change' })).not.toBeInTheDocument()
+  })
+
+  test('a new file proposal says it will create the file', () => {
+    showMessages([
+      {
+        id: '2',
+        role: 'assistant',
+        text: '',
+        tools: [],
+        approvals: [{ id: 'p2', kind: 'create', file: 'brute.cpp', before: '', after: 'int main(){}', explanation: '', state: 'pending' }],
+      },
+    ], { status: 'streaming', streamingChatId: 'c1' })
+    render(<AiPanel />)
+    expect(screen.getByRole('group', { name: 'Proposed new file brute.cpp' })).toBeInTheDocument()
+  })
 })
