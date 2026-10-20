@@ -5,6 +5,9 @@ cd "$(dirname "$0")"
 PORT="${EDITOR_PORT:-5199}"
 URL="http://localhost:$PORT"
 
+# Create the data folders first, so Docker doesn't make them owned by root.
+mkdir -p solutions notes
+
 docker compose up -d "$@"
 
 printf 'Waiting for the editor'

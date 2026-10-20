@@ -3,6 +3,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
 import { FilesPanel } from '@/components/files/FilesPanel'
+import { NotesPanel } from '@/components/notes/NotesPanel'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
@@ -31,6 +32,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const vertical = narrow || useSettings((s) => s.outputPosition) === 'bottom'
   const outputOpen = useSettings((s) => s.outputOpen)
   const aiOpen = useSettings((s) => s.aiOpen)
+  const notesOpen = useSettings((s) => s.notesOpen)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -74,6 +76,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
             </ResizablePanelGroup>
           </div>
           {aiOpen && <AiPanel />}
+          {notesOpen && !aiOpen && <NotesPanel />}
         </div>
         <StatusBar connection={connection} cursor={cursor} />
       </div>

@@ -1,4 +1,5 @@
-// Dev-server API that stores the editor's files as real files in one folder on disk.
+// Dev-server API that stores files as real files in one folder on disk.
+// Code files live under /api/files (solutions folder), markdown notes under /api/notes (notes folder).
 //   GET    /api/files               → [{ name, content }]
 //   PUT    /api/files/:name         { content } → write (create or overwrite)
 //   DELETE /api/files/:name         → delete (idempotent)
@@ -10,7 +11,6 @@ import { languageFromFilename } from '../src/lib/languages.ts'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
-const PREFIX = '/api/files'
 const MAX_BODY_BYTES = 5 * 1024 * 1024
 
 class HttpError extends Error {
@@ -21,15 +21,22 @@ class HttpError extends Error {
   }
 }
 
-/** Only plain, visible code files directly inside the folder — no paths, no traversal. */
-function assertSafeName(name: string): void {
+interface Store {
+  dir: string
+  prefix: string
+  /** Which file names this store holds (e.g. code files, or .md notes). */
+  allows(name: string): boolean
+}
+
+/** Only plain, visible files of the store's kind directly inside the folder — no paths, no traversal. */
+function assertSafeName(store: Store, name: string): void {
   const safe =
     name.length > 0 &&
     name.length <= 255 &&
     !/[/\\\0]/.test(name) &&
     !name.startsWith('.') &&
     path.basename(name) === name &&
-    languageFromFilename(name) !== null
+    store.allows(name)
   if (!safe) throw new HttpError(400, `Invalid file name: ${JSON.stringify(name)}`)
 }
 
@@ -57,24 +64,25 @@ async function exists(file: string): Promise<boolean> {
   )
 }
 
-async function listFiles(dir: string) {
+async function listFiles({ dir, allows }: Store) {
   await mkdir(dir, { recursive: true })
   const entries = await readdir(dir, { withFileTypes: true })
   const names = entries
-    .filter((e) => e.isFile() && !e.name.startsWith('.') && languageFromFilename(e.name))
+    .filter((e) => e.isFile() && !e.name.startsWith('.') && allows(e.name))
     .map((e) => e.name)
     .sort((a, b) => a.localeCompare(b))
   return Promise.all(names.map(async (name) => ({ name, content: await readFile(path.join(dir, name), 'utf8') })))
 }
 
-async function handle(dir: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const rest = (req.url ?? '').split('?')[0].slice(PREFIX.length)
+async function handle(store: Store, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const { dir } = store
+  const rest = (req.url ?? '').split('?')[0].slice(store.prefix.length)
   const method = req.method ?? 'GET'
 
   if (rest === '' || rest === '/') {
     if (method !== 'GET') throw new HttpError(405, 'Method not allowed')
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify(await listFiles(dir)))
+    res.end(JSON.stringify(await listFiles(store)))
     return
   }
 
@@ -86,7 +94,7 @@ async function handle(dir: string, req: IncomingMessage, res: ServerResponse): P
     throw new HttpError(400, 'Malformed file name')
   }
   if (extra.length) throw new HttpError(404, 'Not found')
-  assertSafeName(name)
+  assertSafeName(store, name)
   const file = path.join(dir, name)
   await mkdir(dir, { recursive: true })
 
@@ -99,7 +107,7 @@ async function handle(dir: string, req: IncomingMessage, res: ServerResponse): P
   } else if (action === 'rename' && method === 'POST') {
     const { to } = await readJson(req)
     if (typeof to !== 'string') throw new HttpError(400, '"to" must be a string')
-    assertSafeName(to)
+    assertSafeName(store, to)
     const clash = (await readdir(dir)).find((n) => n.toLowerCase() === to.toLowerCase() && n !== name)
     if (clash) throw new HttpError(409, `${clash} already exists`)
     if (!(await exists(file))) throw new HttpError(404, `${name} not found`)
@@ -111,14 +119,23 @@ async function handle(dir: string, req: IncomingMessage, res: ServerResponse): P
   res.end()
 }
 
-export function createSolutionsMiddleware(dir: string): Middleware {
+function createStoreMiddleware(store: Store): Middleware {
+  const { prefix } = store
   return (req, res, next) => {
     const url = req.url ?? ''
-    if (url !== PREFIX && !url.startsWith(`${PREFIX}/`) && !url.startsWith(`${PREFIX}?`)) return next()
-    handle(dir, req, res).catch((e: unknown) => {
+    if (url !== prefix && !url.startsWith(`${prefix}/`) && !url.startsWith(`${prefix}?`)) return next()
+    handle(store, req, res).catch((e: unknown) => {
       res.statusCode = e instanceof HttpError ? e.status : 500
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
     })
   }
+}
+
+export function createSolutionsMiddleware(dir: string): Middleware {
+  return createStoreMiddleware({ dir, prefix: '/api/files', allows: (name) => languageFromFilename(name) !== null })
+}
+
+export function createNotesMiddleware(dir: string): Middleware {
+  return createStoreMiddleware({ dir, prefix: '/api/notes', allows: (name) => /\.md$/i.test(name) })
 }

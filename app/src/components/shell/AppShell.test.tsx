@@ -27,7 +27,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false })
+  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -70,10 +70,14 @@ test('Run button disabled and busy while running', () => {
   expect(run).toHaveAttribute('aria-busy', 'true')
 })
 
-test.each(['History'])('rail placeholder %s shows "Coming soon" tooltip', async (label) => {
+test('Notes button opens the notes panel, and it shares the right side with Claude', async () => {
   renderShell()
-  await userEvent.hover(screen.getByRole('button', { name: label }))
-  expect(await screen.findByRole('tooltip')).toHaveTextContent(/coming soon/i)
+  await userEvent.click(screen.getByRole('button', { name: 'Notes' }))
+  expect(screen.getByRole('complementary', { name: 'Notes' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Claude' }))
+  expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
+  expect(screen.queryByRole('complementary', { name: 'Notes' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Notes' })).toHaveAttribute('aria-pressed', 'false')
 })
 
 test('search bar calls onOpenCommand', async () => {

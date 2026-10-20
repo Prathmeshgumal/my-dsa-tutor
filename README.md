@@ -54,6 +54,16 @@ editor by default**. The small switch at the bottom-right of the status bar puts
 at the bottom, on the right, or hides it (⌘/Ctrl + J also shows or hides it).
 Running code always reopens it. These choices are remembered.
 
+## Notes
+
+Click the notebook button in the left bar (or ⌘/Ctrl + K → "Open notes") to keep
+Markdown notes next to your code: patterns, tricks, mistakes to avoid. Make as many
+as you like (the title is the first line), switch between them from the title at
+the top, and flip between Edit and Preview. Notes save themselves a moment after you
+stop typing, as real `.md` files in **`notes/`** at the repo root (set `NOTES_DIR`
+to use another folder). Notes and the Claude panel share the right side, so opening
+one closes the other.
+
 ## Ask Claude
 
 Click the ✦ button in the left rail (or ⌘/Ctrl + K → "Ask Claude") to chat with

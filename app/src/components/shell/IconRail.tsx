@@ -1,13 +1,9 @@
-import { Code2, FolderOpen, History, Settings, Sparkles, type LucideIcon } from 'lucide-react'
+import { Code2, FolderOpen, NotebookPen, Settings, Sparkles } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
-
-const PLACEHOLDERS: { label: string; icon: LucideIcon }[] = [
-  { label: 'History', icon: History },
-]
 
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
@@ -15,6 +11,7 @@ export function IconRail() {
   const filesOpen = useFilesPanel((s) => s.open)
   const setFilesOpen = useFilesPanel((s) => s.setOpen)
   const aiOpen = useSettings((s) => s.aiOpen)
+  const notesOpen = useSettings((s) => s.notesOpen)
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
@@ -53,21 +50,23 @@ export function IconRail() {
         <TooltipContent side="right">{filesOpen ? 'Hide files' : 'Show files'}</TooltipContent>
       </Tooltip>
 
-      {PLACEHOLDERS.map(({ label, icon: Icon }) => (
-        <Tooltip key={label}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={label}
-              aria-disabled="true"
-              className={`${item} cursor-default text-muted-foreground/70 hover:bg-muted hover:text-muted-foreground`}
-            >
-              <Icon />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{label} · coming soon</TooltipContent>
-        </Tooltip>
-      ))}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Notes"
+            aria-pressed={notesOpen}
+            onClick={() => useSettings.getState().setNotesOpen(!notesOpen)}
+            className={cn(
+              item,
+              notesOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <NotebookPen />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{notesOpen ? 'Hide notes' : 'Notes'}</TooltipContent>
+      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>

@@ -125,3 +125,9 @@ test('Ask Claude opens the Claude panel', async () => {
   await choose(/ask claude/i)
   expect(useSettings.getState().aiOpen).toBe(true)
 })
+
+test('Open notes opens the notes panel', async () => {
+  useSettings.setState({ notesOpen: false })
+  await choose(/open notes/i)
+  expect(useSettings.getState().notesOpen).toBe(true)
+})

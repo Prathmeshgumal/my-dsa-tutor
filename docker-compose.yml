@@ -36,12 +36,14 @@ services:
       HOME: /home/node
       PISTON_URL: http://piston:2000
       SOLUTIONS_DIR: /workspace/solutions
+      NOTES_DIR: /workspace/notes
     ports:
       - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
     volumes:
       - ./app:/workspace/app
       - editor-node-modules:/workspace/app/node_modules
       - ./solutions:/workspace/solutions
+      - ./notes:/workspace/notes
       # Your Claude Code login, so the Claude panel works without an API key.
       - ${HOME}/.claude:/home/node/.claude
 
