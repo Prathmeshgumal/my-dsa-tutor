@@ -115,7 +115,7 @@ describe('running', () => {
   test('get_last_run says what input the run got, and when there was none', async () => {
     const lastRun = { file: 'sort.cpp', result: ok, stdin: '' }
     const { tools } = setup({ context: { activeFile: null, openFiles: [], lastRun, openNote: null, openProblem: null } })
-    expect((await tools.get_last_run({})).text).toContain('Input (stdin):\n(empty: the Input box was blank)')
+    expect((await tools.get_last_run({})).text).toContain('Input (stdin):\n(nothing typed)')
   })
 
   test('run_code runs the saved file with optional input and shows it in the output panel', async () => {

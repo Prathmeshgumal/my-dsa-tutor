@@ -42,10 +42,12 @@ the left bar).
 
 ## Giving your program input
 
-Code runs in one go, so a program can't stop and wait for you to type. Put what it reads with `cin`
-(or `input()`, `Scanner`) in the **Input** tab next to Output and Errors before you press Run. Each
-file keeps its own input. If your code reads input and the box is empty, the output panel says so,
-and the Output tab shows the input each run was given.
+Programs run like they do in the VS Code terminal. When your code reads with `cin` (or `input()`,
+`Scanner`), the Output tab shows what it printed so far and waits: type the answer and press Enter,
+and the program carries on. What you typed stays in the output in purple. **Stop** ends a program
+that's stuck waiting or looping; a run can last up to 2 minutes.
+
+This needs Piston (the default). With Judge0 a program runs in one go and gets no input.
 
 ## Shortcuts
 

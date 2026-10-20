@@ -37,6 +37,9 @@ async function httpError(res: Response): Promise<RunnerError> {
   return new RunnerError('http', `Piston error (HTTP ${res.status}).`)
 }
 
+/** How long a run without typing may take, so an infinite loop stops quickly. */
+export const BATCH_TIMEOUT_MS = 3000
+
 /** Runs code on a self-hosted Piston (https://github.com/engineer-man/piston) via its v2 API. */
 export function createPistonRunner(opts: { baseUrl?: string; fetchImpl?: typeof fetch } = {}): CodeRunner {
   const baseUrl = opts.baseUrl ?? '/piston'
@@ -54,6 +57,8 @@ export function createPistonRunner(opts: { baseUrl?: string; fetchImpl?: typeof 
             version: '*',
             files: [{ name: req.language.piston.fileName, content: req.source }],
             stdin: req.stdin,
+            // Piston's maximum is raised for interactive runs (they wait for typing); a batch run still gets 3 s.
+            run_timeout: BATCH_TIMEOUT_MS,
           }),
           signal,
         })

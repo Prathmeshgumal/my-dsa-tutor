@@ -4,8 +4,6 @@ import { useSettings } from '@/state/settings'
 import { mockMatchMedia } from '@/test/matchMedia'
 import { RunnerError, type RunResult } from '@/lib/runner/types'
 import { useRun } from '@/state/run'
-import { useStdin } from '@/state/stdin'
-import { useWorkspace } from '@/state/workspace'
 import userEvent from '@testing-library/user-event'
 import { OutputPanel } from './OutputPanel'
 
@@ -32,7 +30,7 @@ function showResult(result: Partial<RunResult>) {
 beforeEach(() => {
   mockMatchMedia(() => false)
   useSettings.setState({ outputPosition: 'right' })
-  useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected' })
+  useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected', terminal: [], phase: null })
 })
 
 test('idle shows run hint', () => {
@@ -126,40 +124,58 @@ test('the output panel has no layout buttons (they live in the status bar)', () 
   expect(screen.queryByRole('button', { name: /output options|collapse output/i })).not.toBeInTheDocument()
 })
 
-describe('program input', () => {
-  beforeEach(() => {
-    useStdin.setState({ inputs: {} })
-    useWorkspace.setState({
-      files: [{ id: 'f1', name: 'arrays.cpp', content: 'int x; cin >> x;' }],
-      openIds: ['f1'],
-      activeId: 'f1',
-      ready: true,
+describe('running like a terminal', () => {
+  test('while compiling there is nothing to type into yet', () => {
+    useRun.setState({ state: 'running', phase: 'compiling' })
+    render(<OutputPanel />)
+    expect(screen.getByText('Compiling…')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  test('the program’s prompt shows, and what you type goes to it on Enter', async () => {
+    const sendInput = vi.fn()
+    useRun.setState({ state: 'running', phase: 'running', terminal: [{ kind: 'stdout', text: 'Enter rows: ' }], sendInput })
+    render(<OutputPanel />)
+    expect(screen.getByTestId('stdout')).toHaveTextContent('Enter rows:')
+    const box = screen.getByRole('textbox', { name: 'Type input for the program' })
+    expect(box).toHaveFocus()
+    await userEvent.type(box, '3{Enter}')
+    expect(sendInput).toHaveBeenCalledWith('3')
+    expect(box).toHaveValue('')
+  })
+
+  test('Stop stops the program', async () => {
+    const stop = vi.fn()
+    useRun.setState({ state: 'running', phase: 'running', stop })
+    render(<OutputPanel />)
+    await userEvent.click(screen.getByRole('button', { name: /stop/i }))
+    expect(stop).toHaveBeenCalled()
+  })
+
+  test('after the run, the terminal keeps what you typed, marked apart from the output', () => {
+    useRun.setState({
+      state: 'done',
+      result: base,
+      terminal: [
+        { kind: 'stdout', text: 'rows: ' },
+        { kind: 'input', text: '2\n' },
+        { kind: 'stdout', text: 'ok\n' },
+      ],
     })
-  })
-
-  test('the Input tab holds what the program reads, for the open file', async () => {
     render(<OutputPanel />)
-    await userEvent.click(screen.getByRole('tab', { name: /input/i }))
-    await userEvent.type(screen.getByRole('textbox', { name: 'Program input' }), '4 5')
-    expect(useStdin.getState().inputs).toEqual({ f1: '4 5' })
-  })
-
-  test('code that reads input with an empty box gets a warning that opens the Input tab', async () => {
-    render(<OutputPanel />)
-    expect(screen.getByRole('note')).toHaveTextContent(/reads input, but the Input box is empty/)
-    await userEvent.click(screen.getByRole('button', { name: 'Add input' }))
-    expect(screen.getByRole('textbox', { name: 'Program input' })).toBeInTheDocument()
-  })
-
-  test('no warning once there is input', () => {
-    useStdin.setState({ inputs: { f1: '3' } })
-    render(<OutputPanel />)
-    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stdout')).toHaveTextContent(/rows: 2\s*ok/)
+    expect(screen.getByText('2', { selector: '[data-kind="input"]' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 })
 
-test('the output shows what input the run was given', () => {
-  useRun.setState({ state: 'done', result: base, error: null, lastStdin: '1 2\n3 4\n' })
+test('a stopped run stays on its output, since there are no errors to show', () => {
+  useRun.setState({
+    state: 'done',
+    result: { ...base, status: 'runtime_error', statusText: 'Stopped', stdout: 'rows: ' },
+    terminal: [{ kind: 'stdout', text: 'rows: ' }],
+  })
   render(<OutputPanel />)
-  expect(screen.getByTestId('stdin-used')).toHaveTextContent(/Input given:\s*1 2 ⏎ 3 4/)
+  expect(screen.getByRole('tab', { name: 'Output' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByTestId('stdout')).toHaveTextContent('rows:')
 })

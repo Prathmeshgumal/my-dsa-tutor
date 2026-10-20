@@ -6,6 +6,10 @@ services:
     container_name: dsa-piston
     restart: unless-stopped
     privileged: true # Piston needs this to sandbox submitted code
+    environment:
+      # The longest a run may take. Runs you type into wait for you, so this allows 2 minutes;
+      # the editor asks for 3 seconds on runs without typing (tests, Claude's runs).
+      PISTON_RUN_TIMEOUT: "120000"
     ports:
       - "127.0.0.1:2000:2000"
     volumes:

@@ -92,7 +92,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 function describeRun(file: string | null, result: RunResult, stdin?: string): string {
   const stats = [result.timeMs !== null && `${result.timeMs} ms`, result.memoryKb !== null && `${result.memoryKb} KB`].filter(Boolean)
   const lines = [`File: ${file ?? '(unknown)'}`, `Result: ${result.statusText}${stats.length ? ` (${stats.join(', ')})` : ''}`]
-  if (stdin !== undefined) lines.push('Input (stdin):', stdin ? clip(stdin) : '(empty: the Input box was blank)')
+  if (stdin !== undefined) lines.push('Input (stdin):', stdin ? clip(stdin) : '(nothing typed)')
   if (result.compileOutput) lines.push('Compiler output:', clip(result.compileOutput))
   lines.push('stdout:', result.stdout ? clip(result.stdout) : '(empty)')
   if (result.stderr) lines.push('stderr:', clip(result.stderr))

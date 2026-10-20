@@ -26,6 +26,8 @@ test('posts to <baseUrl>/execute with language, any version and a fixed file nam
     version: '*',
     files: [{ name: 'main', content: 'int main(){}' }],
     stdin: '',
+    // Piston allows long interactive runs; a batch run stays short so an infinite loop stops quickly.
+    run_timeout: 3000,
   })
 })
 

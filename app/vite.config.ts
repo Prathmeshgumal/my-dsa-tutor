@@ -40,7 +40,12 @@ export default defineConfig({
     port: 5199,
     strictPort: true,
     proxy: {
-      '/piston': { target: process.env.PISTON_URL ?? 'http://127.0.0.1:2000', rewrite: (p) => p.replace(/^\/piston/, '/api/v2') },
+      // ws: interactive runs talk to Piston over a WebSocket (/piston/connect).
+      '/piston': {
+        target: process.env.PISTON_URL ?? 'http://127.0.0.1:2000',
+        rewrite: (p) => p.replace(/^\/piston/, '/api/v2'),
+        ws: true,
+      },
     },
   },
   test: {

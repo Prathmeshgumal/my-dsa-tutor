@@ -1,10 +1,10 @@
-import { readsInput, useStdin } from './stdin'
+import type { SocketLike } from '@/lib/runner/interactive'
 import { toast } from 'sonner'
 import { useSettingsDialog } from '@/components/settings/SettingsDialog'
 import { LANGUAGES } from '@/lib/languages'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
 import { defaultWorkspace } from '@/lib/storage'
-import { createRunner, initialConnection, useRun } from './run'
+import { configureRun, createRunner, initialConnection, useRun } from './run'
 import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
@@ -165,34 +165,75 @@ test('no-key error still shows the output so the message is visible', async () =
   expect(useSettings.getState().outputOpen).toBe(true)
 })
 
-describe('program input (stdin)', () => {
-  beforeEach(() => useStdin.setState({ inputs: {} }))
+describe('running like a terminal (Piston)', () => {
+  class FakeSocket implements SocketLike {
+    onopen: (() => void) | null = null
+    onmessage: ((e: { data: string }) => void) | null = null
+    onclose: ((e: { code: number; reason: string }) => void) | null = null
+    onerror: (() => void) | null = null
+    sent: Record<string, unknown>[] = []
+    send(data: string) {
+      this.sent.push(JSON.parse(data))
+    }
+    close() {}
+    piston(m: Record<string, unknown>) {
+      this.onmessage?.({ data: JSON.stringify(m) })
+    }
+  }
 
-  test('the file’s input box is fed to the program', async () => {
+  let socket: FakeSocket
+  beforeEach(() => {
+    socket = new FakeSocket()
+    configureRun({ connect: () => socket })
+    useSettings.setState({ runner: 'piston' })
+    useRun.setState({ terminal: [], phase: null, lastStdin: '' })
     useWorkspace.getState().createFile('read.cpp')
-    const id = useWorkspace.getState().activeId!
-    useStdin.getState().setInput(id, '1 2 3\n4 5 6\n')
-    const runner = fakeRunner(async () => ok)
-    await run().runActiveFile(runner)
-    expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ stdin: '1 2 3\n4 5 6\n' }))
-    expect(run().lastStdin).toBe('1 2 3\n4 5 6\n')
+  })
+  afterEach(() => configureRun({}))
+
+  test('the program asks, you type, it carries on; the terminal shows both in order', async () => {
+    const done = run().runActiveFile()
+    socket.onopen?.()
+    expect(run().phase).toBe('compiling')
+    socket.piston({ type: 'stage', stage: 'run' })
+    socket.piston({ type: 'data', stream: 'stdout', data: 'rows: ' })
+    expect(run().phase).toBe('running')
+    run().sendInput('2')
+    expect(socket.sent.at(-1)).toEqual({ type: 'data', stream: 'stdin', data: '2\n' })
+    socket.piston({ type: 'data', stream: 'stdout', data: 'got ' })
+    socket.piston({ type: 'data', stream: 'stdout', data: '2\n' })
+    socket.piston({ type: 'exit', stage: 'run', code: 0, signal: null })
+    await done
+    expect(run().terminal).toEqual([
+      { kind: 'stdout', text: 'rows: ' },
+      { kind: 'input', text: '2\n' },
+      { kind: 'stdout', text: 'got 2\n' },
+    ])
+    expect(run()).toMatchObject({ state: 'done', lastStdin: '2\n', result: { status: 'success', stdout: 'rows: got 2\n' } })
   })
 
-  test('each file keeps its own input', () => {
-    useStdin.getState().setInput('a', 'one')
-    useStdin.getState().setInput('b', 'two')
-    expect(useStdin.getState().inputs).toEqual({ a: 'one', b: 'two' })
-    useStdin.getState().setInput('a', '')
-    expect(useStdin.getState().inputs).toEqual({ b: 'two' })
+  test('typing before the program starts goes nowhere', () => {
+    void run().runActiveFile()
+    socket.onopen?.()
+    run().sendInput('early')
+    expect(socket.sent.filter((m) => m.type === 'data')).toEqual([])
+    expect(run().terminal).toEqual([])
   })
 
-  test('code that reads input is recognised', () => {
-    expect(readsInput('int x; cin >> x;', 'cpp')).toBe(true)
-    expect(readsInput('scanf("%d", &x);', 'cpp')).toBe(true)
-    expect(readsInput('getline(cin, s);', 'cpp')).toBe(true)
-    expect(readsInput('x = int(input())', 'python')).toBe(true)
-    expect(readsInput('Scanner sc = new Scanner(System.in);', 'java')).toBe(true)
-    expect(readsInput('cout << "cin is fun"; // cin >> x', 'cpp')).toBe(false)
-    expect(readsInput('cout << 1;', 'cpp')).toBe(false)
+  test('Stop ends the program', async () => {
+    const done = run().runActiveFile()
+    socket.onopen?.()
+    socket.piston({ type: 'stage', stage: 'run' })
+    run().stop()
+    await done
+    expect(run().result).toMatchObject({ statusText: 'Stopped' })
+  })
+
+  test('no Piston: an error with the fix', async () => {
+    const done = run().runActiveFile()
+    socket.onclose?.({ code: 1006, reason: '' })
+    await done
+    expect(run()).toMatchObject({ state: 'error', connection: 'failed' })
+    expect(run().error?.message).toMatch(/docker compose up -d/)
   })
 })
