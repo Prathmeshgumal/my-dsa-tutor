@@ -18,6 +18,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { routeArrow, type Box, type Route } from '@/lib/arrowRoute'
 import { formatScalar, type DryRun, type Move } from '@/lib/dryRun'
 import { cn } from '@/lib/utils'
 import { ProblemTag } from '@/components/problems/ProblemTag'
@@ -287,34 +288,34 @@ function Variable({
 }) {
   return (
     <li data-testid="var-bucket" className="flex flex-col items-center gap-1">
-      <span className="flex items-baseline gap-1.5">
-        <span
-          data-testid="var-name"
-          className="max-w-28 truncate font-mono text-[11.5px] font-semibold text-muted-foreground"
-        >
-          {name}
-        </span>
-        {changed && previous !== undefined && (
-          <span
-            data-testid="ghost"
-            title="Value before this step"
-            className="font-mono text-[10px] text-red-500/80 line-through"
-          >
-            {previous}
-          </span>
-        )}
+      {/* Above the arrows layer, on the page colour, so an arrow passing by never hides the name. */}
+      <span
+        data-testid="var-name"
+        className="relative z-30 max-w-28 truncate rounded bg-background px-1 font-mono text-[11.5px] font-semibold text-muted-foreground"
+      >
+        {name}
       </span>
-      {/* A bucket: open at the top (|_|), value inside. */}
+      {/* A bucket: open at the top (|_|), value inside. Arrows between two variables run underneath. */}
       <span
         data-testid="var-value"
         data-ref={name}
+        data-arrow-side="below"
         className={cn(
-          'grid h-10 min-w-12 place-items-center rounded-b-lg border-x-2 border-b-2 px-2.5 font-mono text-[14px] font-semibold transition-all duration-300',
+          'flex h-10 min-w-12 items-center justify-center gap-1.5 rounded-b-lg border-x-2 border-b-2 px-2.5 font-mono text-[14px] font-semibold transition-all duration-300',
           changed
             ? 'border-violet-500 bg-violet-500/12 text-violet-700 dark:text-violet-200'
             : 'border-muted-foreground/40 text-foreground',
         )}
       >
+        {changed && previous !== undefined && (
+          <span
+            data-testid="ghost"
+            title="Value before this step"
+            className="rounded bg-red-500/15 px-1 py-px text-[12px] leading-none font-semibold text-red-600 line-through dark:bg-red-500/25 dark:text-red-300"
+          >
+            {previous}
+          </span>
+        )}
         {value}
       </span>
     </li>
@@ -323,9 +324,19 @@ function Variable({
 
 interface Arrow {
   move: Move
-  path: string
-  labelX: number
-  labelY: number
+  route: Route | null
+}
+
+const toBox = (el: HTMLElement, origin: DOMRect): Box => {
+  const r = el.getBoundingClientRect()
+  return {
+    left: r.left - origin.left,
+    top: r.top - origin.top,
+    width: r.width,
+    height: r.height,
+    // A cell's old value sits in its top-right corner.
+    topRightTaken: el.querySelector(':scope > [data-testid="ghost"]') !== null,
+  }
 }
 
 /** Curved arrows between boxes for what moved where. Positions are measured from the drawn boxes. */
@@ -340,36 +351,21 @@ function MoveArrows({ moves, stepKey }: { moves: Move[]; stepKey: string }) {
     if (!svg || !host) return
     const measure = () => {
       const origin = host.getBoundingClientRect()
-      const find = (ref: string) => host.querySelector(`[data-ref="${CSS.escape(ref)}"]`)?.getBoundingClientRect()
+      const find = (ref: string) => host.querySelector<HTMLElement>(`[data-ref="${CSS.escape(ref)}"]`)
       setArrows(
         moves.map((move, k) => {
           const a = find(move.from)
           const b = find(move.to)
-          if (!a || !b) return { move, path: '', labelX: 0, labelY: 0 }
-          // From one box to the other, bowing above; the return half of a swap bows below so the two don't overlap.
-          const below = moves.slice(0, k).some((m) => m.from === move.to && m.to === move.from)
-          const x1 = a.left + a.width / 2 - origin.left
-          const x2 = b.left + b.width / 2 - origin.left
-          const lift = 30 + Math.min(60, Math.abs(x2 - x1) * 0.18)
-          if (below) {
-            const y1 = a.bottom - origin.top
-            const y2 = b.bottom - origin.top
-            const cy = Math.max(y1, y2) + lift
-            return {
-              move,
-              path: `M ${x1} ${y1 + 2} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2 + 4}`,
-              labelX: (x1 + x2) / 2,
-              labelY: cy - lift * 0.25 + 12,
-            }
-          }
-          const y1 = a.top - origin.top
-          const y2 = b.top - origin.top
-          const cy = Math.min(y1, y2) - lift
+          if (!a || !b) return { move, route: null }
+          // The return half of a swap arcs below so the two don't overlap. Between two variables, arcs go
+          // below the buckets too: their names are on top.
+          const returning = moves.slice(0, k).some((m) => m.from === move.to && m.to === move.from)
+          const bothVars = a.dataset.arrowSide === 'below' && b.dataset.arrowSide === 'below'
           return {
             move,
-            path: `M ${x1} ${y1 - 2} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2 - 4}`,
-            labelX: (x1 + x2) / 2,
-            labelY: cy + lift * 0.25 - 4,
+            route: routeArrow(toBox(a, origin), toBox(b, origin), {
+              below: returning !== bothVars,
+            }),
           }
         }),
       )
@@ -401,23 +397,24 @@ function MoveArrows({ moves, stepKey }: { moves: Move[]; stepKey: string }) {
           <path d="M 0 0 L 10 5 L 0 10 z" className="fill-amber-500" />
         </marker>
       </defs>
-      {arrows.map(({ move, path, labelX, labelY }, i) => (
+      {arrows.map(({ move, route }, i) => (
         <g key={`${stepKey}-${i}`} data-testid="move-arrow" data-from={move.from} data-to={move.to}>
-          {path && (
+          {route && (
             <path
-              d={path}
+              d={route.path}
               fill="none"
-              strokeWidth={2.25}
+              strokeWidth={2}
+              strokeLinecap="round"
               markerEnd={`url(#${markerId})`}
               className="move-arrow stroke-amber-500"
             />
           )}
-          {move.label && (
+          {route && move.label && (
             <text
-              x={labelX}
-              y={labelY}
-              textAnchor="middle"
-              className="fill-amber-600 stroke-background font-mono text-[11px] font-semibold [paint-order:stroke] [stroke-width:4px] dark:fill-amber-300"
+              x={route.labelX}
+              y={route.labelY}
+              textAnchor={route.labelAnchor}
+              className="fill-amber-600 stroke-background font-mono text-[11px] font-semibold [paint-order:stroke] [stroke-width:5px] dark:fill-amber-300"
             >
               {move.label}
             </text>

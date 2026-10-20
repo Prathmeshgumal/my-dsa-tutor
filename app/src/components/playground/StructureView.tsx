@@ -30,8 +30,10 @@ function Figure({ name, kind, children }: { name: string; kind: string; children
     // On steps with arrows (data-arrows on an ancestor), leave room above and below the boxes for them.
     <figure aria-label={name} className="min-w-0 in-data-[arrows=true]:pb-8">
       <figcaption className="mb-2 flex items-baseline gap-2 in-data-[arrows=true]:mb-9">
-        <span className="font-mono text-[13px] font-semibold text-foreground">{name}</span>
-        <span className="text-[11px] tracking-wide text-muted-foreground uppercase">{kind.replace('_', ' ')}</span>
+        <span className="relative z-30 rounded bg-background font-mono text-[13px] font-semibold text-foreground">{name}</span>
+        <span className="relative z-30 rounded bg-background text-[11px] tracking-wide text-muted-foreground uppercase">
+          {kind.replace('_', ' ')}
+        </span>
       </figcaption>
       <div className="overflow-x-auto pb-1">{children}</div>
     </figure>
@@ -40,13 +42,13 @@ function Figure({ name, kind, children }: { name: string; kind: string; children
 
 const CELL = 48 // px; the strip's cells touch, so this is also the step between them
 
-/** The value a box had before this step, crossed out in its corner. */
+/** The value a box had before this step, crossed out inside its top-right corner (clear of arrows). */
 function Ghost({ value }: { value: Scalar }) {
   return (
     <span
       data-testid="ghost"
       title="Value before this step"
-      className="absolute -top-2.5 -right-1 z-10 rounded bg-background px-0.5 font-mono text-[10px] leading-tight font-medium text-red-500/80 line-through decoration-red-500/80"
+      className="absolute top-0.5 right-0.5 z-30 rounded bg-red-500/15 px-1 py-px font-mono text-[11px] leading-none font-semibold text-red-600 line-through dark:bg-red-500/25 dark:text-red-300"
     >
       {formatScalar(value)}
     </span>
@@ -93,6 +95,7 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
     return was !== undefined && was !== i ? [{ p, from: was, to: i }] : []
   })
   const trailsTop = 70 + depth * 18 + 4
+  const changedAt = (i: number) => Boolean(prev && i < prev.values.length && prev.values[i] !== s.values[i])
   const wall = 'border-y-2 border-r-2 border-muted-foreground/35 first:rounded-l-lg first:border-l-2 last:rounded-r-lg'
 
   return (
@@ -110,7 +113,7 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
           <div className="flex">
             {Array.from({ length: slots }, (_, i) => (
               <span key={i} className="w-12 pb-1 text-center font-mono text-[10px] text-muted-foreground">
-                {i}
+                <span className="relative z-30 rounded bg-background px-0.5">{i}</span>
               </span>
             ))}
           </div>
@@ -127,8 +130,9 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
                   STRIP_STATE[state(i)],
                 )}
               >
-                {formatScalar(v)}
-                {prev && i < prev.values.length && prev.values[i] !== v && <Ghost value={prev.values[i]} />}
+                {/* With the old value in the corner, the new one sits a little lower so they don't touch. */}
+                <span className={cn(changedAt(i) && 'translate-y-1.5')}>{formatScalar(v)}</span>
+                {changedAt(i) && <Ghost value={prev!.values[i]} />}
               </div>
             ))}
             {Array.from({ length: spare }, (_, k) => (
