@@ -93,6 +93,21 @@ test('with nothing yet, explains how to get one and offers the example', async (
   expect(usePlayground.getState().activeId).toBe('example-bubble-sort')
 })
 
+test('the list, the code and the drawing can be resized with drag handles', () => {
+  render(<Playground />)
+  expect(screen.getAllByRole('separator')).toHaveLength(2)
+})
+
+test('variables are drawn as buckets: name on top, value inside', () => {
+  usePlayground.setState({ step: 1 })
+  render(<Playground />)
+  const buckets = within(screen.getByRole('list', { name: 'Variables' })).getAllByTestId('var-bucket')
+  expect(buckets.map((b) => [within(b).getByTestId('var-name').textContent, within(b).getByTestId('var-value').textContent])).toEqual([
+    ['i', '0'],
+    ['j', '2'],
+  ])
+})
+
 describe('structures', () => {
   const show = (s: Structure) => rtlRender(<StructureView structure={s} />)
 
@@ -104,6 +119,19 @@ describe('structures', () => {
     expect(within(fig).getByText('j')).toBeInTheDocument()
     expect(within(fig).getAllByTestId('cell')[0]).toHaveAttribute('data-state', 'highlight')
     expect(within(fig).getAllByTestId('cell')[2]).toHaveAttribute('data-state', 'done')
+  })
+
+  test('an empty array (e.g. a new vector) still shows, as an empty strip', () => {
+    show({ kind: 'array', name: 'v', values: [] })
+    expect(screen.getByRole('figure', { name: 'v' })).toHaveTextContent('empty')
+  })
+
+  test('a vector can show its spare capacity as empty slots', () => {
+    show({ kind: 'array', name: 'v', values: [10, 20, 30], capacity: 4 })
+    const fig = screen.getByRole('figure', { name: 'v' })
+    expect(within(fig).getAllByTestId('cell')).toHaveLength(3)
+    expect(within(fig).getAllByTestId('spare')).toHaveLength(1)
+    expect(fig).toHaveTextContent('size 3 · capacity 4')
   })
 
   test('grid: rows and the current cell', () => {

@@ -31,3 +31,9 @@ test('catches the mistakes that would draw wrongly', () => {
 test('needs at least one step', () => {
   expect(dryRunProblems({ steps: [] })).toEqual(['It needs at least one step.'])
 })
+
+test("capacity can't be smaller than the number of values", () => {
+  expect(dryRunProblems({ steps: [{ note: 'x', structures: [{ kind: 'array', name: 'v', values: [1, 2, 3], capacity: 2 }] }] })[0]).toMatch(
+    /capacity 2 is smaller than its 3 values/,
+  )
+})

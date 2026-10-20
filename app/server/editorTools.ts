@@ -297,6 +297,7 @@ const structure = z.discriminatedUnion('kind', [
     highlight: z.array(z.number().int()).optional().describe('Indices being compared/read'),
     swapped: z.array(z.number().int()).optional(),
     done: z.array(z.number().int()).optional().describe('Indices already final'),
+    capacity: z.number().int().optional().describe('For a vector: allocated slots; extra ones are drawn as empty spare slots'),
   }),
   z.object({
     kind: z.literal('grid'),

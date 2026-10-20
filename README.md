@@ -73,7 +73,9 @@ and builds a dry run that plays here: your code with the current line highlighte
 for each step, the variables, and the data structures drawn out (arrays with pointers,
 DP tables, hash maps, stacks, queues, linked lists, binary trees, graphs). The step where
 a bug shows up is marked in red. Use ← → to step, Space to play, and 0.5× / 1× / 2× for
-speed. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
+speed. Drag the dividers to resize the list, the code and the drawing (sizes are remembered).
+Variables are drawn as buckets (name on top, value inside; changed ones light up) and
+arrays/vectors as one long strip of boxes, with a vector's spare capacity as empty slots. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
 as JSON files in **`playground/`**; the code editor stays as you left it while you're here.
 
 ## Ask Claude

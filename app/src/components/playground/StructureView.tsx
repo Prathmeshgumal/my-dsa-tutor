@@ -36,52 +36,89 @@ function Figure({ name, kind, children }: { name: string; kind: string; children
   )
 }
 
-const CELL = 48 // px, cell width incl. gap
+const CELL = 48 // px; the strip's cells touch, so this is also the step between them
+
+// Tints for a strip cell; strip cells share walls, so state is shown inside the cell (fill + inner ring).
+const STRIP_STATE: Record<string, string> = {
+  '': 'bg-card text-foreground',
+  highlight: 'bg-violet-500/15 text-violet-700 ring-2 ring-violet-500 ring-inset dark:text-violet-200',
+  swapped: 'bg-amber-500/15 text-amber-700 ring-2 ring-amber-500 ring-inset dark:text-amber-200',
+  done: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+}
+
+/** An array or vector as one long strip of joined boxes: indices above, pointers below. */
 function ArrayView({ s }: { s: ArrayViz }) {
   const state = (i: number) =>
     s.swapped?.includes(i) ? 'swapped' : s.highlight?.includes(i) ? 'highlight' : s.done?.includes(i) ? 'done' : ''
+  const spare = Math.max(0, (s.capacity ?? s.values.length) - s.values.length)
+  const slots = s.values.length + spare
   // Pointers at the same index stack under it.
   const byIndex = new Map<number, string[]>()
   for (const [p, i] of Object.entries(s.pointers ?? {})) byIndex.set(i, [...(byIndex.get(i) ?? []), p])
   const pointerNames = Object.keys(s.pointers ?? {})
   const depth = Math.max(0, ...[...byIndex.values()].map((v) => v.length))
+  const wall = 'border-y-2 border-r-2 border-muted-foreground/35 first:rounded-l-lg first:border-l-2 last:rounded-r-lg'
 
   return (
-    <Figure name={s.name} kind="array">
-      <div className="relative w-max" style={{ paddingBottom: depth ? depth * 18 + 14 : 0 }}>
-        <div className="flex gap-1">
-          {s.values.map((v, i) => (
-            <div key={i} className="flex w-11 flex-col items-center gap-1">
-              <span className="font-mono text-[10px] text-muted-foreground">{i}</span>
+    <Figure name={s.name} kind={s.capacity !== undefined ? 'vector' : 'array'}>
+      {s.capacity !== undefined && (
+        <p className="-mt-1 mb-2 font-mono text-[11px] text-muted-foreground">{`size ${s.values.length} · capacity ${s.capacity}`}</p>
+      )}
+      {slots === 0 ? (
+        <div className="flex items-center gap-2">
+          <div className="h-12 w-12 rounded-lg border-2 border-dashed border-muted-foreground/35" />
+          <span className="text-[12px] text-muted-foreground italic">empty</span>
+        </div>
+      ) : (
+        <div className="relative w-max" style={{ paddingBottom: depth ? depth * 18 + 14 : 0 }}>
+          <div className="flex">
+            {Array.from({ length: slots }, (_, i) => (
+              <span key={i} className="w-12 pb-1 text-center font-mono text-[10px] text-muted-foreground">
+                {i}
+              </span>
+            ))}
+          </div>
+          <div className="flex">
+            {s.values.map((v, i) => (
               <div
+                key={i}
                 data-testid="cell"
                 data-state={state(i)}
                 className={cn(
-                  'grid h-11 w-11 place-items-center rounded-lg border-2 font-mono text-[14px] font-semibold transition-all duration-300',
-                  CELL_STATE[state(i)],
+                  'grid h-12 w-12 place-items-center font-mono text-[15px] font-semibold transition-all duration-300',
+                  wall,
+                  STRIP_STATE[state(i)],
                 )}
               >
                 {formatScalar(v)}
               </div>
-            </div>
-          ))}
+            ))}
+            {Array.from({ length: spare }, (_, k) => (
+              <div
+                key={`spare-${k}`}
+                data-testid="spare"
+                title="Allocated but not used yet"
+                className={cn('h-12 w-12 bg-[repeating-linear-gradient(135deg,transparent_0_6px,var(--border)_6px_7px)]', wall, 'border-dashed')}
+              />
+            ))}
+          </div>
+          {[...byIndex.entries()].map(([i, names]) =>
+            names.map((p, k) => (
+              <div
+                key={p}
+                className={cn(
+                  'absolute flex w-12 flex-col items-center font-mono text-[12px] font-bold transition-[left] duration-300 ease-out',
+                  POINTER_COLORS[pointerNames.indexOf(p) % POINTER_COLORS.length],
+                )}
+                style={{ left: i * CELL, top: 70 + k * 18 }}
+              >
+                {k === 0 && <span aria-hidden className="-mb-1 leading-none">▲</span>}
+                <span>{p}</span>
+              </div>
+            )),
+          )}
         </div>
-        {[...byIndex.entries()].map(([i, names]) =>
-          names.map((p, k) => (
-            <div
-              key={p}
-              className={cn(
-                'absolute flex w-11 flex-col items-center font-mono text-[12px] font-bold transition-[left] duration-300 ease-out',
-                POINTER_COLORS[pointerNames.indexOf(p) % POINTER_COLORS.length],
-              )}
-              style={{ left: i * CELL, top: 66 + k * 18 }}
-            >
-              {k === 0 && <span aria-hidden className="-mb-1 leading-none">▲</span>}
-              <span>{p}</span>
-            </div>
-          )),
-        )}
-      </div>
+      )}
     </Figure>
   )
 }

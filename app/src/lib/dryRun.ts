@@ -15,6 +15,8 @@ export interface ArrayViz {
   swapped?: number[]
   /** Cells already in their final place. */
   done?: number[]
+  /** For a vector: slots allocated so far (drawn as empty spare slots after the values). */
+  capacity?: number
 }
 
 export interface GridViz {
@@ -126,6 +128,9 @@ export function dryRunProblems(run: Pick<DryRun, 'steps' | 'code'>): string[] {
     }
     for (const s of step.structures ?? []) {
       if (s.kind === 'array') {
+        if (s.capacity !== undefined && s.capacity < s.values.length) {
+          problems.push(`${where}: ${s.name} capacity ${s.capacity} is smaller than its ${s.values.length} values.`)
+        }
         for (const [p, idx] of Object.entries(s.pointers ?? {})) {
           if (idx < -1 || idx > s.values.length) problems.push(`${where}: pointer ${p}=${idx} is outside ${s.name} (length ${s.values.length}).`)
         }

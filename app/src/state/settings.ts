@@ -19,6 +19,8 @@ interface SettingsState {
   /** Width in px of the right-hand panel (Claude / Notes). */
   sidePanelWidth: number
   screen: Screen
+  /** Playground panel sizes (percent), per area: list|main, and code|drawing side by side or stacked. */
+  playgroundLayout: Record<string, Record<string, number>>
   setApiKey(k: string): void
   setTheme(t: ThemePref): void
   setPanelLayout(l: number[]): void
@@ -30,6 +32,7 @@ interface SettingsState {
   setNotesOpen(open: boolean): void
   setSidePanelWidth(width: number): void
   setScreen(screen: Screen): void
+  setPlaygroundLayout(area: string, layout: Record<string, number>): void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -45,6 +48,7 @@ export const useSettings = create<SettingsState>()(
       notesOpen: false,
       sidePanelWidth: 380,
       screen: 'editor',
+      playgroundLayout: {},
       setApiKey: (apiKey) => set({ apiKey }),
       setTheme: (theme) => set({ theme }),
       setPanelLayout: (panelLayout) => set({ panelLayout }),
@@ -54,6 +58,7 @@ export const useSettings = create<SettingsState>()(
       setAiOpen: (aiOpen) => set(aiOpen ? { aiOpen, notesOpen: false } : { aiOpen }),
       setSidePanelWidth: (sidePanelWidth) => set({ sidePanelWidth }),
       setScreen: (screen) => set({ screen }),
+      setPlaygroundLayout: (area, layout) => set((s) => ({ playgroundLayout: { ...s.playgroundLayout, [area]: layout } })),
       setNotesOpen: (notesOpen) => set(notesOpen ? { notesOpen, aiOpen: false } : { notesOpen }),
     }),
     { name: 'dsa-editor:settings' },
