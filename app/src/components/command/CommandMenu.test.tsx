@@ -131,3 +131,9 @@ test('Open notes opens the notes panel', async () => {
   await choose(/open notes/i)
   expect(useSettings.getState().notesOpen).toBe(true)
 })
+
+test('Open Playground switches to the Playground', async () => {
+  useSettings.setState({ screen: 'editor' })
+  await choose(/open playground/i)
+  expect(useSettings.getState().screen).toBe('playground')
+})

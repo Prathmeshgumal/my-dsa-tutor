@@ -7,6 +7,8 @@ import { z } from 'zod'
 import type { ApprovalKind, EditorContext } from '../src/lib/chatEvents.ts'
 import { languageFromFilename } from '../src/lib/languages.ts'
 import { nextNoteName, noteTitle } from '../src/lib/noteTitle.ts'
+import { dryRunProblems, MAX_STEPS, type DryRun, type DryRunStep } from '../src/lib/dryRun.ts'
+import { randomUUID } from 'node:crypto'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
 
 export interface ApprovalRequest {
@@ -21,6 +23,8 @@ export interface EditorToolDeps {
   dir: string
   /** Where the user's Markdown notes live. */
   notesDir: string
+  /** Where dry-run visualizations are saved for the Playground. */
+  playgroundDir: string
   context: EditorContext
   runner: CodeRunner
   /** Shows the change to the user and resolves with their decision. */
@@ -31,6 +35,8 @@ export interface EditorToolDeps {
   onFileChanged(file: string): void
   /** Called after an approved note change is written, so the notes panel reloads it. */
   onNoteChanged(note: string): void
+  /** Called with a new dry run, so the Playground can show it. */
+  onVisualization(run: DryRun): void
 }
 
 export interface ToolText {
@@ -87,7 +93,7 @@ function uniqueCount(content: string, oldText: string, where: string): void {
 }
 
 export function createEditorTools(deps: EditorToolDeps) {
-  const { dir, notesDir, context } = deps
+  const { dir, notesDir, playgroundDir, context } = deps
 
   async function readNote(name: string): Promise<string> {
     checkNoteName(name)
@@ -235,6 +241,27 @@ export function createEditorTools(deps: EditorToolDeps) {
         return { text: `Updated ${name}.` }
       },
     ),
+
+    create_visualization: guard(
+      async ({ title, file, input, steps }: { title: string; file?: string; input?: string; steps: DryRunStep[] }) => {
+        // The code comes from the real file, so step line numbers match what the student sees.
+        const code = file ? await readSolution(file) : undefined
+        const problems = dryRunProblems({ code, steps })
+        if (problems.length) return fail(`The visualization wasn't saved. Fix these and call create_visualization again:\n- ${problems.join('\n- ')}`)
+        const run: DryRun = {
+          id: randomUUID(),
+          title,
+          ...(file ? { file, language: languageFromFilename(file)!.id, code } : {}),
+          ...(input ? { input } : {}),
+          createdAt: Date.now(),
+          steps,
+        }
+        await mkdir(playgroundDir, { recursive: true })
+        await writeFile(path.join(playgroundDir, `${run.id}.json`), JSON.stringify(run), 'utf8')
+        deps.onVisualization(run)
+        return { text: `Saved "${title}" (${steps.length} steps). The student can watch it in the Playground; a card in the chat opens it.` }
+      },
+    ),
   }
 }
 
@@ -252,11 +279,81 @@ export const TOOL_NAMES = [
   'read_note',
   'create_note',
   'edit_note',
+  'create_visualization',
 ] as const satisfies readonly (keyof EditorTools)[]
 
 const asResult = (t: ToolText) => ({ content: [{ type: 'text' as const, text: t.text }], isError: t.isError })
 
 const explanation = z.string().describe('One short sentence the user sees: why this change.')
+
+const scalar = z.union([z.number(), z.string(), z.boolean(), z.null()])
+const cell = z.tuple([z.number().int(), z.number().int()])
+const structure = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('array'),
+    name: z.string(),
+    values: z.array(scalar),
+    pointers: z.record(z.string(), z.number().int()).optional().describe('Named indices drawn as arrows, e.g. {"i":0,"j":3}'),
+    highlight: z.array(z.number().int()).optional().describe('Indices being compared/read'),
+    swapped: z.array(z.number().int()).optional(),
+    done: z.array(z.number().int()).optional().describe('Indices already final'),
+  }),
+  z.object({
+    kind: z.literal('grid'),
+    name: z.string(),
+    rows: z.array(z.array(scalar)).describe('A DP table or matrix'),
+    rowLabels: z.array(z.string()).optional(),
+    colLabels: z.array(z.string()).optional(),
+    current: cell.optional().describe('[row, col] being filled'),
+    highlight: z.array(cell).optional().describe('[row, col] cells it reads'),
+  }),
+  z.object({
+    kind: z.literal('map'),
+    name: z.string(),
+    entries: z.array(z.tuple([scalar, scalar])),
+    highlight: z.array(scalar).optional().describe('Keys just added or read'),
+  }),
+  z.object({
+    kind: z.enum(['stack', 'queue']),
+    name: z.string(),
+    values: z.array(scalar).describe('Stack: bottom→top. Queue: front→back.'),
+    highlight: z.array(z.number().int()).optional(),
+  }),
+  z.object({
+    kind: z.literal('linked_list'),
+    name: z.string(),
+    nodes: z.array(scalar),
+    pointers: z.record(z.string(), z.number().int().nullable()).optional().describe('e.g. {"slow":1,"fast":3,"prev":null}'),
+    highlight: z.array(z.number().int()).optional(),
+    cycleTo: z.number().int().optional(),
+  }),
+  z.object({
+    kind: z.literal('tree'),
+    name: z.string(),
+    nodes: z.array(scalar).describe('Binary tree in level order with nulls, LeetCode style'),
+    highlight: z.array(z.number().int()).optional().describe('Level-order indices being visited'),
+    done: z.array(z.number().int()).optional(),
+    pointers: z.record(z.string(), z.number().int().nullable()).optional(),
+  }),
+  z.object({
+    kind: z.literal('graph'),
+    name: z.string(),
+    nodes: z.array(z.string()),
+    edges: z.array(z.union([z.tuple([z.string(), z.string()]), z.tuple([z.string(), z.string(), scalar])])),
+    directed: z.boolean().optional(),
+    current: z.string().optional(),
+    visited: z.array(z.string()).optional(),
+    activeEdges: z.array(z.tuple([z.string(), z.string()])).optional(),
+  }),
+])
+const step = z.object({
+  line: z.number().int().optional().describe('1-based line of the file that runs in this step'),
+  note: z.string().describe('What happens in this step, in plain words (one or two short sentences)'),
+  vars: z.record(z.string(), scalar).optional().describe('Variable values after this step'),
+  structures: z.array(structure).optional().describe('Data structures after this step (repeat them every step)'),
+  output: z.string().optional().describe('Everything printed so far'),
+  mistake: z.boolean().optional().describe('true on the step where the bug shows up'),
+})
 
 /** The same tools, described for the Agent SDK's in-process MCP server. */
 export function toSdkTools(tools: EditorTools) {
@@ -331,6 +428,17 @@ export function toSdkTools(tools: EditorTools) {
         explanation,
       },
       async (args) => asResult(await tools.edit_note(args)),
+    ),
+    tool(
+      'create_visualization',
+      `Show a step-by-step dry run in the Playground: the code with the current line, a note per step, variables, and data structures drawn visually (arrays with pointers, DP grids, maps, stacks/queues, linked lists, binary trees, graphs). Use it to dry run the student's code or to explain a bug or an idea. Pass "file" to show that file's code; "line" in each step refers to it. Each step is a full snapshot (repeat structures and vars every step). One step per meaningful line; at most ${MAX_STEPS} steps. Mark the step where things go wrong with mistake: true.`,
+      {
+        title: z.string().describe('e.g. "Dry run: twoSum on [2,7,11,15], target 9"'),
+        file: z.string().optional().describe('Solution file the steps walk through'),
+        input: z.string().optional().describe('The input used'),
+        steps: z.array(step),
+      },
+      async (args) => asResult(await tools.create_visualization(args)),
     ),
   ]
 }

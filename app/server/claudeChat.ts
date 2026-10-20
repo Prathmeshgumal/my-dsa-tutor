@@ -31,6 +31,14 @@ You can only act through these tools:
 - edit_file / create_file: propose a change; the student sees it and must approve it before it is applied
 - list_notes / read_note: the student's Markdown notes (shown in the editor's Notes panel)
 - create_note / edit_note: propose a new note or a change to one; also needs approval. When the student asks you to save or add something to their notes, use these (not comments in code).
+- create_visualization: show a step-by-step dry run in the Playground (code with the current line, variables, and data structures drawn as arrays with pointers, DP grids, maps, stacks, queues, linked lists, trees, graphs)
+
+Dry runs:
+- When the student asks for a dry run, asks why their code is wrong, or would understand something better by seeing it, use create_visualization.
+- Trace the student's actual code from their file (pass "file"), with a small input. Read the file first so every step's line number is right.
+- Be faithful: show what the code really does, including the bug. Mark the step where it goes wrong with mistake: true, and explain it in that step's note.
+- Before creating it, run the code with the same input (run_code) and make sure the final values and output in your trace match the real run.
+- Keep it focused: one step per meaningful line, usually 10–60 steps. Afterwards, point out in chat what to watch for.
 
 How to help:
 - Each message starts with an <editor_context> block naming the open file, with its current code. Treat that code as current.
@@ -160,6 +168,8 @@ interface MiddlewareOptions {
   cwd: string
   /** The Markdown notes folder, for the notes tools. */
   notesDir: string
+  /** Where dry-run visualizations are saved. */
+  playgroundDir: string
   queryImpl?: QueryFn
   /** Runs code for the run_code tool. */
   runner?: CodeRunner
@@ -169,6 +179,7 @@ interface MiddlewareOptions {
 export function createClaudeChatMiddleware({
   cwd,
   notesDir,
+  playgroundDir,
   queryImpl = query,
   runner = createPistonRunner({ baseUrl: `${process.env.PISTON_URL ?? 'http://127.0.0.1:2000'}/api/v2` }),
   approvals = createApprovals(),
@@ -203,12 +214,14 @@ export function createClaudeChatMiddleware({
       const tools = createEditorTools({
         dir: cwd,
         notesDir,
+        playgroundDir,
         context,
         runner,
         requestApproval: (change) => approvals.request(send, abortController.signal, change),
         onRun: (file, result) => send({ type: 'run', file, result }),
         onFileChanged: (file) => send({ type: 'file_changed', file }),
         onNoteChanged: (note) => send({ type: 'note_changed', note }),
+        onVisualization: (run) => send({ type: 'visualization', run }),
       })
 
       let sessionSent = false

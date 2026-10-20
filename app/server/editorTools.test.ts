@@ -7,6 +7,7 @@ import { createEditorTools, type ApprovalRequest, type EditorToolDeps } from './
 
 let dir: string
 let notesDir: string
+let playgroundDir: string
 const ok: RunResult = {
   status: 'success',
   statusText: 'Accepted',
@@ -22,11 +23,13 @@ beforeEach(async () => {
   await writeFile(path.join(dir, 'sort.cpp'), 'int main() {\n  int a = 1;\n  return 0;\n}\n')
   await writeFile(path.join(dir, 'bfs.py'), 'print("bfs")\n')
   notesDir = await mkdtemp(path.join(tmpdir(), 'agent-notes-'))
+  playgroundDir = await mkdtemp(path.join(tmpdir(), 'agent-playground-'))
   await writeFile(path.join(notesDir, 'note-1.md'), '# Two pointers\n\n- works on sorted arrays\n')
 })
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
   await rm(notesDir, { recursive: true, force: true })
+  await rm(playgroundDir, { recursive: true, force: true })
 })
 
 function setup(overrides: Partial<EditorToolDeps> = {}) {
@@ -35,6 +38,7 @@ function setup(overrides: Partial<EditorToolDeps> = {}) {
   const deps: EditorToolDeps = {
     dir,
     notesDir,
+    playgroundDir,
     context: {
       activeFile: { name: 'sort.cpp', content: 'ignored: tools read from disk' },
       openFiles: ['sort.cpp', 'bfs.py'],
@@ -48,6 +52,7 @@ function setup(overrides: Partial<EditorToolDeps> = {}) {
     onRun: vi.fn(),
     onFileChanged: vi.fn(),
     onNoteChanged: vi.fn(),
+    onVisualization: vi.fn(),
     ...overrides,
   }
   return { tools: createEditorTools(deps), deps, runner, approvals }
@@ -195,5 +200,38 @@ describe('notes', () => {
     await tools.edit_note({ name: 'note-1.md', old_text: '# Two pointers', new_text: '# Changed', explanation: '' })
     expect(await readFile(path.join(notesDir, 'note-1.md'), 'utf8')).toContain('# Two pointers')
     expect(deps.onNoteChanged).not.toHaveBeenCalled()
+  })
+})
+
+describe('visualizations', () => {
+  const steps = [
+    { line: 2, note: 'a starts at 1', vars: { a: 1 }, structures: [{ kind: 'array' as const, name: 'arr', values: [3, 1, 2], pointers: { i: 0 } }] },
+    { line: 3, note: 'return', vars: { a: 1 } },
+  ]
+
+  test('create_visualization uses the real file as the code, saves it and shows it in the Playground', async () => {
+    const { tools, deps } = setup()
+    const result = await tools.create_visualization({ title: 'Dry run of sort.cpp', file: 'sort.cpp', input: '3 1 2', steps })
+    expect(result.isError).toBeFalsy()
+    const run = vi.mocked(deps.onVisualization).mock.calls[0][0]
+    expect(run).toMatchObject({ title: 'Dry run of sort.cpp', file: 'sort.cpp', language: 'cpp', input: '3 1 2', steps })
+    expect(run.code).toContain('int a = 1;')
+    const saved = JSON.parse(await readFile(path.join(playgroundDir, `${run.id}.json`), 'utf8'))
+    expect(saved).toEqual(run)
+    expect(result.text).toContain('Playground')
+  })
+
+  test('without a file it can still visualize an idea (no code panel)', async () => {
+    const { tools, deps } = setup()
+    await tools.create_visualization({ title: 'Two pointers idea', steps: [{ note: 'start', structures: [] }] })
+    expect(vi.mocked(deps.onVisualization).mock.calls[0][0].code).toBeUndefined()
+  })
+
+  test('a broken trace is sent back to Claude to fix, and nothing is saved', async () => {
+    const { tools, deps } = setup()
+    const result = await tools.create_visualization({ title: 'x', file: 'sort.cpp', steps: [{ line: 99, note: 'nope' }] })
+    expect(result.isError).toBe(true)
+    expect(result.text).toMatch(/line 99/)
+    expect(deps.onVisualization).not.toHaveBeenCalled()
   })
 })

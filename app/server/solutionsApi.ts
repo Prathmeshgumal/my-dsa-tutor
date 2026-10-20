@@ -136,6 +136,11 @@ export function createSolutionsMiddleware(dir: string): Middleware {
   return createStoreMiddleware({ dir, prefix: '/api/files', allows: (name) => languageFromFilename(name) !== null })
 }
 
+/** Saved dry runs for the Playground, one JSON file each. */
+export function createPlaygroundMiddleware(dir: string): Middleware {
+  return createStoreMiddleware({ dir, prefix: '/api/playground', allows: (name) => /^[\w-]+\.json$/.test(name) })
+}
+
 export function createNotesMiddleware(dir: string): Middleware {
   return createStoreMiddleware({ dir, prefix: '/api/notes', allows: (name) => /\.md$/i.test(name) })
 }

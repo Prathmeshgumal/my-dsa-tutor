@@ -5,6 +5,7 @@ import { defaultWorkspace } from '@/lib/storage'
 import { useAiChat, type Approval, type Chat, type ChatMessage } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
+import { usePlayground } from '@/state/playground'
 import { AiPanel } from './AiPanel'
 
 const render = (ui: React.ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
@@ -281,4 +282,16 @@ test('note proposals and note tools are labelled as notes', () => {
   const tools = screen.getByRole('list', { name: 'What Claude did' })
   expect(within(tools).getByText('Listed notes')).toBeInTheDocument()
   expect(within(tools).getByText('Proposed a new note')).toBeInTheDocument()
+})
+
+test('a dry run card opens it in the Playground', async () => {
+  const open = vi.fn()
+  usePlayground.setState({ open })
+  showMessages([{ id: '2', role: 'assistant', text: 'Watch step 4.', tools: [{ name: 'create_visualization', detail: '' }], visualizations: [{ id: 'v1', title: 'Dry run: bubble sort', steps: 12 }] }])
+  render(<AiPanel />)
+  const card = screen.getByRole('group', { name: 'Dry run: bubble sort' })
+  expect(card).toHaveTextContent('12 steps')
+  await userEvent.click(within(card).getByRole('button', { name: 'Open in Playground' }))
+  expect(open).toHaveBeenCalledWith('v1')
+  expect(within(screen.getByRole('list', { name: 'What Claude did' })).getByText('Made a dry run')).toBeInTheDocument()
 })

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, Clapperboard, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { activeChat, useAiChat, type Approval, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
+import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
 import { Markdown } from './Markdown'
@@ -29,6 +30,7 @@ const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: type
   read_note: { label: (d) => `Read note ${d}`, icon: NotebookPen },
   create_note: { label: () => 'Proposed a new note', icon: NotebookPen },
   edit_note: { label: (d) => `Proposed a change to note ${d}`, icon: NotebookPen },
+  create_visualization: { label: () => 'Made a dry run', icon: Clapperboard },
 }
 
 function ToolList({ tools }: { tools: ToolActivity[] }) {
@@ -138,6 +140,28 @@ function ApprovalCard({ approval }: { approval: Approval }) {
   )
 }
 
+/** A dry run Claude made; it plays in the Playground. */
+function VisualizationCard({ id, title, steps }: { id: string; title: string; steps: number }) {
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      className="my-2 flex items-center gap-3 rounded-lg border border-violet-500/30 bg-gradient-to-r from-violet-500/10 to-cyan-500/5 px-3 py-2.5"
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-500 text-white">
+        <Clapperboard className="size-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-medium">{title}</span>
+        <span className="block text-[11px] text-muted-foreground">{steps} steps</span>
+      </span>
+      <Button size="sm" onClick={() => usePlayground.getState().open(id)}>
+        Open in Playground
+      </Button>
+    </div>
+  )
+}
+
 function Message({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   if (message.role === 'user') {
     return (
@@ -150,6 +174,7 @@ function Message({ message, streaming }: { message: ChatMessage; streaming: bool
     <div className="text-[13px] leading-relaxed text-foreground">
       <ToolList tools={message.tools} />
       {message.approvals?.map((a) => <ApprovalCard key={a.id} approval={a} />)}
+      {message.visualizations?.map((v) => <VisualizationCard key={v.id} {...v} />)}
       {message.text && <Markdown>{message.text}</Markdown>}
       {streaming && !message.text && !message.approvals?.some((a) => a.state === 'pending') && (
         <p className="flex items-center gap-2 text-muted-foreground">
@@ -166,7 +191,7 @@ function Message({ message, streaming }: { message: ChatMessage; streaming: bool
           {message.error}
         </p>
       )}
-      {!streaming && !message.text && !message.error && !message.approvals?.length && (
+      {!streaming && !message.text && !message.error && !message.approvals?.length && !message.visualizations?.length && (
         <p className="text-muted-foreground italic">Stopped.</p>
       )}
     </div>

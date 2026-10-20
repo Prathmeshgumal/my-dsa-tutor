@@ -6,6 +6,7 @@ import { useWorkspace } from './workspace'
 import { useRun } from './run'
 import { useSettings } from './settings'
 import { useNotes } from './notes'
+import { usePlayground } from './playground'
 import type { RunResult } from '@/lib/runner/types'
 
 const runResult: RunResult = { status: 'success', statusText: 'Accepted', stdout: '1', stderr: '', compileOutput: '', timeMs: 3, memoryKb: 100 }
@@ -273,6 +274,13 @@ describe('agent tools', () => {
     const stream = fakeStream([{ type: 'done' }])
     await chat().send('hi', { stream, ...quiet })
     expect((stream.mock.calls[0][0] as ChatRequest).context.openNote).toEqual({ name: 'note-1.md', title: 'Two pointers' })
+  })
+
+  test('a dry run from Claude is added to the Playground and linked from the reply', async () => {
+    const run = { id: 'v1', title: 'Dry run', createdAt: 5, steps: [{ note: 'a' }, { note: 'b' }] }
+    await chat().send('dry run it', { stream: fakeStream([{ type: 'visualization', run }]), ...quiet })
+    expect(usePlayground.getState().runs[0].id).toBe('v1')
+    expect(activeChat(chat())!.messages[1].visualizations).toEqual([{ id: 'v1', title: 'Dry run', steps: 2 }])
   })
 
   test('an applied change reloads the files straight away', async () => {

@@ -6,7 +6,7 @@ PORT="${EDITOR_PORT:-5199}"
 URL="http://localhost:$PORT"
 
 # Create the data folders first, so Docker doesn't make them owned by root.
-mkdir -p solutions notes
+mkdir -p solutions notes playground
 
 docker compose up -d "$@"
 

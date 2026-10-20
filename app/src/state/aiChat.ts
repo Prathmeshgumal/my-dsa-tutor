@@ -5,6 +5,7 @@ import { streamChat } from '@/lib/claudeClient'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
 import { noteTitle, useNotes } from './notes'
+import { usePlayground } from './playground'
 import { useRun } from './run'
 import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
@@ -32,6 +33,8 @@ export interface ChatMessage {
   text: string
   tools: ToolActivity[]
   approvals?: Approval[]
+  /** Dry runs Claude made in this reply (open in the Playground). */
+  visualizations?: { id: string; title: string; steps: number }[]
   error?: string
 }
 
@@ -186,6 +189,11 @@ export const useAiChat = create<AiChatState>()(
               } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result)
               else if (event.type === 'file_changed') void afterEdits()
               else if (event.type === 'note_changed') void useNotes.getState().load()
+              else if (event.type === 'visualization') {
+                const { run } = event
+                usePlayground.getState().add(run)
+                patchReply((m) => ({ visualizations: [...(m.visualizations ?? []), { id: run.id, title: run.title, steps: run.steps.length }] }))
+              }
               else if (event.type === 'error') patchReply(() => ({ error: event.message }))
             },
             { signal: controller.signal },

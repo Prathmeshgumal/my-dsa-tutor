@@ -4,6 +4,8 @@ import { persist } from 'zustand/middleware'
 export type ThemePref = 'system' | 'light' | 'dark'
 export type RunnerKind = 'piston' | 'judge0'
 export type OutputPosition = 'right' | 'bottom'
+/** The main area: the code editor, or the Playground with dry-run visualizations. */
+export type Screen = 'editor' | 'playground'
 
 interface SettingsState {
   apiKey: string
@@ -16,6 +18,7 @@ interface SettingsState {
   notesOpen: boolean
   /** Width in px of the right-hand panel (Claude / Notes). */
   sidePanelWidth: number
+  screen: Screen
   setApiKey(k: string): void
   setTheme(t: ThemePref): void
   setPanelLayout(l: number[]): void
@@ -26,6 +29,7 @@ interface SettingsState {
   setAiOpen(open: boolean): void
   setNotesOpen(open: boolean): void
   setSidePanelWidth(width: number): void
+  setScreen(screen: Screen): void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -40,6 +44,7 @@ export const useSettings = create<SettingsState>()(
       aiOpen: false,
       notesOpen: false,
       sidePanelWidth: 380,
+      screen: 'editor',
       setApiKey: (apiKey) => set({ apiKey }),
       setTheme: (theme) => set({ theme }),
       setPanelLayout: (panelLayout) => set({ panelLayout }),
@@ -48,6 +53,7 @@ export const useSettings = create<SettingsState>()(
       setOutputOpen: (outputOpen) => set({ outputOpen }),
       setAiOpen: (aiOpen) => set(aiOpen ? { aiOpen, notesOpen: false } : { aiOpen }),
       setSidePanelWidth: (sidePanelWidth) => set({ sidePanelWidth }),
+      setScreen: (screen) => set({ screen }),
       setNotesOpen: (notesOpen) => set(notesOpen ? { notesOpen, aiOpen: false } : { notesOpen }),
     }),
     { name: 'dsa-editor:settings' },

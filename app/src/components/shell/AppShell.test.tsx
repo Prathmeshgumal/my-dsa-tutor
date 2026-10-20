@@ -27,7 +27,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false })
+  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false, screen: 'editor' })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -275,4 +275,24 @@ test('the Claude and Notes panels use the remembered width and can be resized', 
   expect(screen.getByRole('separator', { name: 'Resize panel' })).toBeInTheDocument()
   act(() => useSettings.getState().setNotesOpen(true))
   expect(screen.getByRole('complementary', { name: 'Notes' })).toHaveStyle({ width: '520px' })
+})
+
+test('the Playground button switches the main area; the editor stays loaded behind it', async () => {
+  const mounts = vi.fn()
+  function EditorProbe() {
+    useEffect(() => mounts(), [])
+    return <div>EDITOR</div>
+  }
+  renderShell({ editor: <EditorProbe /> })
+  const editorBtn = screen.getByRole('button', { name: 'Editor' })
+  const playgroundBtn = screen.getByRole('button', { name: 'Playground' })
+  expect(editorBtn).toHaveAttribute('aria-current', 'page')
+  await userEvent.click(playgroundBtn)
+  expect(screen.getByRole('main', { name: 'Playground' })).toBeInTheDocument()
+  expect(playgroundBtn).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByText('EDITOR')).not.toBeVisible()
+  await userEvent.click(editorBtn)
+  expect(screen.queryByRole('main', { name: 'Playground' })).not.toBeInTheDocument()
+  expect(screen.getByText('EDITOR')).toBeVisible()
+  expect(mounts).toHaveBeenCalledTimes(1)
 })

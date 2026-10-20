@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Eye, EyeOff, FilePlus2, Moon, PanelBottom, PanelRight, NotebookPen, Play, Settings, Sparkles, Sun } from 'lucide-react'
+import { Clapperboard, Eye, EyeOff, FilePlus2, Moon, PanelBottom, PanelRight, NotebookPen, Play, Settings, Sparkles, Sun } from 'lucide-react'
 import { create } from 'zustand'
 import { focusEditor } from '@/components/editor/editorFocus'
 import { openNewFileDialog } from '@/components/editor/FileDialogs'
@@ -89,6 +89,9 @@ export function CommandMenu() {
             </CommandItem>
             <CommandItem value="Ask Claude" onSelect={run(() => useSettings.getState().setAiOpen(true))}>
               <Sparkles /> Ask Claude
+            </CommandItem>
+            <CommandItem value="Open Playground" onSelect={run(() => useSettings.getState().setScreen('playground'))}>
+              <Clapperboard /> Open Playground
             </CommandItem>
             <CommandItem value="Open notes" onSelect={run(() => useSettings.getState().setNotesOpen(true))}>
               <NotebookPen /> Open notes

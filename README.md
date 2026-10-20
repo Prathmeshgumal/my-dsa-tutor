@@ -64,6 +64,18 @@ stop typing, as real `.md` files in **`notes/`** at the repo root (set `NOTES_DI
 to use another folder). Notes and the Claude panel share the right side, so opening
 one closes the other.
 
+## Playground (dry runs)
+
+The film-clapper button in the left bar switches to the **Playground**: step-by-step
+dry runs of your code. Ask Claude things like "dry run my code with input [3, 1, 2]" or
+"show me where my loop goes wrong". It reads your file, runs it to check the real result,
+and builds a dry run that plays here: your code with the current line highlighted, a note
+for each step, the variables, and the data structures drawn out (arrays with pointers,
+DP tables, hash maps, stacks, queues, linked lists, binary trees, graphs). The step where
+a bug shows up is marked in red. Use ← → to step, Space to play, and 0.5× / 1× / 2× for
+speed. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
+as JSON files in **`playground/`**; the code editor stays as you left it while you're here.
+
 ## Ask Claude
 
 Click the ✦ button in the left bar (or ⌘/Ctrl + K → "Ask Claude") to chat with a Claude
@@ -83,6 +95,7 @@ It can only act through these tools:
 | `create_file` | Creates a new solution file | **Yes** |
 | `list_notes` / `read_note` | Your Markdown notes | No |
 | `create_note` / `edit_note` | Saves a new note, or changes one (e.g. "add this to my notes") | **Yes** |
+| `create_visualization` | Makes a step-by-step dry run of your code for the Playground | No |
 
 Claude Code's own tools (shell, web, other folders) and your personal Claude Code
 settings, CLAUDE.md, plugins and MCP servers are all switched off for it. You can keep

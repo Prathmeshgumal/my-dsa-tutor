@@ -1,4 +1,5 @@
 // Shared between the dev server (server/claudeChat.ts) and the browser.
+import type { DryRun } from './dryRun.ts'
 import type { RunResult } from './runner/types.ts'
 
 /** What a proposed change does: a solution file (edit/create) or a note (edit_note/create_note). */
@@ -17,6 +18,8 @@ export type ChatEvent =
   | { type: 'file_changed'; file: string }
   /** An approved change to a note was written; the notes panel reloads. */
   | { type: 'note_changed'; note: string }
+  /** Claude made a dry-run visualization for the Playground. */
+  | { type: 'visualization'; run: DryRun }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
