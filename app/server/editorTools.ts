@@ -48,7 +48,7 @@ export interface EditorToolDeps {
   /** Shows the change to the user and resolves with their decision. */
   requestApproval(req: ApprovalRequest): Promise<boolean>
   /** Called with every run, so the editor's output panel can show it. */
-  onRun(file: string, result: RunResult): void
+  onRun(file: string, result: RunResult, stdin: string): void
   /** Called after an approved change is written, so the editor reloads it. */
   onFileChanged(file: string): void
   /** Called after an approved note change is written, so the notes panel reloads it. */
@@ -89,9 +89,10 @@ function checkName(name: string): void {
 const lineCount = (text: string) => (text === '' ? 0 : text.replace(/\n$/, '').split('\n').length)
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-function describeRun(file: string | null, result: RunResult): string {
+function describeRun(file: string | null, result: RunResult, stdin?: string): string {
   const stats = [result.timeMs !== null && `${result.timeMs} ms`, result.memoryKb !== null && `${result.memoryKb} KB`].filter(Boolean)
   const lines = [`File: ${file ?? '(unknown)'}`, `Result: ${result.statusText}${stats.length ? ` (${stats.join(', ')})` : ''}`]
+  if (stdin !== undefined) lines.push('Input (stdin):', stdin ? clip(stdin) : '(empty: the Input box was blank)')
   if (result.compileOutput) lines.push('Compiler output:', clip(result.compileOutput))
   lines.push('stdout:', result.stdout ? clip(result.stdout) : '(empty)')
   if (result.stderr) lines.push('stderr:', clip(result.stderr))
@@ -278,7 +279,7 @@ export function createEditorTools(deps: EditorToolDeps) {
       const last = context.lastRun
       if (!last) return { text: 'The code hasn’t run yet in the editor (the output panel is empty).' }
       if ('error' in last) return { text: `The last run of ${last.file ?? 'the code'} failed to start: ${last.error}` }
-      return { text: describeRun(last.file, last.result) }
+      return { text: describeRun(last.file, last.result, last.stdin) }
     }),
 
     run_code: guard(async ({ name, stdin }: { name?: string; stdin?: string }) => {
@@ -292,8 +293,8 @@ export function createEditorTools(deps: EditorToolDeps) {
       } catch (e) {
         return fail(`Couldn't run ${file}: ${e instanceof Error ? e.message : String(e)}`)
       }
-      deps.onRun(file, result)
-      return { text: describeRun(file, result) }
+      deps.onRun(file, result, stdin ?? '')
+      return { text: describeRun(file, result, stdin ?? '') }
     }),
 
     edit_file: guard(

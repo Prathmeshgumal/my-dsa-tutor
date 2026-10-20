@@ -1,3 +1,4 @@
+import { readsInput, useStdin } from './stdin'
 import { toast } from 'sonner'
 import { useSettingsDialog } from '@/components/settings/SettingsDialog'
 import { LANGUAGES } from '@/lib/languages'
@@ -162,4 +163,36 @@ test('no-key error still shows the output so the message is visible', async () =
   useSettings.setState({ apiKey: '', runner: 'judge0', outputOpen: false })
   await run().runActiveFile(fakeRunner(async () => ok))
   expect(useSettings.getState().outputOpen).toBe(true)
+})
+
+describe('program input (stdin)', () => {
+  beforeEach(() => useStdin.setState({ inputs: {} }))
+
+  test('the file’s input box is fed to the program', async () => {
+    useWorkspace.getState().createFile('read.cpp')
+    const id = useWorkspace.getState().activeId!
+    useStdin.getState().setInput(id, '1 2 3\n4 5 6\n')
+    const runner = fakeRunner(async () => ok)
+    await run().runActiveFile(runner)
+    expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ stdin: '1 2 3\n4 5 6\n' }))
+    expect(run().lastStdin).toBe('1 2 3\n4 5 6\n')
+  })
+
+  test('each file keeps its own input', () => {
+    useStdin.getState().setInput('a', 'one')
+    useStdin.getState().setInput('b', 'two')
+    expect(useStdin.getState().inputs).toEqual({ a: 'one', b: 'two' })
+    useStdin.getState().setInput('a', '')
+    expect(useStdin.getState().inputs).toEqual({ b: 'two' })
+  })
+
+  test('code that reads input is recognised', () => {
+    expect(readsInput('int x; cin >> x;', 'cpp')).toBe(true)
+    expect(readsInput('scanf("%d", &x);', 'cpp')).toBe(true)
+    expect(readsInput('getline(cin, s);', 'cpp')).toBe(true)
+    expect(readsInput('x = int(input())', 'python')).toBe(true)
+    expect(readsInput('Scanner sc = new Scanner(System.in);', 'java')).toBe(true)
+    expect(readsInput('cout << "cin is fun"; // cin >> x', 'cpp')).toBe(false)
+    expect(readsInput('cout << 1;', 'cpp')).toBe(false)
+  })
 })

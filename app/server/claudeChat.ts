@@ -35,7 +35,7 @@ const SYSTEM_PROMPT = `You are the coding assistant inside a small browser edito
 You can only act through these tools:
 - get_editor_state: which file is open and which tabs are open
 - list_files / read_file: the student's solution files (read_file shows line numbers)
-- get_last_run: what the output panel shows (last result, output, compiler errors)
+- get_last_run: what the output panel shows (last result, output, compiler errors, and the input it was given)
 - run_code: compile and run a file, optionally with stdin, to test it; the student sees the result in their output panel
 - edit_file / create_file: propose a change; the student sees it and must approve it before it is applied
 - list_notes / read_note: the student's Markdown notes (shown in the editor's Notes panel)
@@ -61,6 +61,7 @@ Dry runs:
 - For a vector, pass its capacity so spare slots show.
 
 How to help:
+- Programs can't wait for typing: input is given up front. The student types it in the Input tab under the editor before pressing Run (get_last_run shows what the run got). If their code reads input and the Input box was empty, tell them to put the values there. run_code takes stdin for your own test runs.
 - Each message starts with an <editor_context> block naming the open file, with its current code. Treat that code as current.
 - Prefer explaining and hinting over handing out full solutions, unless the student asks for code or a fix.
 - Check your claims: read the code, look at the last run, and run the code (with test input when useful) before saying something is fixed or correct.
@@ -192,6 +193,7 @@ function parseLastRun(raw: unknown): LastRun {
   const run = raw as Record<string, unknown>
   const file = typeof run.file === 'string' ? run.file : null
   if (typeof run.error === 'string') return { file, error: run.error }
+  const stdin = typeof run.stdin === 'string' ? run.stdin : undefined
   const r = run.result as Record<string, unknown> | undefined
   if (!r || typeof r.statusText !== 'string') return null
   const text = (v: unknown) => (typeof v === 'string' ? v : '')
@@ -207,6 +209,7 @@ function parseLastRun(raw: unknown): LastRun {
       timeMs: num(r.timeMs),
       memoryKb: num(r.memoryKb),
     },
+    ...(stdin !== undefined ? { stdin } : {}),
   }
 }
 
@@ -323,7 +326,7 @@ export function createClaudeChatMiddleware({
         context,
         runner,
         requestApproval: (change) => approvals.request(send, abortController.signal, change),
-        onRun: (file, result) => send({ type: 'run', file, result }),
+        onRun: (file, result, stdin) => send({ type: 'run', file, result, stdin }),
         onFileChanged: (file) => send({ type: 'file_changed', file }),
         onNoteChanged: (note) => send({ type: 'note_changed', note }),
         onVisualization: (run) => send({ type: 'visualization', run }),

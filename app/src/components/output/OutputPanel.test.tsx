@@ -4,6 +4,9 @@ import { useSettings } from '@/state/settings'
 import { mockMatchMedia } from '@/test/matchMedia'
 import { RunnerError, type RunResult } from '@/lib/runner/types'
 import { useRun } from '@/state/run'
+import { useStdin } from '@/state/stdin'
+import { useWorkspace } from '@/state/workspace'
+import userEvent from '@testing-library/user-event'
 import { OutputPanel } from './OutputPanel'
 
 vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
@@ -121,4 +124,42 @@ test('runner error shows message inline', () => {
 test('the output panel has no layout buttons (they live in the status bar)', () => {
   render(<OutputPanel />)
   expect(screen.queryByRole('button', { name: /output options|collapse output/i })).not.toBeInTheDocument()
+})
+
+describe('program input', () => {
+  beforeEach(() => {
+    useStdin.setState({ inputs: {} })
+    useWorkspace.setState({
+      files: [{ id: 'f1', name: 'arrays.cpp', content: 'int x; cin >> x;' }],
+      openIds: ['f1'],
+      activeId: 'f1',
+      ready: true,
+    })
+  })
+
+  test('the Input tab holds what the program reads, for the open file', async () => {
+    render(<OutputPanel />)
+    await userEvent.click(screen.getByRole('tab', { name: /input/i }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Program input' }), '4 5')
+    expect(useStdin.getState().inputs).toEqual({ f1: '4 5' })
+  })
+
+  test('code that reads input with an empty box gets a warning that opens the Input tab', async () => {
+    render(<OutputPanel />)
+    expect(screen.getByRole('note')).toHaveTextContent(/reads input, but the Input box is empty/)
+    await userEvent.click(screen.getByRole('button', { name: 'Add input' }))
+    expect(screen.getByRole('textbox', { name: 'Program input' })).toBeInTheDocument()
+  })
+
+  test('no warning once there is input', () => {
+    useStdin.setState({ inputs: { f1: '3' } })
+    render(<OutputPanel />)
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+})
+
+test('the output shows what input the run was given', () => {
+  useRun.setState({ state: 'done', result: base, error: null, lastStdin: '1 2\n3 4\n' })
+  render(<OutputPanel />)
+  expect(screen.getByTestId('stdin-used')).toHaveTextContent(/Input given:\s*1 2 ⏎ 3 4/)
 })

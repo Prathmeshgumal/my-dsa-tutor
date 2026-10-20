@@ -40,6 +40,13 @@ in localStorage for `http://localhost:5199`. The port is fixed for that reason.
 You can switch to Judge0 on RapidAPI (paid, needs an API key) in Settings (⚙️ in
 the left bar).
 
+## Giving your program input
+
+Code runs in one go, so a program can't stop and wait for you to type. Put what it reads with `cin`
+(or `input()`, `Scanner`) in the **Input** tab next to Output and Errors before you press Run. Each
+file keeps its own input. If your code reads input and the box is empty, the output panel says so,
+and the Output tab shows the input each run was given.
+
 ## Shortcuts
 
 | Keys | Action |

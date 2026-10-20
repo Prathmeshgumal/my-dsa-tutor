@@ -143,8 +143,8 @@ async function saveEverything() {
 }
 
 function lastRun(): LastRun {
-  const { state, result, error, lastFile } = useRun.getState()
-  if (state === 'done' && result) return { file: lastFile, result }
+  const { state, result, error, lastFile, lastStdin } = useRun.getState()
+  if (state === 'done' && result) return { file: lastFile, result, stdin: lastStdin }
   if (state === 'error' && error) return { file: lastFile, error: error.message }
   return null
 }
@@ -229,7 +229,7 @@ export const useAiChat = create<AiChatState>()(
               } else if (event.type === 'approval') {
                 const { type: _, ...change } = event
                 patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
-              } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result)
+              } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result, event.stdin)
               else if (event.type === 'file_changed') void afterEdits()
               else if (event.type === 'note_changed') void useNotes.getState().load()
               else if (event.type === 'problem_changed') {

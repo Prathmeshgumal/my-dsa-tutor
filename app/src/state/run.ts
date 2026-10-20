@@ -6,6 +6,7 @@ import { createPistonRunner } from '@/lib/runner/piston'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
 import { useSettings, type RunnerKind } from './settings'
 import { useSettingsDialog } from './settingsDialog'
+import { useStdin } from './stdin'
 import { useWorkspace } from './workspace'
 
 export type Connection = 'no_key' | 'connected' | 'failed'
@@ -30,9 +31,11 @@ interface RunState {
   connection: Connection
   /** The file the shown result belongs to. */
   lastFile: string | null
+  /** The input the shown run was given. */
+  lastStdin: string
   runActiveFile(runner?: CodeRunner): Promise<void>
   /** Shows a run made elsewhere (by Claude) in the output panel. */
-  showRun(file: string, result: RunResult): void
+  showRun(file: string, result: RunResult, stdin?: string): void
 }
 
 export const useRun = create<RunState>()((set, get) => ({
@@ -41,10 +44,11 @@ export const useRun = create<RunState>()((set, get) => ({
   error: null,
   connection: initialConnection(useSettings.getState()),
   lastFile: null,
+  lastStdin: '',
 
-  showRun(file, result) {
+  showRun(file, result, stdin = '') {
     useSettings.getState().setOutputOpen(true)
-    set({ state: 'done', result, error: null, lastFile: file, connection: 'connected' })
+    set({ state: 'done', result, error: null, lastFile: file, lastStdin: stdin, connection: 'connected' })
   },
 
   async runActiveFile(runner) {
@@ -63,12 +67,13 @@ export const useRun = create<RunState>()((set, get) => ({
       return
     }
 
-    set({ state: 'running', error: null, lastFile: file.name })
+    const stdin = useStdin.getState().inputs[file.id] ?? ''
+    set({ state: 'running', error: null, lastFile: file.name, lastStdin: stdin })
     try {
       const result = await (runner ?? createRunner(settings)).run({
         language,
         source: file.content,
-        stdin: '',
+        stdin,
       })
       set({ state: 'done', result, connection: 'connected' })
     } catch (e) {

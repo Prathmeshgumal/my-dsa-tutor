@@ -214,7 +214,7 @@ describe('agent tools', () => {
     useRun.setState({ state: 'done', result: runResult, error: null, lastFile: 'main.cpp' })
     const stream = fakeStream([{ type: 'done' }])
     await chat().send('why?', { stream, ...quiet })
-    expect((stream.mock.calls[0][0] as ChatRequest).context.lastRun).toEqual({ file: 'main.cpp', result: runResult })
+    expect((stream.mock.calls[0][0] as ChatRequest).context.lastRun).toEqual({ file: 'main.cpp', result: runResult, stdin: '' })
   })
 
   test('a proposed change waits for approval while Claude waits, and expires when the reply ends', async () => {

@@ -15,7 +15,7 @@ export type ChatEvent =
   /** Claude wants to change a file and is waiting for the user's yes/no (POST /api/claude/approval). */
   | { type: 'approval'; id: string; kind: ApprovalKind; file: string; before: string; after: string; explanation: string }
   /** Claude ran code; the editor shows it in the output panel. */
-  | { type: 'run'; file: string; result: RunResult }
+  | { type: 'run'; file: string; result: RunResult; stdin?: string }
   /** An approved change was written to disk; the editor reloads its files. */
   | { type: 'file_changed'; file: string }
   /** An approved change to a note was written; the notes panel reloads. */
@@ -28,7 +28,10 @@ export type ChatEvent =
   | { type: 'error'; message: string }
 
 /** What the output panel shows right now. */
-export type LastRun = { file: string | null; result: RunResult } | { file: string | null; error: string } | null
+export type LastRun =
+  | { file: string | null; result: RunResult; /** The input the run was given */ stdin?: string }
+  | { file: string | null; error: string }
+  | null
 
 export interface EditorContext {
   activeFile: { name: string; content: string } | null

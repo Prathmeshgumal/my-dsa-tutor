@@ -112,15 +112,22 @@ describe('reading', () => {
 })
 
 describe('running', () => {
+  test('get_last_run says what input the run got, and when there was none', async () => {
+    const lastRun = { file: 'sort.cpp', result: ok, stdin: '' }
+    const { tools } = setup({ context: { activeFile: null, openFiles: [], lastRun, openNote: null, openProblem: null } })
+    expect((await tools.get_last_run({})).text).toContain('Input (stdin):\n(empty: the Input box was blank)')
+  })
+
   test('run_code runs the saved file with optional input and shows it in the output panel', async () => {
     const { tools, runner, deps } = setup()
     const text = (await tools.run_code({ name: 'bfs.py', stdin: '3\n1 2 3' })).text
     expect(runner.run).toHaveBeenCalledWith(
       expect.objectContaining({ source: 'print("bfs")\n', stdin: '3\n1 2 3', language: expect.objectContaining({ id: 'python' }) }),
     )
-    expect(deps.onRun).toHaveBeenCalledWith('bfs.py', ok)
+    expect(deps.onRun).toHaveBeenCalledWith('bfs.py', ok, '3\n1 2 3')
     expect(text).toContain('Accepted')
     expect(text).toContain('0 1')
+    expect(text).toContain('Input (stdin):\n3\n1 2 3')
   })
 
   test('run_code defaults to the open file', async () => {
