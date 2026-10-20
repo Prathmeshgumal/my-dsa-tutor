@@ -7,6 +7,7 @@ import { refreshFromDisk } from './hydrate'
 import type { Attachment } from '@/lib/images'
 import { noteTitle, useNotes } from './notes'
 import { usePlayground } from './playground'
+import { activeProblem, useProblems } from './problems'
 import { useRun } from './run'
 import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
@@ -114,7 +115,14 @@ function editorContext(): ChatRequest['context'] {
     openFiles: openIds.flatMap((id) => files.filter((f) => f.id === id).map((f) => f.name)),
     lastRun: lastRun(),
     openNote: openNote(),
+    openProblem: openProblem(),
   }
+}
+
+function openProblem(): ChatRequest['context']['openProblem'] {
+  if (useSettings.getState().screen !== 'problem') return null
+  const entry = activeProblem(useProblems.getState())
+  return entry ? { slug: entry.slug, title: entry.problem.title } : null
 }
 
 function openNote(): ChatRequest['context']['openNote'] {
@@ -126,7 +134,7 @@ function openNote(): ChatRequest['context']['openNote'] {
 
 /** Save code and notes, so Claude reads what the user sees. */
 async function saveEverything() {
-  await Promise.all([flushAutosave(), useNotes.getState().flush()])
+  await Promise.all([flushAutosave(), useNotes.getState().flush(), useProblems.getState().flush()])
 }
 
 function lastRun(): LastRun {
@@ -211,6 +219,15 @@ export const useAiChat = create<AiChatState>()(
               } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result)
               else if (event.type === 'file_changed') void afterEdits()
               else if (event.type === 'note_changed') void useNotes.getState().load()
+              else if (event.type === 'problem_changed') {
+                const { slug, open } = event
+                void useProblems
+                  .getState()
+                  .load()
+                  .then(() => {
+                    if (open) return useProblems.getState().open(slug)
+                  })
+              }
               else if (event.type === 'visualization') {
                 const { run } = event
                 usePlayground.getState().add(run)

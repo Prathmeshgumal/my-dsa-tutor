@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
 import { createClaudeChatMiddleware } from './server/claudeChat.ts'
+import { createProblemsMiddleware } from './server/problemsApi.ts'
 import { createNotesMiddleware, createPlaygroundMiddleware, createSolutionsMiddleware } from './server/solutionsApi.ts'
 
 // The editor's files live as real files in <repo>/solutions (override with SOLUTIONS_DIR).
@@ -13,6 +14,9 @@ const notesDir = process.env.NOTES_DIR ?? path.resolve(import.meta.dirname, '../
 // Dry-run visualizations shown in the Playground live in <repo>/playground (override with PLAYGROUND_DIR).
 const playgroundDir = process.env.PLAYGROUND_DIR ?? path.resolve(import.meta.dirname, '../playground')
 
+// Practice problems (description, tests, solution) live in <repo>/problems, one folder each (override with PROBLEMS_DIR).
+const problemsDir = process.env.PROBLEMS_DIR ?? path.resolve(import.meta.dirname, '../problems')
+
 function solutionsApi(): Plugin {
   return {
     name: 'solutions-api',
@@ -20,8 +24,9 @@ function solutionsApi(): Plugin {
       server.middlewares.use(createSolutionsMiddleware(solutionsDir))
       server.middlewares.use(createNotesMiddleware(notesDir))
       server.middlewares.use(createPlaygroundMiddleware(playgroundDir))
+      server.middlewares.use(createProblemsMiddleware(problemsDir))
       // Claude runs in the solutions folder, so it sees the same files the editor shows.
-      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir, notesDir, playgroundDir }))
+      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir, notesDir, playgroundDir, problemsDir }))
     },
   }
 }

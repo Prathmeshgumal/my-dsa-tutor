@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, Clapperboard, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X, Paperclip, Image as ImageIcon } from 'lucide-react'
+import { ArrowUp, Check, Clapperboard, ListChecks, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X, Paperclip, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,6 +11,7 @@ import { useSettings } from '@/state/settings'
 import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
+import { activeProblem, useProblems } from '@/state/problems'
 import { Markdown } from './Markdown'
 
 const SUGGESTIONS = [
@@ -33,6 +34,13 @@ const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: type
   create_note: { label: () => 'Proposed a new note', icon: NotebookPen },
   edit_note: { label: (d) => `Proposed a change to note ${d}`, icon: NotebookPen },
   create_visualization: { label: () => 'Made a dry run', icon: Clapperboard },
+  list_problems: { label: () => 'Listed problems', icon: ListChecks },
+  get_problem: { label: (d) => `Read problem ${d}`.trim(), icon: ListChecks },
+  create_problem: { label: () => 'Proposed a new problem', icon: ListChecks },
+  add_test_case: { label: () => 'Proposed a test case', icon: ListChecks },
+  edit_solution: { label: () => 'Proposed a change to your solution', icon: Pencil },
+  run_tests: { label: () => 'Ran the test cases', icon: Play },
+  list_attempts: { label: () => 'Checked your submissions', icon: ListChecks },
 }
 
 function ToolList({ tools }: { tools: ToolActivity[] }) {
@@ -84,16 +92,19 @@ function DiffLines({ text, sign }: { text: string; sign: '-' | '+' }) {
 }
 
 /** A change Claude wants to make; nothing is written until the user applies it. */
+const APPROVAL_KIND: Record<Approval['kind'], { badge: string; title: (file: string) => string; icon: typeof Pencil }> = {
+  create: { badge: 'New file', title: (f) => `Proposed new file ${f}`, icon: FilePlus2 },
+  edit: { badge: 'Edit', title: (f) => `Proposed change to ${f}`, icon: Pencil },
+  create_note: { badge: 'New note', title: (f) => `Proposed new note ${f}`, icon: NotebookPen },
+  edit_note: { badge: 'Edit note', title: (f) => `Proposed change to note ${f}`, icon: NotebookPen },
+  create_problem: { badge: 'New problem', title: (f) => `Proposed new problem ${f}`, icon: ListChecks },
+  add_test: { badge: 'New test case', title: (f) => `Proposed test case for ${f}`, icon: ListChecks },
+  edit_solution: { badge: 'Edit', title: (f) => `Proposed change to ${f}`, icon: Pencil },
+}
+
 function ApprovalCard({ approval }: { approval: Approval }) {
-  const isNote = approval.kind === 'create_note' || approval.kind === 'edit_note'
-  const isNew = approval.kind === 'create' || approval.kind === 'create_note'
-  const title = isNote
-    ? isNew
-      ? `Proposed new note ${approval.file}`
-      : `Proposed change to note ${approval.file}`
-    : isNew
-      ? `Proposed new file ${approval.file}`
-      : `Proposed change to ${approval.file}`
+  const kind = APPROVAL_KIND[approval.kind] ?? APPROVAL_KIND.edit
+  const title = kind.title(approval.file)
   const decided = approval.state === 'pending' ? null : DECIDED[approval.state]
   return (
     <div
@@ -105,14 +116,8 @@ function ApprovalCard({ approval }: { approval: Approval }) {
       )}
     >
       <div className="flex items-center gap-1.5 border-b bg-muted/40 px-2.5 py-1.5 text-[12px]">
-        {isNote ? (
-          <NotebookPen className="size-3.5" aria-hidden />
-        ) : isNew ? (
-          <FilePlus2 className="size-3.5" aria-hidden />
-        ) : (
-          <Pencil className="size-3.5" aria-hidden />
-        )}
-        <span className="font-medium">{isNote ? (isNew ? 'New note' : 'Edit note') : isNew ? 'New file' : 'Edit'}</span>
+        <kind.icon className="size-3.5" aria-hidden />
+        <span className="font-medium">{kind.badge}</span>
         <span className="truncate font-mono text-muted-foreground">{approval.file}</span>
         {decided && (
           <span className={cn('ml-auto flex shrink-0 items-center gap-1', decided.className)}>
@@ -121,13 +126,20 @@ function ApprovalCard({ approval }: { approval: Approval }) {
         )}
       </div>
       {approval.explanation && <p className="px-2.5 pt-2 text-[12.5px] text-muted-foreground">{approval.explanation}</p>}
-      <div className="m-2.5 max-h-64 overflow-auto rounded-md border font-mono text-[11.5px] leading-relaxed">
-        {/* min-w-max: row colours run under text that scrolls sideways */}
-        <div className="min-w-max">
-          <DiffLines text={approval.before} sign="-" />
-          <DiffLines text={approval.after} sign="+" />
+      {approval.kind === 'create_problem' ? (
+        // A whole new problem reads better as the page it will become than as added lines.
+        <div className="m-2.5 max-h-80 overflow-auto rounded-md border px-3 py-2 text-[12.5px] leading-relaxed">
+          <Markdown>{approval.after}</Markdown>
         </div>
-      </div>
+      ) : (
+        <div className="m-2.5 max-h-64 overflow-auto rounded-md border font-mono text-[11.5px] leading-relaxed">
+          {/* min-w-max: row colours run under text that scrolls sideways */}
+          <div className="min-w-max">
+            <DiffLines text={approval.before} sign="-" />
+            <DiffLines text={approval.after} sign="+" />
+          </div>
+        </div>
+      )}
       {approval.state === 'pending' && (
         <div className="flex justify-end gap-2 px-2.5 pb-2.5">
           <Button size="sm" variant="ghost" onClick={() => void useAiChat.getState().answerApproval(approval.id, false)}>
@@ -170,6 +182,8 @@ const PROGRESS_LABEL: Record<string, string> = {
   edit_note: 'Preparing a change to a note',
   create_file: 'Writing a new file',
   edit_file: 'Preparing an edit',
+  create_problem: 'Setting up the problem',
+  edit_solution: 'Preparing an edit',
 }
 
 const formatChars = (n: number) => (n < 1000 ? `${n} characters` : `${(n / 1000).toFixed(1)}k characters`)
@@ -343,7 +357,11 @@ export function AiPanel() {
   const messages = current?.messages ?? []
   const replyingHere = useAiChat((s) => s.streamingChatId !== null && s.streamingChatId === s.activeChatId)
   const [showList, setShowList] = useState(false)
-  const activeName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
+  const fileName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
+  // On the Problem screen Claude is told about the problem instead of the open file.
+  const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
+  const onProblem = useSettings((s) => s.screen === 'problem')
+  const activeName = onProblem ? problemTitle : fileName
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<(Attachment & { id: string })[]>([])
   const [attachError, setAttachError] = useState<string | null>(null)
@@ -494,10 +512,10 @@ export function AiPanel() {
         <div
           data-testid="context-chip"
           className="mb-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          title="Claude sees this file’s current code"
+          title={onProblem ? 'Claude sees this problem and your solution' : 'Claude sees this file’s current code'}
         >
-          <FileCode2 className="size-3 shrink-0" aria-hidden />
-          <span className="truncate font-mono">{activeName ?? 'No file open'}</span>
+          {onProblem ? <ListChecks className="size-3 shrink-0" aria-hidden /> : <FileCode2 className="size-3 shrink-0" aria-hidden />}
+          <span className={cn('truncate', !onProblem && 'font-mono')}>{activeName ?? (onProblem ? 'No problem open' : 'No file open')}</span>
         </div>
         {attachments.length > 0 && (
           <ul aria-label="Attached images" className="mb-1.5 flex flex-wrap gap-1.5">

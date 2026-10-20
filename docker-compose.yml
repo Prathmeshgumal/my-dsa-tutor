@@ -38,6 +38,7 @@ services:
       SOLUTIONS_DIR: /workspace/solutions
       NOTES_DIR: /workspace/notes
       PLAYGROUND_DIR: /workspace/playground
+      PROBLEMS_DIR: /workspace/problems
     ports:
       - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
     volumes:
@@ -46,6 +47,7 @@ services:
       - ./solutions:/workspace/solutions
       - ./notes:/workspace/notes
       - ./playground:/workspace/playground
+      - ./problems:/workspace/problems
       # Your Claude Code login, so the Claude panel works without an API key.
       - ${HOME}/.claude:/home/node/.claude
 

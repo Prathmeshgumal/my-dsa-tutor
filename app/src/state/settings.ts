@@ -4,8 +4,8 @@ import { persist } from 'zustand/middleware'
 export type ThemePref = 'system' | 'light' | 'dark'
 export type RunnerKind = 'piston' | 'judge0'
 export type OutputPosition = 'right' | 'bottom'
-/** The main area: the code editor, or the Playground with dry-run visualizations. */
-export type Screen = 'editor' | 'playground'
+/** The main area: the code editor, a practice problem, or the Playground with dry-run visualizations. */
+export type Screen = 'editor' | 'problem' | 'playground'
 
 interface SettingsState {
   apiKey: string

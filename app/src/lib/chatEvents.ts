@@ -2,8 +2,8 @@
 import type { DryRun } from './dryRun.ts'
 import type { RunResult } from './runner/types.ts'
 
-/** What a proposed change does: a solution file (edit/create) or a note (edit_note/create_note). */
-export type ApprovalKind = 'edit' | 'create' | 'edit_note' | 'create_note'
+/** What a proposed change does: a solution file (edit/create), a note, or a practice problem. */
+export type ApprovalKind = 'edit' | 'create' | 'edit_note' | 'create_note' | 'create_problem' | 'edit_solution' | 'add_test'
 
 /** One server-sent event from POST /api/claude/chat. */
 export type ChatEvent =
@@ -22,6 +22,8 @@ export type ChatEvent =
   | { type: 'note_changed'; note: string }
   /** Claude made a dry-run visualization for the Playground. */
   | { type: 'visualization'; run: DryRun }
+  /** A practice problem was created or changed; open = switch to the Problem screen and show it. */
+  | { type: 'problem_changed'; slug: string; open: boolean }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -34,6 +36,8 @@ export interface EditorContext {
   lastRun: LastRun
   /** The note open in the Notes panel, if the panel is open. */
   openNote: { name: string; title: string } | null
+  /** The practice problem on screen, if the Problem screen is showing. */
+  openProblem: { slug: string; title: string } | null
 }
 
 /** Image types Claude accepts. */

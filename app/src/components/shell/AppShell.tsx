@@ -5,6 +5,7 @@ import { AiPanel } from '@/components/ai/AiPanel'
 import { FilesPanel } from '@/components/files/FilesPanel'
 import { NotesPanel } from '@/components/notes/NotesPanel'
 import { Playground } from '@/components/playground/Playground'
+import { ProblemScreen } from '@/components/problems/ProblemScreen'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
@@ -45,6 +46,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
           <IconRail />
           {filesOpen && <FilesPanel />}
           {screen === 'playground' && <Playground />}
+          {screen === 'problem' && <ProblemScreen />}
           {/* Kept mounted (just hidden) on the Playground, so Monaco keeps its cursor, scroll and undo history. */}
           <div hidden={screen !== 'editor'} className="flex min-h-0 min-w-0 flex-1 flex-col">
             {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}

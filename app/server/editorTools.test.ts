@@ -4,10 +4,13 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
 import { createEditorTools, type ApprovalRequest, type EditorToolDeps } from './editorTools'
+import { CASE_MARK, RESULT_MARK } from '../src/lib/cppHarness.ts'
+import { readEntry } from './problemStore.ts'
 
 let dir: string
 let notesDir: string
 let playgroundDir: string
+let problemsDir: string
 const ok: RunResult = {
   status: 'success',
   statusText: 'Accepted',
@@ -24,12 +27,14 @@ beforeEach(async () => {
   await writeFile(path.join(dir, 'bfs.py'), 'print("bfs")\n')
   notesDir = await mkdtemp(path.join(tmpdir(), 'agent-notes-'))
   playgroundDir = await mkdtemp(path.join(tmpdir(), 'agent-playground-'))
+  problemsDir = await mkdtemp(path.join(tmpdir(), 'agent-problems-'))
   await writeFile(path.join(notesDir, 'note-1.md'), '# Two pointers\n\n- works on sorted arrays\n')
 })
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
   await rm(notesDir, { recursive: true, force: true })
   await rm(playgroundDir, { recursive: true, force: true })
+  await rm(problemsDir, { recursive: true, force: true })
 })
 
 function setup(overrides: Partial<EditorToolDeps> = {}) {
@@ -39,10 +44,13 @@ function setup(overrides: Partial<EditorToolDeps> = {}) {
     dir,
     notesDir,
     playgroundDir,
+    problemsDir,
     context: {
       activeFile: { name: 'sort.cpp', content: 'ignored: tools read from disk' },
       openFiles: ['sort.cpp', 'bfs.py'],
       lastRun: null,
+      openNote: null,
+      openProblem: null,
     },
     runner,
     requestApproval: vi.fn(async (req: ApprovalRequest) => {
@@ -53,6 +61,7 @@ function setup(overrides: Partial<EditorToolDeps> = {}) {
     onFileChanged: vi.fn(),
     onNoteChanged: vi.fn(),
     onVisualization: vi.fn(),
+    onProblemChanged: vi.fn(),
     ...overrides,
   }
   return { tools: createEditorTools(deps), deps, runner, approvals }
@@ -233,5 +242,86 @@ describe('visualizations', () => {
     expect(result.isError).toBe(true)
     expect(result.text).toMatch(/line 99/)
     expect(deps.onVisualization).not.toHaveBeenCalled()
+  })
+})
+
+describe('problems', () => {
+  const twoSum = {
+    title: 'Two Sum',
+    difficulty: 'easy' as const,
+    description: 'Return indices of the two numbers that add up to target.',
+    params: [
+      { name: 'nums', type: 'vector<int>' },
+      { name: 'target', type: 'int' },
+    ],
+    tests: [
+      { input: ['[2,7,11,15]', '9'], expected: '[0,1]', example: true },
+      { input: ['[3,3]', '6'], expected: '[0,1]', example: false },
+    ],
+    starter: 'class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n    }\n};\n',
+    driver: 'int main() { judge::run([] { auto n = judge::read<vector<int>>(); auto t = judge::read<int>(); return Solution().twoSum(n, t); }); }',
+    explanation: 'Set up Two Sum',
+  }
+  const out = (...answers: string[]) => answers.map((a) => `\n${RESULT_MARK}\n${a}\n${CASE_MARK}\n`).join('')
+
+  test('create_problem checks it compiles, asks, saves and opens it', async () => {
+    const { tools, deps, approvals, runner } = setup()
+    const res = await tools.create_problem(twoSum)
+    expect(res.isError).toBeFalsy()
+    expect(runner.run).toHaveBeenCalledTimes(1)
+    expect(approvals[0]).toMatchObject({ kind: 'create_problem', file: 'Two Sum' })
+    expect(approvals[0].after).toContain('`nums = [2,7,11,15], target = 9` → `[0,1]` (example)')
+    expect(deps.onProblemChanged).toHaveBeenCalledWith('two-sum', true)
+    const entry = await readEntry(problemsDir, 'two-sum')
+    expect(entry.solution).toBe(twoSum.starter)
+    expect(entry.problem.tests[1]).toEqual({ input: ['[3,3]', '6'], expected: '[0,1]', example: false, addedBy: 'problem' })
+  })
+
+  test('create_problem refuses a driver that does not compile', async () => {
+    const runner = { run: vi.fn(async () => ({ ...ok, status: 'compile_error' as const, compileOutput: 'driver.cpp:1: error' })) }
+    const { tools, approvals } = setup({ runner })
+    const res = await tools.create_problem(twoSum)
+    expect(res.isError).toBe(true)
+    expect(res.text).toContain('driver.cpp:1: error')
+    expect(approvals).toHaveLength(0)
+  })
+
+  test('create_problem refuses tests that do not match the parameters', async () => {
+    const { tools } = setup()
+    const res = await tools.create_problem({ ...twoSum, tests: [{ input: ['[1]'], expected: '1', example: true }] })
+    expect(res.isError).toBe(true)
+    expect(res.text).toContain('1 input lines but there are 2 params')
+  })
+
+  test('the problem on screen is the default for the other tools', async () => {
+    await setup().tools.create_problem(twoSum)
+    const runner = { run: vi.fn(async () => ({ ...ok, stdout: out('[0,1]', '[1,0]') })) }
+    const { tools } = setup({
+      runner,
+      context: { activeFile: null, openFiles: [], lastRun: null, openNote: null, openProblem: { slug: 'two-sum', title: 'Two Sum' } },
+    })
+    expect((await tools.get_problem({})).text).toContain('3\t    vector<int> twoSum')
+    const run = (await tools.run_tests({ all: true })).text
+    expect(run).toContain('Wrong Answer: 1/2 cases passed')
+    expect(run).toContain('Case 2 [fail]: nums = [3,3], target = 6 → expected [0,1], got [1,0]')
+    expect((await tools.list_problems({})).text).toContain('two-sum: Two Sum (easy), 0 attempts')
+  })
+
+  test('add_test_case and edit_solution need approval and tell the screen to reload', async () => {
+    await setup().tools.create_problem(twoSum)
+    const { tools, deps, approvals } = setup()
+    await tools.add_test_case({ slug: 'two-sum', input: ['[1,5,5]', '10'], expected: '[1,2]', explanation: 'duplicates' })
+    await tools.edit_solution({ slug: 'two-sum', old_text: '    }\n};', new_text: '        return {};\n    }\n};', explanation: 'compile' })
+    expect(approvals.map((a) => a.kind)).toEqual(['add_test', 'edit_solution'])
+    const entry = await readEntry(problemsDir, 'two-sum')
+    expect(entry.problem.tests.at(-1)).toEqual({ input: ['[1,5,5]', '10'], expected: '[1,2]', example: false, addedBy: 'claude' })
+    expect(entry.solution).toContain('return {};')
+    expect(deps.onProblemChanged).toHaveBeenCalledWith('two-sum', false)
+  })
+
+  test('tools explain when no problem is open or it does not exist', async () => {
+    const { tools } = setup()
+    expect((await tools.get_problem({})).text).toContain('No problem is open')
+    expect((await tools.get_problem({ slug: 'nope' })).text).toContain('list_problems')
   })
 })

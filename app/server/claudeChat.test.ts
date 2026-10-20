@@ -19,7 +19,7 @@ function fakeQuery(messages: SDKMessage[] | ((options: Options) => AsyncGenerato
 
 async function start(queryImpl: QueryFn, approvals: Approvals = createApprovals()) {
   calls = []
-  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', notesDir: '/tmp/notes', playgroundDir: '/tmp/playground', queryImpl, approvals })
+  const middleware = createClaudeChatMiddleware({ cwd: '/tmp/solutions', notesDir: '/tmp/notes', playgroundDir: '/tmp/playground', problemsDir: '/tmp/problems', queryImpl, approvals })
   server = createServer((req, res) =>
     middleware(req, res, () => {
       res.statusCode = 418
@@ -162,7 +162,7 @@ test('the agent only gets the editor tools: no built-ins, no personal settings, 
   expect(options.strictMcpConfig).toBe(true)
   expect(Object.keys(options.mcpServers!)).toEqual(['editor'])
   expect(options.allowedTools).toEqual(
-    ['get_editor_state', 'list_files', 'read_file', 'get_last_run', 'run_code', 'edit_file', 'create_file', 'list_notes', 'read_note', 'create_note', 'edit_note', 'create_visualization'].map(
+    ['get_editor_state', 'list_files', 'read_file', 'get_last_run', 'run_code', 'edit_file', 'create_file', 'list_notes', 'read_note', 'create_note', 'edit_note', 'create_visualization', 'list_problems', 'get_problem', 'create_problem', 'add_test_case', 'edit_solution', 'run_tests', 'list_attempts'].map(
       (n) => `mcp__editor__${n}`,
     ),
   )

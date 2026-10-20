@@ -65,6 +65,7 @@ test('follow-ups stay in the same chat and resume its session, with the open fil
       openFiles: ['main.cpp', 'two.py'],
       lastRun: null,
       openNote: null,
+      openProblem: null,
     },
   })
 })

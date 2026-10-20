@@ -10,6 +10,19 @@ import { nextNoteName, noteTitle } from '../src/lib/noteTitle.ts'
 import { dryRunProblems, MAX_STEPS, type DryRun, type DryRunStep } from '../src/lib/dryRun.ts'
 import { randomUUID } from 'node:crypto'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
+import {
+  DIFFICULTIES,
+  describeInput,
+  problemProblems,
+  runTests,
+  type Compare,
+  type Difficulty,
+  type Param,
+  type ProblemEntry,
+  type TestCase,
+  type TestRun,
+} from '../src/lib/problems.ts'
+import { createProblem, listAttempts, listEntries, ProblemNotFound, readEntry, writeSolution, writeTests } from './problemStore.ts'
 
 export interface ApprovalRequest {
   kind: ApprovalKind
@@ -25,6 +38,8 @@ export interface EditorToolDeps {
   notesDir: string
   /** Where dry-run visualizations are saved for the Playground. */
   playgroundDir: string
+  /** Where practice problems live, one folder each. */
+  problemsDir: string
   context: EditorContext
   runner: CodeRunner
   /** Shows the change to the user and resolves with their decision. */
@@ -37,6 +52,8 @@ export interface EditorToolDeps {
   onNoteChanged(note: string): void
   /** Called with a new dry run, so the Playground can show it. */
   onVisualization(run: DryRun): void
+  /** Called after a problem is created or changed; open = show it on the Problem screen. */
+  onProblemChanged(slug: string, open: boolean): void
 }
 
 export interface ToolText {
@@ -92,8 +109,61 @@ function uniqueCount(content: string, oldText: string, where: string): void {
   if (count > 1) throw new ToolError(`old_text appears ${count} times in ${where}; include more surrounding lines so it is unique.`)
 }
 
+function describeProblem(entry: ProblemEntry): string {
+  const { problem } = entry
+  const lines = [
+    `# ${problem.title} (${problem.difficulty}) — ${entry.slug}${entry.solved ? ', solved' : ''}`,
+    '',
+    problem.description,
+    '',
+    `Function parameters: ${problem.params.map((p) => `${p.type} ${p.name}`).join(', ')}`,
+    `Answers compared: ${problem.compare}`,
+    '',
+    'Test cases:',
+    ...problem.tests.map(
+      (t, i) => `${i + 1}. ${describeInput(problem.params, t)} → ${t.expected}${t.example ? ' (example)' : ''}${t.addedBy !== 'problem' ? ` (added by ${t.addedBy})` : ''}`,
+    ),
+    '',
+    'solution.cpp (the student\'s code, with line numbers):',
+    ...entry.solution.split('\n').map((l, i) => `${i + 1}\t${l}`),
+    '',
+    'driver.cpp (hidden from the student):',
+    entry.driver,
+  ]
+  return clip(lines.join('\n'))
+}
+
+function describeTestRun(entry: ProblemEntry, run: TestRun): string {
+  const { problem } = entry
+  const lines = [`${run.statusText}: ${run.passed}/${run.total} cases passed${run.timeMs !== null ? ` (${run.timeMs} ms)` : ''}`]
+  if (run.errorText) lines.push(run.status === 'compile_error' ? 'Compiler output:' : 'Error output:', clip(run.errorText))
+  run.results.forEach((r, i) => {
+    const test = problem.tests[run.cases[i]]
+    lines.push(
+      `Case ${run.cases[i] + 1} [${r.status}]: ${describeInput(problem.params, test)} → expected ${test.expected}${r.status === 'pass' || r.status === 'fail' ? `, got ${r.output}` : ''}`,
+    )
+    if (r.stdout) lines.push(`  printed: ${clip(r.stdout)}`)
+  })
+  return lines.join('\n')
+}
+
 export function createEditorTools(deps: EditorToolDeps) {
-  const { dir, notesDir, playgroundDir, context } = deps
+  const { dir, notesDir, playgroundDir, problemsDir, context } = deps
+
+  const problemSlug = (slug?: string) => {
+    const s = slug ?? context.openProblem?.slug
+    if (!s) throw new ToolError('No problem is open; pass its slug (see list_problems).')
+    return s
+  }
+
+  async function problem(slug?: string): Promise<ProblemEntry> {
+    try {
+      return await readEntry(problemsDir, problemSlug(slug))
+    } catch (e) {
+      if (e instanceof ProblemNotFound) throw new ToolError(`${e.message} Use list_problems to see them.`)
+      throw e
+    }
+  }
 
   async function readNote(name: string): Promise<string> {
     checkNoteName(name)
@@ -144,6 +214,9 @@ export function createEditorTools(deps: EditorToolDeps) {
         text: [
           active ? `Open file: ${active.name}${language ? ` (${language.label})` : ''}` : 'No file is open.',
           `Open tabs: ${context.openFiles.join(', ') || '(none)'}`,
+          context.openProblem
+            ? `On the Problem screen: ${context.openProblem.title} (${context.openProblem.slug})`
+            : 'The Problem screen isn\'t showing.',
         ].join('\n'),
       }
     }),
@@ -262,6 +335,132 @@ export function createEditorTools(deps: EditorToolDeps) {
         return { text: `Saved "${title}" (${steps.length} steps). The student can watch it in the Playground; a card in the chat opens it.` }
       },
     ),
+
+    list_problems: guard(async (_: Record<string, never>) => {
+      const entries = await listEntries(problemsDir)
+      if (!entries.length) return { text: 'There are no practice problems yet.' }
+      return {
+        text: entries
+          .map((e) => `${e.slug}: ${e.problem.title} (${e.problem.difficulty})${e.solved ? ' ✓ solved' : ''}, ${plural(e.attempts, 'attempt')}`)
+          .join('\n'),
+      }
+    }),
+
+    get_problem: guard(async ({ slug }: { slug?: string }) => ({ text: describeProblem(await problem(slug)) })),
+
+    create_problem: guard(
+      async (args: {
+        title: string
+        difficulty: Difficulty
+        description: string
+        params: Param[]
+        compare?: Compare
+        tests: { input: string[]; expected: string; example: boolean }[]
+        starter: string
+        driver: string
+        explanation: string
+      }) => {
+        const newProblem = {
+          title: args.title,
+          difficulty: args.difficulty,
+          description: args.description,
+          params: args.params,
+          compare: args.compare ?? 'exact',
+          tests: args.tests.map((t): TestCase => ({ ...t, addedBy: 'problem' })),
+          createdAt: Date.now(),
+        }
+        const problems = problemProblems(newProblem)
+        if (problems.length) return fail(`The problem wasn't created. Fix these and call create_problem again:\n- ${problems.join('\n- ')}`)
+        // Make sure the driver and starter compile together before the student sees it.
+        let check: TestRun
+        try {
+          check = await runTests(deps.runner, { problem: newProblem, solution: args.starter, driver: args.driver }, 'run')
+        } catch (e) {
+          return fail(`Couldn't check the driver compiles: ${e instanceof Error ? e.message : String(e)}`)
+        }
+        if (check.status === 'compile_error') {
+          return fail(`The starter code and driver don't compile together. Fix the driver (or starter) and try again:\n${clip(check.errorText)}`)
+        }
+        const preview = [
+          `# ${args.title} (${args.difficulty})`,
+          '',
+          args.description,
+          '',
+          '**Test cases**',
+          '',
+          ...newProblem.tests.map((t) => `- \`${describeInput(args.params, t)}\` → \`${t.expected}\`${t.example ? ' (example)' : ''}`),
+          '',
+          '**Starting code**',
+          '',
+          '```cpp',
+          args.starter,
+          '```',
+        ].join('\n')
+        const approved = await deps.requestApproval({ kind: 'create_problem', file: args.title, before: '', after: preview, explanation: args.explanation })
+        if (!approved) return { text: 'The user declined creating this problem.' }
+        const slug = await createProblem(problemsDir, { problem: newProblem, solution: args.starter, driver: args.driver })
+        deps.onProblemChanged(slug, true)
+        return { text: `Created ${slug}; it's open on the Problem screen.` }
+      },
+    ),
+
+    add_test_case: guard(
+      async ({ slug, input, expected, explanation }: { slug?: string; input: string[]; expected: string; explanation: string }) => {
+        const entry = await problem(slug)
+        const test: TestCase = { input, expected, example: false, addedBy: 'claude' }
+        const problems = problemProblems({ params: entry.problem.params, tests: [{ ...test, example: true }] })
+        if (problems.length) return fail(problems.join('\n').replaceAll('Test 1', 'This test'))
+        const approved = await deps.requestApproval({
+          kind: 'add_test',
+          file: entry.problem.title,
+          before: '',
+          after: `${describeInput(entry.problem.params, test)} → ${expected}`,
+          explanation,
+        })
+        if (!approved) return { text: 'The user declined adding this test case.' }
+        const latest = await problem(entry.slug)
+        await writeTests(problemsDir, entry.slug, [...latest.problem.tests, test])
+        deps.onProblemChanged(entry.slug, false)
+        return { text: `Added the case to ${entry.slug} (case ${latest.problem.tests.length + 1}). Submit checks it.` }
+      },
+    ),
+
+    edit_solution: guard(
+      async ({ slug, old_text, new_text, explanation }: { slug?: string; old_text: string; new_text: string; explanation: string }) => {
+        const entry = await problem(slug)
+        const where = `${entry.slug}/solution.cpp`
+        uniqueCount(entry.solution, old_text, where)
+        const approved = await deps.requestApproval({ kind: 'edit_solution', file: where, before: old_text, after: new_text, explanation })
+        if (!approved) return { text: `The user declined this edit. Don't apply it another way; ask what they'd prefer.` }
+        const latest = (await problem(entry.slug)).solution
+        if (!latest.includes(old_text)) throw new ToolError(`${where} changed while waiting for approval; read it again with get_problem.`)
+        await writeSolution(problemsDir, entry.slug, latest.replace(old_text, () => new_text))
+        deps.onProblemChanged(entry.slug, false)
+        return { text: `Applied the edit to ${where}.` }
+      },
+    ),
+
+    run_tests: guard(async ({ slug, all }: { slug?: string; all?: boolean }) => {
+      const entry = await problem(slug)
+      try {
+        return { text: describeTestRun(entry, await runTests(deps.runner, entry, all ? 'submit' : 'run')) }
+      } catch (e) {
+        return fail(`Couldn't run the tests: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }),
+
+    list_attempts: guard(async ({ slug }: { slug?: string }) => {
+      const entry = await problem(slug)
+      const attempts = await listAttempts(problemsDir, entry.slug)
+      if (!attempts.length) return { text: `No submissions for ${entry.slug} yet.` }
+      return {
+        text: clip(
+          attempts
+            .map((a) => `${new Date(a.at).toISOString()}: ${a.statusText} ${a.passed}/${a.total}\n${a.code}`)
+            .join('\n\n---\n\n'),
+        ),
+      }
+    }),
   }
 }
 
@@ -280,6 +479,13 @@ export const TOOL_NAMES = [
   'create_note',
   'edit_note',
   'create_visualization',
+  'list_problems',
+  'get_problem',
+  'create_problem',
+  'add_test_case',
+  'edit_solution',
+  'run_tests',
+  'list_attempts',
 ] as const satisfies readonly (keyof EditorTools)[]
 
 const asResult = (t: ToolText) => ({ content: [{ type: 'text' as const, text: t.text }], isError: t.isError })
@@ -451,6 +657,93 @@ export function toSdkTools(tools: EditorTools) {
         steps: z.array(step),
       },
       async (args) => asResult(await tools.create_visualization(args)),
+    ),
+    tool('list_problems', 'List the practice problems (slug, title, difficulty, solved, number of submissions).', {}, async () =>
+      asResult(await tools.list_problems({})),
+    ),
+    tool(
+      'get_problem',
+      "Read a practice problem: description, parameters, every test case, the student's solution.cpp with line numbers, and the hidden driver. Defaults to the problem on screen.",
+      { slug: z.string().optional() },
+      async (args) => asResult(await tools.get_problem(args)),
+    ),
+    tool(
+      'create_problem',
+      `Turn a question the student shares (pasted text, a screenshot, LeetCode/codehelp/anywhere) into a practice problem with LeetCode-style layout: description on the left, only class Solution in the editor, test cases checked automatically. The student approves it, then it opens on the Problem screen.
+
+How tests run: the program is HARNESS + starter/solution + driver. The harness already includes <bits/stdc++.h>, "using namespace std", ListNode and TreeNode (LeetCode definitions), and:
+- judge::read<T>() reads one input line as T: int, long long, double, bool, char ("a"), string ("abc"), vector<...> of those (nested too, e.g. [[1,2],[3]]), ListNode* ([1,2,3]) and TreeNode* (level order with null).
+- judge::run(f) runs every case: f reads one case's input with judge::read and returns the answer, which is printed in LeetCode format and compared with "expected".
+So a driver is usually just:
+int main() {
+    judge::run([] {
+        auto nums = judge::read<vector<int>>();
+        auto target = judge::read<int>();
+        return Solution().twoSum(nums, target);
+    });
+}
+For in-place problems (void), call the method and return the modified argument. Don't define ListNode/TreeNode or main elsewhere.`,
+      {
+        title: z.string().describe('e.g. "Two Sum"'),
+        difficulty: z.enum(DIFFICULTIES as [Difficulty, ...Difficulty[]]),
+        description: z
+          .string()
+          .describe('The problem statement in Markdown, with its examples (Input/Output/Explanation) and constraints, faithful to the source'),
+        params: z
+          .array(z.object({ name: z.string(), type: z.string().describe('C++ type, e.g. vector<int>') }))
+          .describe('The function parameters, in order'),
+        compare: z
+          .enum(['exact', 'any_order', 'any_order_nested'])
+          .optional()
+          .describe('any_order when the answer list can be in any order; any_order_nested when inner lists can also be (e.g. 3Sum triplets)'),
+        tests: z
+          .array(
+            z.object({
+              input: z.array(z.string()).describe('One value per parameter, LeetCode format: "[2,7,11,15]", "9", "\\"abc\\""'),
+              expected: z.string().describe('The answer in LeetCode format, e.g. "[0,1]", "true", "\\"bab\\"", "2.50000" for doubles'),
+              example: z.boolean().describe('true for the examples given in the problem'),
+            }),
+          )
+          .describe("The problem's examples, plus a few more cases covering edge cases (empty, single element, duplicates, negatives, large values)"),
+        starter: z.string().describe('The class Solution { public: ... }; skeleton the student fills in (empty function body), like LeetCode'),
+        driver: z.string().describe('The hidden main() using judge::run and judge::read'),
+        explanation,
+      },
+      async (args) => asResult(await tools.create_problem(args)),
+    ),
+    tool(
+      'add_test_case',
+      "Propose an extra test case for a problem (e.g. an edge case the student's code misses). The student approves it. Defaults to the problem on screen.",
+      {
+        slug: z.string().optional(),
+        input: z.array(z.string()).describe('One value per parameter, LeetCode format'),
+        expected: z.string().describe('The correct answer, LeetCode format'),
+        explanation,
+      },
+      async (args) => asResult(await tools.add_test_case(args)),
+    ),
+    tool(
+      'edit_solution',
+      "Propose replacing one exact, unique piece of a problem's solution.cpp. The student must approve it. Only when they ask for a change.",
+      {
+        slug: z.string().optional(),
+        old_text: z.string().describe('Exact text to replace, copied from get_problem (without line numbers); must appear exactly once'),
+        new_text: z.string(),
+        explanation,
+      },
+      async (args) => asResult(await tools.edit_solution(args)),
+    ),
+    tool(
+      'run_tests',
+      "Run a problem's test cases against the saved solution.cpp and see each case's result and anything it printed. By default the examples and the student's own cases; all: true runs every case. Doesn't record a submission.",
+      { slug: z.string().optional(), all: z.boolean().optional() },
+      async (args) => asResult(await tools.run_tests(args)),
+    ),
+    tool(
+      'list_attempts',
+      "The student's past submissions for a problem: time, result and the code they submitted.",
+      { slug: z.string().optional() },
+      async (args) => asResult(await tools.list_attempts(args)),
     ),
   ]
 }

@@ -44,7 +44,7 @@ the left bar).
 
 | Keys | Action |
 |---|---|
-| ⌘/Ctrl + Enter | Run the current file |
+| ⌘/Ctrl + Enter | Run the current file (on Problems: run the test cases) |
 | ⌘/Ctrl + K | Search files and commands |
 | ⌘/Ctrl + J | Show or hide the output |
 
@@ -63,6 +63,28 @@ the top, and flip between Edit and Preview. Notes save themselves a moment after
 stop typing, as real `.md` files in **`notes/`** at the repo root (set `NOTES_DIR`
 to use another folder). Notes and the Claude panel share the right side, so opening
 one closes the other.
+
+## Problems (LeetCode style)
+
+The checklist button in the left bar switches to **Problems**. Give Claude a question from
+anywhere (paste the text from LeetCode or codehelp, or send a screenshot) and it sets it up
+here: the description on the left, a `class Solution` to fill in, and test cases that check
+themselves. You never write `main()` or compare output by eye.
+
+- **Run** (or ⌘/Ctrl + Enter) checks the examples and any cases you added. Nothing is saved.
+- **Submit** checks every case, including Claude's extra edge cases, and saves the attempt
+  under **Submissions**. A problem is **solved** once a Submit passes every case, and it stays
+  solved.
+- Each case shows its input, the expected answer, your output, and anything your code printed
+  with `cout`. Compiler errors point at your own line numbers.
+- **+ Add** adds a case of your own. Claude can also add one when it spots an edge case you miss.
+- When this screen is showing, Claude knows which problem you're on. Ask it to explain the
+  question, give a hint, or check your solution.
+
+Problems are C++ for now. `ListNode` and `TreeNode` are already defined, as on LeetCode. Each
+problem is a folder in **`problems/`** at the repo root (set `PROBLEMS_DIR` to use another
+folder). The folder holds `problem.json` (description and tests), `solution.cpp` (your code),
+`driver.cpp` (the hidden `main()` Claude wrote) and `attempts/`.
 
 ## Playground (dry runs)
 
@@ -104,6 +126,11 @@ It can only act through these tools:
 | `list_notes` / `read_note` | Your Markdown notes | No |
 | `create_note` / `edit_note` | Saves a new note, or changes one (e.g. "add this to my notes") | **Yes** |
 | `create_visualization` | Makes a step-by-step dry run of your code for the Playground | No |
+| `create_problem` | Sets up a question you shared as a problem on the Problems screen | **Yes** |
+| `list_problems` / `get_problem` / `list_attempts` | Your problems, one problem with its tests and your solution, your past submissions | No |
+| `run_tests` | Runs a problem's test cases against your solution (doesn't count as a submission) | No |
+| `add_test_case` | Adds an edge case to a problem | **Yes** |
+| `edit_solution` | Replaces one exact piece of a problem's solution | **Yes** |
 
 You can also send it images (up to 5 per message, PNG/JPEG/GIF/WebP, under 5 MB each):
 click 📎, paste a screenshot into the message box, or drop images on the panel. Chats keep

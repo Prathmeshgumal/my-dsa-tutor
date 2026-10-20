@@ -41,6 +41,14 @@ You can only act through these tools:
 - list_notes / read_note: the student's Markdown notes (shown in the editor's Notes panel)
 - create_note / edit_note: propose a new note or a change to one; also needs approval. When the student asks you to save or add something to their notes, use these (not comments in code).
 - create_visualization: show a step-by-step dry run in the Playground (code with the current line, variables, and data structures drawn as arrays with pointers, DP grids, maps, stacks, queues, linked lists, trees, graphs)
+- list_problems / get_problem / create_problem / add_test_case / edit_solution / run_tests / list_attempts: practice problems on the Problem screen (LeetCode style: description, class Solution in the editor, test cases checked automatically)
+
+Practice problems:
+- When the student shares a question to solve (pasted text, a screenshot, a LeetCode or codehelp problem), create it with create_problem instead of writing a .cpp file, so they get the problem layout. Copy the statement faithfully; add a few edge cases beyond the examples, with answers you've worked out carefully.
+- When the Problem screen is showing, <editor_context> names the problem; use get_problem to read it and its solution (not read_file).
+- To explain the question, work from its description and examples. Don't hand out the solution unless asked.
+- If their code misses an edge case, show it with add_test_case rather than putting tests in their code.
+- Use run_tests to check claims about their solution. Only the student's Submit records an attempt or marks a problem solved.
 
 Dry runs:
 - When the student asks for a dry run, asks why their code is wrong, or would understand something better by seeing it, use create_visualization.
@@ -70,6 +78,9 @@ export function buildPrompt(message: string, context: EditorContext): string {
   const others = context.openFiles.filter((n) => n !== context.activeFile?.name)
   if (others.length) lines.push(`Other open tabs: ${others.join(', ')}`)
   if (context.openNote) lines.push(`Open in the Notes panel: ${context.openNote.name} (${context.openNote.title})`)
+  if (context.openProblem) {
+    lines.push(`The Problem screen is showing "${context.openProblem.title}" (slug ${context.openProblem.slug}); use get_problem to read it.`)
+  }
   lines.push('</editor_context>', '', message)
   return lines.join('\n')
 }
@@ -203,7 +214,10 @@ function parseContext(raw: unknown): EditorContext {
   const openFiles = Array.isArray(ctx.openFiles) ? ctx.openFiles.filter((n): n is string => typeof n === 'string') : []
   const note = ctx.openNote as Record<string, unknown> | null | undefined
   const openNote = note && typeof note.name === 'string' && typeof note.title === 'string' ? { name: note.name, title: note.title } : null
-  return { activeFile, openFiles, lastRun: parseLastRun(ctx.lastRun), openNote }
+  const prob = ctx.openProblem as Record<string, unknown> | null | undefined
+  const openProblem =
+    prob && typeof prob.slug === 'string' && typeof prob.title === 'string' ? { slug: prob.slug, title: prob.title } : null
+  return { activeFile, openFiles, lastRun: parseLastRun(ctx.lastRun), openNote, openProblem }
 }
 
 /** Proposed changes waiting for the user's yes/no, shared between the chat stream and the approval endpoint. */
@@ -242,6 +256,8 @@ interface MiddlewareOptions {
   notesDir: string
   /** Where dry-run visualizations are saved. */
   playgroundDir: string
+  /** Where practice problems live. */
+  problemsDir: string
   queryImpl?: QueryFn
   /** Runs code for the run_code tool. */
   runner?: CodeRunner
@@ -252,6 +268,7 @@ export function createClaudeChatMiddleware({
   cwd,
   notesDir,
   playgroundDir,
+  problemsDir,
   queryImpl = query,
   runner = createPistonRunner({ baseUrl: `${process.env.PISTON_URL ?? 'http://127.0.0.1:2000'}/api/v2` }),
   approvals = createApprovals(),
@@ -296,6 +313,7 @@ export function createClaudeChatMiddleware({
         dir: cwd,
         notesDir,
         playgroundDir,
+        problemsDir,
         context,
         runner,
         requestApproval: (change) => approvals.request(send, abortController.signal, change),
@@ -303,6 +321,7 @@ export function createClaudeChatMiddleware({
         onFileChanged: (file) => send({ type: 'file_changed', file }),
         onNoteChanged: (note) => send({ type: 'note_changed', note }),
         onVisualization: (run) => send({ type: 'visualization', run }),
+        onProblemChanged: (slug, open) => send({ type: 'problem_changed', slug, open }),
       })
 
       const toEvents = createEventMapper()

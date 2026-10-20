@@ -1,4 +1,4 @@
-import { FileCode2, Play, Search } from 'lucide-react'
+import { FileCode2, ListChecks, Play, Search } from 'lucide-react'
 import { ShimmerButton } from '@/components/glow/ShimmerButton'
 import { Kbd } from '@/components/Kbd'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LANGUAGES, languageFromFilename, type LanguageId } from '@/lib/languages'
 import { shortcut } from '@/lib/platform'
+import { cn } from '@/lib/utils'
+import { activeProblem, useProblems } from '@/state/problems'
+import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 
 interface Props {
@@ -20,6 +23,8 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
   const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId) ?? null)
   const setActiveLanguage = useWorkspace((s) => s.setActiveLanguage)
   const language = file ? languageFromFilename(file.name) : null
+  const onProblem = useSettings((s) => s.screen === 'problem')
+  const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b px-3">
@@ -27,8 +32,14 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
         {'{}'}
       </div>
       <div className="flex min-w-0 items-center gap-1.5 text-sm" data-testid="active-file-name">
-        <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        {file ? (
+        {onProblem ? (
+          <ListChecks className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        ) : (
+          <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        )}
+        {onProblem ? (
+          <span className={cn('truncate', problemTitle ? 'font-medium' : 'text-muted-foreground')}>{problemTitle ?? 'No problem open'}</span>
+        ) : file ? (
           <span className="truncate font-medium">{file.name}</span>
         ) : (
           <span className="text-muted-foreground">No file open</span>
@@ -54,7 +65,8 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
         </button>
       )}
 
-      <Select value={language?.id ?? ''} onValueChange={(v) => setActiveLanguage(v as LanguageId)} disabled={!file}>
+      {/* Problems are C++ for now, so there's no language to pick there. */}
+      {!onProblem && <Select value={language?.id ?? ''} onValueChange={(v) => setActiveLanguage(v as LanguageId)} disabled={!file}>
         <SelectTrigger size="sm" className="w-[104px]" aria-label="Language">
           <SelectValue placeholder="Language" />
         </SelectTrigger>
@@ -65,7 +77,7 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
+      </Select>}
 
       <ShimmerButton onClick={onRun} disabled={!canRun} loading={running} aria-label="Run">
         {!running && <Play className="size-3 fill-current" aria-hidden />}

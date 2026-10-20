@@ -1,4 +1,4 @@
-import { Clapperboard, Code2, FolderOpen, NotebookPen, Settings, Sparkles } from 'lucide-react'
+import { Clapperboard, Code2, FolderOpen, ListChecks, NotebookPen, Settings, Sparkles } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useFilesPanel } from '@/state/filesPanel'
@@ -7,6 +7,7 @@ import { useSettingsDialog } from '@/state/settingsDialog'
 
 const SCREENS: { id: Screen; label: string; icon: typeof Code2 }[] = [
   { id: 'editor', label: 'Editor', icon: Code2 },
+  { id: 'problem', label: 'Problems', icon: ListChecks },
   { id: 'playground', label: 'Playground', icon: Clapperboard },
 ]
 

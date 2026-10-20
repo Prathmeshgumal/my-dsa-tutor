@@ -9,21 +9,28 @@ import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 import { startAutosave } from '@/state/autosave'
 import { hydrateFromDisk } from '@/state/hydrate'
+import { useProblems } from '@/state/problems'
 import { useRun } from '@/state/run'
 import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 import { useWorkspace } from '@/state/workspace'
 
-const runActiveFile = () => void useRun.getState().runActiveFile()
+// On the Problem screen, Run checks the problem's test cases; elsewhere it runs the open file.
+const runActiveFile = () =>
+  useSettings.getState().screen === 'problem' ? void useProblems.getState().test('run') : void useRun.getState().runActiveFile()
 
 const modalOpen = () =>
   useFileDialogs.getState().kind !== null || useSettingsDialog.getState().open || useCommandMenu.getState().open
 
 export default function App() {
   const [cursor, setCursor] = useState<{ line: number; col: number } | null>(null)
-  const running = useRun((s) => s.state === 'running')
+  const onProblem = useSettings((s) => s.screen === 'problem')
+  const fileRunning = useRun((s) => s.state === 'running')
+  const testing = useProblems((s) => s.testing !== null)
+  const hasProblem = useProblems((s) => s.activeSlug !== null)
   const connection = useRun((s) => s.connection)
   const hasActiveFile = useWorkspace((s) => s.ready && s.activeId !== null)
+  const running = onProblem ? testing : fileRunning
 
   // Load files from the solutions folder, then keep it in sync. Falls back to browser-only storage.
   useEffect(() => {
@@ -72,7 +79,7 @@ export default function App() {
         output={<OutputPanel />}
         onRun={runActiveFile}
         running={running}
-        canRun={hasActiveFile}
+        canRun={onProblem ? hasProblem : hasActiveFile}
         connection={connection}
         cursor={hasActiveFile ? cursor : null}
         onOpenCommand={() => useCommandMenu.getState().setOpen(true)}
