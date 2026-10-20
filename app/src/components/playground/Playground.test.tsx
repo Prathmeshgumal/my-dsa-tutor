@@ -1,10 +1,14 @@
-import { act, render as rtlRender, screen, within } from '@testing-library/react'
+import { act, fireEvent, render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DryRun, Structure } from '@/lib/dryRun'
 import { usePlayground } from '@/state/playground'
+import { useDryRunFix } from '@/state/dryRunFix'
+import { useWorkspace } from '@/state/workspace'
 import { Playground } from './Playground'
 import { StructureView } from './StructureView'
+
+vi.mock('@monaco-editor/react', () => import('@/test/monacoStub'))
 
 const render = (ui: React.ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
 const load = vi.fn(async () => {})
@@ -249,5 +253,45 @@ describe('structures', () => {
     expect(within(fig).getAllByTestId('node')).toHaveLength(3)
     expect(within(fig).getAllByTestId('edge')).toHaveLength(2)
     expect(within(fig).getByText('4')).toBeInTheDocument()
+  })
+})
+
+describe('fixing the code from a dry run', () => {
+  beforeEach(() => {
+    useWorkspace.setState({
+      files: [{ id: 'f1', name: 'two_sum.cpp', content: 'int i = 0;\nint j = 2;' }],
+      openIds: ['f1'],
+      activeId: 'f1',
+      ready: true,
+    })
+  })
+
+  test('the code can be edited right here, and the real file changes', async () => {
+    render(<Playground />)
+    expect(screen.getByText('Code changed since this dry run')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /edit code/i }))
+    const editor = screen.getByTestId('monaco')
+    expect(editor).toHaveValue('int i = 0;\nint j = 2;')
+    fireEvent.change(editor, { target: { value: 'int i = 0;\nint j = 2;!' } })
+    expect(useWorkspace.getState().files[0].content).toBe('int i = 0;\nint j = 2;!')
+    await userEvent.click(screen.getByRole('button', { name: /done editing/i }))
+    expect(screen.queryByTestId('monaco')).not.toBeInTheDocument()
+  })
+
+  test('"Dry run again" asks Claude to redo it and shows that it is working', async () => {
+    const redo = vi.fn(async () => {
+      useDryRunFix.setState({ redoing: 'r1' })
+    })
+    useDryRunFix.setState({ redo, redoing: null, redoError: null, tests: null })
+    render(<Playground />)
+    await userEvent.click(screen.getByRole('button', { name: /dry run again/i }))
+    expect(redo).toHaveBeenCalledWith(run)
+    expect(await screen.findByText(/Claude is making a new dry run/)).toBeInTheDocument()
+  })
+
+  test('a dry run whose file is gone has no edit button', () => {
+    useWorkspace.setState({ files: [], openIds: [], activeId: null })
+    render(<Playground />)
+    expect(screen.queryByRole('button', { name: /edit code/i })).not.toBeInTheDocument()
   })
 })

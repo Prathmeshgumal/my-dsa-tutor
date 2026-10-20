@@ -112,7 +112,15 @@ copies, writes into a map), the condition being checked with real values (`5 > 1
 the line's calculation next to the code (`sum = 2 + 7 = 9`), where you are in the loops,
 and the call stack for recursion. Old values show crossed out in the corner of a box that
 changed, and a pointer that moved leaves a short trail (`j +1`). Marks on the timeline
-above the slider jump to the bug, to moves and to new loop passes. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
+above the slider jump to the bug, to moves and to new loop passes. "Watch an example" shows a bubble sort without needing Claude. 
+
+**Fix it right there.** When a dry run shows the bug, click **Edit code**: the code panel becomes an
+editor for the real file (the problem's `solution.cpp`, or the file in `solutions/`), saved as you type.
+Then **Dry run again**: Claude traces your changed code on the same input and the new dry run opens
+next to the old one, so you can step through both. For a problem, all its test cases run at the same
+time and the result shows in the header (e.g. "Accepted · 8/8 tests").
+
+Dry runs are saved
 as JSON files in **`playground/`**; the code editor stays as you left it while you're here.
 
 ## Ask Claude

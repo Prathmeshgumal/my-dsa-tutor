@@ -6,8 +6,11 @@ import {
   ChevronLast,
   Clapperboard,
   FileCode2,
+  Loader2,
   Pause,
+  Pencil,
   Play,
+  RotateCcw,
   SkipBack,
   SkipForward,
   Sparkles,
@@ -18,7 +21,13 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import Editor from '@monaco-editor/react'
+import { registerGlowThemes } from '@/components/editor/monacoThemes'
+import { useResolvedTheme } from '@/components/theme/ThemeProvider'
 import { routeArrow, type Box, type Route } from '@/lib/arrowRoute'
+import { languageFromFilename } from '@/lib/languages'
+import { useAiChat } from '@/state/aiChat'
+import { dryRunSource, editCode, useCurrentCode, useDryRunFix, type DryRunSource } from '@/state/dryRunFix'
 import { formatScalar, type DryRun, type Move } from '@/lib/dryRun'
 import { cn } from '@/lib/utils'
 import { ProblemTag } from '@/components/problems/ProblemTag'
@@ -425,7 +434,123 @@ function MoveArrows({ moves, stepKey }: { moves: Move[]; stepKey: string }) {
   )
 }
 
+/** Edits the dry run's real file (the problem's code or a solutions file); saved as you type. */
+function CodeEditor({ source, code }: { source: DryRunSource; code: string }) {
+  const theme = useResolvedTheme()
+  const path = source.kind === 'problem' ? `problem:${source.slug}/${source.file}` : `playground-file:${source.name}`
+  return (
+    <div className="min-h-0 flex-1 bg-card">
+      <Editor
+        path={path}
+        language={languageFromFilename(source.kind === 'problem' ? source.file : source.name)?.monaco ?? 'cpp'}
+        value={code}
+        onChange={(v) => editCode(source, v ?? '')}
+        theme={theme === 'dark' ? 'glow-dark' : 'glow-light'}
+        beforeMount={registerGlowThemes}
+        onMount={(editor) => editor.focus()}
+        loading={<Loader2 className="size-5 animate-spin text-muted-foreground" />}
+        options={{
+          fontFamily: "'Geist Mono', ui-monospace, monospace",
+          fontSize: 13,
+          lineHeight: 0,
+          minimap: { enabled: false },
+          padding: { top: 8, bottom: 8 },
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          tabSize: 4,
+          scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false },
+        }}
+      />
+    </div>
+  )
+}
+
+/** Edit the code here, then have Claude dry run it again on the same input (and, for a problem, run its tests). */
+function FixBar({
+  run,
+  editing,
+  onEdit,
+  changed,
+}: {
+  run: DryRun
+  editing: boolean
+  onEdit(editing: boolean): void
+  changed: boolean
+}) {
+  const redoing = useDryRunFix((s) => s.redoing === run.id)
+  const redoError = useDryRunFix((s) => s.redoError)
+  const tests = useDryRunFix((s) => (s.tests?.forRuns.includes(run.id) ? s.tests : null))
+  const claudeBusy = useAiChat((s) => s.status === 'streaming')
+  // How much of the new dry run Claude has written so far (a long one takes a minute).
+  const written = useAiChat((s) => s.chats.find((c) => c.id === s.streamingChatId)?.messages.at(-1)?.progress?.chars ?? 0)
+  const result = tests?.result
+  const passed = result && result.status === 'success' && result.passed === result.total
+
+  return (
+    <div className="ml-auto flex flex-wrap items-center gap-2">
+      {tests?.status === 'running' && (
+        <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" aria-hidden /> Running the tests…
+        </span>
+      )}
+      {result && (
+        <span
+          data-testid="fix-tests"
+          className={cn(
+            'rounded-full px-2 py-0.5 text-[12px] font-medium',
+            passed ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/12 text-red-700 dark:text-red-300',
+          )}
+        >
+          {result.statusText}
+          {result.status !== 'compile_error' && ` · ${result.passed}/${result.total} tests`}
+        </span>
+      )}
+      {tests?.status === 'error' && <span className="text-[12px] text-red-500">Couldn’t run the tests: {tests.error}</span>}
+      {redoing ? (
+        <span role="status" className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin text-violet-500" aria-hidden /> Claude is making a new dry run…
+          {written > 0 && <span className="tabular-nums">{(written / 1000).toFixed(1)}k characters so far</span>}
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[12px]" onClick={() => useSettings.getState().setAiOpen(true)}>
+            Show chat
+          </Button>
+        </span>
+      ) : (
+        <>
+          {redoError && <span className="text-[12px] text-amber-600 dark:text-amber-400">{redoError}</span>}
+          {changed && !editing && <span className="text-[12px] text-muted-foreground">Code changed since this dry run</span>}
+          <Button size="sm" variant="outline" onClick={() => onEdit(!editing)}>
+            {editing ? <Check /> : <Pencil />} {editing ? 'Done editing' : 'Edit code'}
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* span: a disabled button shows no tooltip */}
+              <span tabIndex={claudeBusy ? 0 : -1}>
+                <Button
+                  size="sm"
+                  disabled={claudeBusy}
+                  onClick={() => {
+                    onEdit(false)
+                    void useDryRunFix.getState().redo(run)
+                  }}
+                >
+                  <RotateCcw /> Dry run again
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {claudeBusy ? 'Claude is busy with another reply' : 'Claude traces your current code on the same input'}
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
+    </div>
+  )
+}
+
 function Viewer({ run }: { run: DryRun }) {
+  const source = dryRunSource(run)
+  const current = useCurrentCode(source)
+  const [editing, setEditing] = useState(false)
   const stepIndex = usePlayground((s) => s.step)
   const step = run.steps[Math.min(stepIndex, run.steps.length - 1)]
   const before = stepIndex > 0 ? (run.steps[stepIndex - 1].vars ?? {}) : {}
@@ -559,6 +684,9 @@ function Viewer({ run }: { run: DryRun }) {
             </code>
           </span>
         )}
+        {source && current !== null && (
+          <FixBar run={run} editing={editing} onEdit={setEditing} changed={current !== run.code} />
+        )}
       </header>
 
       {run.code ? (
@@ -571,7 +699,11 @@ function Viewer({ run }: { run: DryRun }) {
         >
           <ResizablePanel id="code" minSize="15" className="flex min-h-0 min-w-0 flex-col bg-card/30">
             <section aria-label="Code panel" className="flex min-h-0 flex-1 flex-col">
-              <CodePanel code={run.code} line={step.line} calc={step.calc} />
+              {editing && source && current !== null ? (
+                <CodeEditor source={source} code={current} />
+              ) : (
+                <CodePanel code={run.code} line={step.line} calc={step.calc} />
+              )}
             </section>
           </ResizablePanel>
           <ResizableHandle
@@ -672,7 +804,7 @@ export function Playground() {
           className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
         />
         <ResizablePanel id="main" minSize="40" className="flex min-h-0 min-w-0 flex-col">
-          {run ? <Viewer run={run} /> : <Empty />}
+          {run ? <Viewer key={run.id} run={run} /> : <Empty />}
         </ResizablePanel>
       </ResizablePanelGroup>
     </main>

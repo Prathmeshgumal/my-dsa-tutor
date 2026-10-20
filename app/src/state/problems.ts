@@ -36,6 +36,8 @@ interface ProblemsState {
   open(slug: string): Promise<void>
   /** Edits the open code file. */
   editSolution(code: string): void
+  /** Edits any code file of any problem (e.g. from the Playground); saved after a pause like typing here. */
+  editCode(slug: string, name: string, code: string): void
   /** Writes any pending edit now. */
   flush(): Promise<void>
   selectFile(name: string): Promise<void>
@@ -164,8 +166,12 @@ export const useProblems = create<ProblemsState>()(
 
         editSolution(code) {
           const slug = get().activeSlug
-          if (!slug) return
-          const name = get().activeFile
+          if (slug) get().editCode(slug, get().activeFile, code)
+        },
+
+        editCode(slug, name, code) {
+          // Only one edit waits at a time; a different file's goes out now.
+          if (pending && (pending.slug !== slug || pending.name !== name)) void get().flush()
           patchEntry(slug, (e) => withCode(e, name, code))
           set({ saveStatus: 'pending' })
           pending = { slug, name, code }
