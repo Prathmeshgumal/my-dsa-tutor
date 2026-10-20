@@ -35,6 +35,10 @@ export interface ChatMessage {
   approvals?: Approval[]
   /** Dry runs Claude made in this reply (open in the Playground). */
   visualizations?: { id: string; title: string; steps: number }[]
+  /** Claude is writing a tool call's input right now. */
+  progress?: { name: string; chars: number }
+  /** The user pressed Stop. */
+  stopped?: boolean
   error?: string
 }
 
@@ -172,6 +176,7 @@ export const useAiChat = create<AiChatState>()(
           patchChat((c) => ({ messages: c.messages.map((m) => (m.id === replyId ? { ...m, ...patch(m) } : m)) }))
 
         controller = new AbortController()
+        const { signal } = controller
         let edited = false
         try {
           await beforeSend()
@@ -180,9 +185,10 @@ export const useAiChat = create<AiChatState>()(
             (event) => {
               if (event.type === 'session') patchChat(() => ({ sessionId: event.sessionId }))
               else if (event.type === 'text') patchReply((m) => ({ text: m.text + event.text }))
+              else if (event.type === 'tool_progress') patchReply(() => ({ progress: { name: event.name, chars: event.chars } }))
               else if (event.type === 'tool') {
                 if (EDIT_TOOLS.has(event.name)) edited = true
-                patchReply((m) => ({ tools: [...m.tools, { name: event.name, detail: event.detail }] }))
+                patchReply((m) => ({ tools: [...m.tools, { name: event.name, detail: event.detail }], progress: undefined }))
               } else if (event.type === 'approval') {
                 const { type: _, ...change } = event
                 patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
@@ -196,13 +202,17 @@ export const useAiChat = create<AiChatState>()(
               }
               else if (event.type === 'error') patchReply(() => ({ error: event.message }))
             },
-            { signal: controller.signal },
+            { signal },
           )
           if (edited) await afterEdits()
         } finally {
           controller = null
           // Claude has stopped waiting for any proposal it didn't get an answer to.
-          patchReply((m) => ({ approvals: m.approvals?.map((a) => (a.state === 'pending' ? { ...a, state: 'expired' } : a)) }))
+          patchReply((m) => ({
+            approvals: m.approvals?.map((a) => (a.state === 'pending' ? { ...a, state: 'expired' } : a)),
+            progress: undefined,
+            ...(signal.aborted ? { stopped: true } : {}),
+          }))
           set({ status: 'idle', streamingChatId: null })
         }
       },

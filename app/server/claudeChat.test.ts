@@ -94,6 +94,44 @@ test('streams session id, text deltas, tool activity and done', async () => {
   ])
 })
 
+const blockStart = (block: Record<string, unknown>) =>
+  m({ type: 'stream_event', session_id: sid, parent_tool_use_id: null, event: { type: 'content_block_start', index: 0, content_block: block } })
+const jsonDelta = (partial_json: string) =>
+  m({ type: 'stream_event', session_id: sid, parent_tool_use_id: null, event: { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json } } })
+
+test('separate text blocks in one turn are separated by a blank line', async () => {
+  await start(
+    fakeQuery([
+      blockStart({ type: 'text', text: '' }),
+      textDelta('Here are the changes:'),
+      toolUse('mcp__editor__run_code', {}),
+      blockStart({ type: 'text', text: '' }),
+      textDelta('It works.'),
+      success,
+    ]),
+  )
+  const text = (await chat(body)).flatMap((e) => (e.type === 'text' ? [e.text] : [])).join('')
+  expect(text).toBe('Here are the changes:\n\nIt works.')
+})
+
+test('while Claude writes a long tool call, progress is reported (so the panel never looks frozen)', async () => {
+  await start(
+    fakeQuery([
+      blockStart({ type: 'tool_use', id: 't1', name: 'mcp__editor__create_visualization', input: {} }),
+      jsonDelta('x'.repeat(600)),
+      jsonDelta('x'.repeat(600)),
+      jsonDelta('x'.repeat(100)),
+      toolUse('mcp__editor__create_visualization', { title: 't' }),
+      success,
+    ]),
+  )
+  const progress = (await chat(body)).filter((e) => e.type === 'tool_progress')
+  expect(progress[0]).toEqual({ type: 'tool_progress', name: 'create_visualization', chars: 0 })
+  expect(progress.at(-1)).toEqual({ type: 'tool_progress', name: 'create_visualization', chars: 1200 })
+  // Throttled: not one event per delta.
+  expect(progress.length).toBeLessThanOrEqual(3)
+})
+
 test('edits are reported so the editor can reload files', async () => {
   await start(fakeQuery([toolUse('mcp__editor__edit_file', { name: 'two_sum.cpp', old_text: 'a', new_text: 'b' }), success]))
   const events = await chat(body)

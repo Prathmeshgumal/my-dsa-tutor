@@ -10,6 +10,8 @@ export type ChatEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; detail: string }
+  /** Claude is writing a tool call's input (can take a minute for a big dry run or note). */
+  | { type: 'tool_progress'; name: string; chars: number }
   /** Claude wants to change a file and is waiting for the user's yes/no (POST /api/claude/approval). */
   | { type: 'approval'; id: string; kind: ApprovalKind; file: string; before: string; after: string; explanation: string }
   /** Claude ran code; the editor shows it in the output panel. */

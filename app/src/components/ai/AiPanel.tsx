@@ -162,6 +162,30 @@ function VisualizationCard({ id, title, steps }: { id: string; title: string; st
   )
 }
 
+const PROGRESS_LABEL: Record<string, string> = {
+  create_visualization: 'Making a dry run',
+  create_note: 'Writing a note',
+  edit_note: 'Preparing a change to a note',
+  create_file: 'Writing a new file',
+  edit_file: 'Preparing an edit',
+}
+
+const formatChars = (n: number) => (n < 1000 ? `${n} characters` : `${(n / 1000).toFixed(1)}k characters`)
+
+/** Shows that Claude is still busy, so a long silence never looks like a freeze. */
+function Working({ children }: { children: React.ReactNode }) {
+  return (
+    <p role="status" className="mt-2 flex items-center gap-2 text-muted-foreground">
+      <span className="flex gap-1" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="size-1.5 animate-pulse rounded-full bg-violet-500" style={{ animationDelay: `${i * 150}ms` }} />
+        ))}
+      </span>
+      {children}
+    </p>
+  )
+}
+
 function Message({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   if (message.role === 'user') {
     return (
@@ -176,22 +200,22 @@ function Message({ message, streaming }: { message: ChatMessage; streaming: bool
       {message.approvals?.map((a) => <ApprovalCard key={a.id} approval={a} />)}
       {message.visualizations?.map((v) => <VisualizationCard key={v.id} {...v} />)}
       {message.text && <Markdown>{message.text}</Markdown>}
-      {streaming && !message.text && !message.approvals?.some((a) => a.state === 'pending') && (
-        <p className="flex items-center gap-2 text-muted-foreground">
-          <span className="flex gap-1" aria-hidden>
-            {[0, 1, 2].map((i) => (
-              <span key={i} className="size-1.5 animate-pulse rounded-full bg-violet-500" style={{ animationDelay: `${i * 150}ms` }} />
-            ))}
-          </span>
-          Thinking…
-        </p>
-      )}
+      {streaming &&
+        !message.approvals?.some((a) => a.state === 'pending') &&
+        (message.progress ? (
+          <Working>
+            {`${PROGRESS_LABEL[message.progress.name] ?? 'Preparing a tool call'}… ${message.progress.chars ? `${formatChars(message.progress.chars)} so far` : ''}`.trim()}
+          </Working>
+        ) : (
+          <Working>{message.text ? 'Working…' : 'Thinking…'}</Working>
+        ))}
       {message.error && (
         <p role="alert" className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-300">
           {message.error}
         </p>
       )}
-      {!streaming && !message.text && !message.error && !message.approvals?.length && !message.visualizations?.length && (
+      {!streaming && message.stopped && <p className="mt-2 text-muted-foreground italic">Stopped by you.</p>}
+      {!streaming && !message.stopped && !message.text && !message.error && !message.approvals?.length && !message.visualizations?.length && (
         <p className="text-muted-foreground italic">Stopped.</p>
       )}
     </div>

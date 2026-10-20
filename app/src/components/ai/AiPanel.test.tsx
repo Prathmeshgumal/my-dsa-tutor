@@ -295,3 +295,36 @@ test('a dry run card opens it in the Playground', async () => {
   expect(open).toHaveBeenCalledWith('v1')
   expect(within(screen.getByRole('list', { name: 'What Claude did' })).getByText('Made a dry run')).toBeInTheDocument()
 })
+
+test('while Claude writes a long tool call, the reply says what it is doing', () => {
+  showMessages(
+    [
+      { id: '1', role: 'user', text: 'dry run it', tools: [] },
+      { id: '2', role: 'assistant', text: 'Here is the trace:', tools: [], progress: { name: 'create_visualization', chars: 4200 } },
+    ],
+    { status: 'streaming', streamingChatId: 'c1' },
+  )
+  render(<AiPanel />)
+  expect(screen.getByRole('status')).toHaveTextContent('Making a dry run… 4.2k characters so far')
+})
+
+test('a streaming reply that already has text still shows that Claude is working', () => {
+  showMessages(
+    [
+      { id: '1', role: 'user', text: 'hi', tools: [] },
+      { id: '2', role: 'assistant', text: 'Let me check.', tools: [] },
+    ],
+    { status: 'streaming', streamingChatId: 'c1' },
+  )
+  render(<AiPanel />)
+  expect(screen.getByRole('status')).toHaveTextContent(/working/i)
+})
+
+test('a stopped reply says so', () => {
+  showMessages([
+    { id: '1', role: 'user', text: 'hi', tools: [] },
+    { id: '2', role: 'assistant', text: 'Half an answer', tools: [], stopped: true },
+  ])
+  render(<AiPanel />)
+  expect(screen.getByText('Stopped by you.')).toBeInTheDocument()
+})

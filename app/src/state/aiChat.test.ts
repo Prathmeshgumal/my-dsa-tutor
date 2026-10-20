@@ -283,6 +283,37 @@ describe('agent tools', () => {
     expect(activeChat(chat())!.messages[1].visualizations).toEqual([{ id: 'v1', title: 'Dry run', steps: 2 }])
   })
 
+  test('tool progress shows on the reply until the tool call arrives', async () => {
+    let emit!: (e: ChatEvent) => void
+    let finish!: () => void
+    const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void) => {
+      emit = onEvent
+      await new Promise<void>((r) => (finish = r))
+    })
+    const pending = chat().send('dry run it', { stream, ...quiet })
+    await vi.waitFor(() => expect(emit).toBeDefined())
+    emit({ type: 'tool_progress', name: 'create_visualization', chars: 3000 })
+    expect(activeChat(chat())!.messages[1].progress).toEqual({ name: 'create_visualization', chars: 3000 })
+    emit({ type: 'tool', name: 'create_visualization', detail: '' })
+    expect(activeChat(chat())!.messages[1].progress).toBeUndefined()
+    finish()
+    await pending
+  })
+
+  test('a reply you stop is marked as stopped, even if it had text', async () => {
+    let seen: AbortSignal | undefined
+    const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void, opts?: { signal?: AbortSignal }) => {
+      seen = opts?.signal
+      onEvent({ type: 'text', text: 'Working on it' })
+      await new Promise((r) => opts!.signal!.addEventListener('abort', r))
+    })
+    const pending = chat().send('hi', { stream, ...quiet })
+    await vi.waitFor(() => expect(seen).toBeDefined())
+    chat().stop()
+    await pending
+    expect(activeChat(chat())!.messages[1]).toMatchObject({ text: 'Working on it', stopped: true })
+  })
+
   test('an applied change reloads the files straight away', async () => {
     const afterEdits = vi.fn(async () => {})
     await chat().send('fix it', { stream: fakeStream([{ type: 'file_changed', file: 'main.cpp' }]), beforeSend: async () => {}, afterEdits })

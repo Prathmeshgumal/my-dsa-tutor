@@ -67,26 +67,56 @@ function describeTool(input: Record<string, unknown>): string {
   return typeof input.name === 'string' ? input.name : ''
 }
 
-/** Turns SDK messages into the few events the chat UI needs (top-level agent only). */
-function toEvents(message: SDKMessage): ChatEvent[] {
-  if (message.type === 'stream_event' && message.parent_tool_use_id === null) {
-    const event = message.event
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') return [{ type: 'text', text: event.delta.text }]
+/** Report tool-input progress at most once per this many characters. */
+const PROGRESS_EVERY = 1000
+
+/** Turns SDK messages into the few events the chat UI needs (top-level agent only). One per reply: it keeps state. */
+function createEventMapper() {
+  let sentText = false
+  let progress: { name: string; chars: number; reported: number } | null = null
+
+  return function toEvents(message: SDKMessage): ChatEvent[] {
+    if (message.type === 'stream_event' && message.parent_tool_use_id === null) {
+      const event = message.event
+      if (event.type === 'content_block_start') {
+        const block = event.content_block
+        // A new text block after earlier text (e.g. after a tool call) starts a new paragraph.
+        if (block.type === 'text' && sentText) return [{ type: 'text', text: '\n\n' }]
+        if (block.type === 'tool_use') {
+          progress = { name: block.name.replace(TOOL_PREFIX, ''), chars: 0, reported: 0 }
+          return [{ type: 'tool_progress', name: progress.name, chars: 0 }]
+        }
+        return []
+      }
+      if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta') {
+          sentText = true
+          return [{ type: 'text', text: event.delta.text }]
+        }
+        if (event.delta.type === 'input_json_delta' && progress) {
+          progress.chars += event.delta.partial_json.length
+          if (progress.chars - progress.reported >= PROGRESS_EVERY) {
+            progress.reported = progress.chars
+            return [{ type: 'tool_progress', name: progress.name, chars: progress.chars }]
+          }
+        }
+      }
+      return []
+    }
+    if (message.type === 'assistant' && message.parent_tool_use_id === null) {
+      return message.message.content.flatMap((block): ChatEvent[] =>
+        block.type === 'tool_use'
+          ? [{ type: 'tool', name: block.name.replace(TOOL_PREFIX, ''), detail: describeTool(block.input as Record<string, unknown>) }]
+          : [],
+      )
+    }
+    if (message.type === 'result') {
+      if (message.subtype === 'success' && !message.is_error) return [{ type: 'done' }]
+      const errors = 'errors' in message ? message.errors : []
+      return [{ type: 'error', message: errors.join('\n') || 'Claude stopped with an error.' }]
+    }
     return []
   }
-  if (message.type === 'assistant' && message.parent_tool_use_id === null) {
-    return message.message.content.flatMap((block): ChatEvent[] =>
-      block.type === 'tool_use'
-        ? [{ type: 'tool', name: block.name.replace(TOOL_PREFIX, ''), detail: describeTool(block.input as Record<string, unknown>) }]
-        : [],
-    )
-  }
-  if (message.type === 'result') {
-    if (message.subtype === 'success' && !message.is_error) return [{ type: 'done' }]
-    const errors = 'errors' in message ? message.errors : []
-    return [{ type: 'error', message: errors.join('\n') || 'Claude stopped with an error.' }]
-  }
-  return []
 }
 
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown> | null> {
@@ -224,6 +254,7 @@ export function createClaudeChatMiddleware({
         onVisualization: (run) => send({ type: 'visualization', run }),
       })
 
+      const toEvents = createEventMapper()
       let sessionSent = false
       try {
         const messages = queryImpl({
