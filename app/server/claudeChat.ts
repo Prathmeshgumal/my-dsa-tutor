@@ -48,6 +48,8 @@ Dry runs:
 - Be faithful: show what the code really does, including the bug. Mark the step where it goes wrong with mistake: true, and explain it in that step's note.
 - Before creating it, run the code with the same input (run_code) and make sure the final values and output in your trace match the real run.
 - Keep it focused: one step per meaningful line, usually 10–60 steps. Afterwards, point out in chat what to watch for.
+- Make each step easy to follow: add "moves" arrows when values go somewhere (swaps, copies, shifts, writes into a map), "check" on steps that evaluate a condition (with the real values and whether it's true), "calc" when a line computes something (e.g. "sum = 2 + 7 = 9"), "loop" for where you are in the loops (e.g. "pass 2 of 3 · j = 1"), and "callStack" for recursion. Old values and pointer moves are shown automatically.
+- For a vector, pass its capacity so spare slots show.
 
 How to help:
 - Each message starts with an <editor_context> block naming the open file, with its current code. Treat that code as current.

@@ -17,23 +17,45 @@ export function exampleDryRun(): DryRun {
   const n = arr.length
   const done: number[] = []
   const steps: DryRunStep[] = []
-  const snap = (line: number, note: string, vars: Record<string, number>, extra: { highlight?: number[]; swapped?: number[] } = {}) =>
+  type Extra = { highlight?: number[]; swapped?: number[] } & Pick<DryRunStep, 'check' | 'moves' | 'calc'>
+  const snap = (line: number, note: string, vars: Record<string, number>, { highlight, swapped, ...more }: Extra = {}) =>
     steps.push({
       line,
       note,
       vars,
-      structures: [{ kind: 'array', name: 'arr', values: [...arr], pointers: 'j' in vars ? { j: vars.j, 'j+1': vars.j + 1 } : {}, done: [...done], ...extra }],
+      loop: 'i' in vars ? `pass ${vars.i + 1} of ${n - 1}${'j' in vars ? ` · j = ${vars.j}` : ''}` : undefined,
+      ...more,
+      structures: [
+        {
+          kind: 'array',
+          name: 'arr',
+          values: [...arr],
+          pointers: 'j' in vars ? { j: vars.j } : {},
+          done: [...done],
+          ...(highlight ? { highlight } : {}),
+          ...(swapped ? { swapped } : {}),
+        },
+      ],
     })
 
-  snap(2, `n = ${n}: the array has ${n} elements.`, { n })
+  snap(2, `n = ${n}: the array has ${n} elements.`, { n }, { calc: `n = arr.size() = ${n}` })
   for (let i = 0; i < n - 1; i++) {
     snap(3, `Pass ${i + 1}: the largest unsorted value will bubble to index ${n - 1 - i}.`, { n, i })
     for (let j = 0; j < n - 1 - i; j++) {
       const bigger = arr[j] > arr[j + 1]
-      snap(5, `Compare arr[${j}] = ${arr[j]} with arr[${j + 1}] = ${arr[j + 1]}: ${bigger ? 'out of order' : 'already in order'}.`, { n, i, j }, { highlight: [j, j + 1] })
+      snap(5, `Compare arr[${j}] with arr[${j + 1}]: ${bigger ? 'out of order' : 'already in order'}.`, { n, i, j }, {
+        highlight: [j, j + 1],
+        check: { expr: `arr[${j}] > arr[${j + 1}] → ${arr[j]} > ${arr[j + 1]}`, result: bigger },
+      })
       if (bigger) {
         ;[arr[j], arr[j + 1]] = [arr[j + 1], arr[j]]
-        snap(6, `Swap them: now arr[${j}] = ${arr[j]}, arr[${j + 1}] = ${arr[j + 1]}.`, { n, i, j }, { swapped: [j, j + 1] })
+        snap(6, `Swap them: the bigger value moves right.`, { n, i, j }, {
+          swapped: [j, j + 1],
+          moves: [
+            { from: `arr[${j}]`, to: `arr[${j + 1}]`, label: 'swap' },
+            { from: `arr[${j + 1}]`, to: `arr[${j}]` },
+          ],
+        })
       }
     }
     done.push(n - 1 - i)

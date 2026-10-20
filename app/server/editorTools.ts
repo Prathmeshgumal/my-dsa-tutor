@@ -354,6 +354,17 @@ const step = z.object({
   structures: z.array(structure).optional().describe('Data structures after this step (repeat them every step)'),
   output: z.string().optional().describe('Everything printed so far'),
   mistake: z.boolean().optional().describe('true on the step where the bug shows up'),
+  moves: z
+    .array(z.object({ from: z.string(), to: z.string(), label: z.string().optional() }))
+    .optional()
+    .describe('Arrows for what moved where in this step. Name boxes like "arr[3]", "seen[7]" (map key), "dp[1][2]", "st[0]", or a variable name. Both ends must be drawn in this step.'),
+  check: z
+    .object({ expr: z.string(), result: z.boolean() })
+    .optional()
+    .describe('The condition this step evaluates, with real values: {"expr":"arr[j] > arr[j+1] → 5 > 1","result":true}'),
+  calc: z.string().optional().describe('The calculation on this line with real values, e.g. "sum = 2 + 7 = 9"'),
+  loop: z.string().optional().describe('Where we are in the loops, e.g. "pass 2 of 3 · j = 1"'),
+  callStack: z.array(z.string()).optional().describe('For recursion: calls in progress, outermost first, e.g. ["main()", "fib(4)", "fib(3)"]'),
 })
 
 /** The same tools, described for the Agent SDK's in-process MCP server. */

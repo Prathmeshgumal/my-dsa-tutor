@@ -99,6 +99,42 @@ export interface DryRunStep {
   output?: string
   /** Mark the step where the bug shows up */
   mistake?: boolean
+  /** Arrows for what moved where, between boxes named like "arr[3]", "seen[7]", "dp[1][2]" or a variable "end" */
+  moves?: Move[]
+  /** The condition this step checks, with real values, e.g. "arr[j] > arr[j+1] → 5 > 1" */
+  check?: { expr: string; result: boolean }
+  /** The line's calculation with real values, e.g. "sum = 2 + 7 = 9" */
+  calc?: string
+  /** Where we are in the loops, e.g. "pass 2 of 3 · j = 1" */
+  loop?: string
+  /** For recursion: the calls in progress, outermost first, e.g. ["main()", "fib(4)", "fib(3)"] */
+  callStack?: string[]
+}
+
+export interface Move {
+  from: string
+  to: string
+  /** e.g. "swap", "copy", "shift" */
+  label?: string
+}
+
+/** The name an arrow uses for one box: arr[3], seen[7], dp[1][2]. */
+export function cellRef(name: string, ...index: Scalar[]): string {
+  return `${name}${index.map((i) => `[${formatScalar(i)}]`).join('')}`
+}
+
+/** Every box an arrow can point at in this step. */
+export function stepRefs(step: DryRunStep): Set<string> {
+  const refs = new Set(Object.keys(step.vars ?? {}))
+  for (const s of step.structures ?? []) {
+    if (s.kind === 'array' || s.kind === 'stack' || s.kind === 'queue') s.values.forEach((_, i) => refs.add(cellRef(s.name, i)))
+    else if (s.kind === 'linked_list') s.nodes.forEach((_, i) => refs.add(cellRef(s.name, i)))
+    else if (s.kind === 'map') s.entries.forEach(([k]) => refs.add(cellRef(s.name, k)))
+    else if (s.kind === 'grid') s.rows.forEach((row, r) => row.forEach((_, c) => refs.add(cellRef(s.name, r, c))))
+    else if (s.kind === 'tree') s.nodes.forEach((v, i) => v !== null && refs.add(cellRef(s.name, i)))
+    else if (s.kind === 'graph') s.nodes.forEach((n) => refs.add(cellRef(s.name, n)))
+  }
+  return refs
 }
 
 export interface DryRun {
@@ -125,6 +161,13 @@ export function dryRunProblems(run: Pick<DryRun, 'steps' | 'code'>): string[] {
     const where = `Step ${i + 1}`
     if (step.line !== undefined && (!run.code || step.line < 1 || step.line > lines)) {
       problems.push(`${where}: line ${step.line} isn't in the code (it has ${lines} lines).`)
+    }
+    if (step.moves?.length) {
+      const refs = stepRefs(step)
+      for (const m of step.moves) {
+        if (!refs.has(m.from)) problems.push(`${where}: arrow from "${m.from}" points at something not drawn in this step.`)
+        if (!refs.has(m.to)) problems.push(`${where}: arrow to "${m.to}" points at something not drawn in this step.`)
+      }
     }
     for (const s of step.structures ?? []) {
       if (s.kind === 'array') {

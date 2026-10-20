@@ -75,7 +75,13 @@ DP tables, hash maps, stacks, queues, linked lists, binary trees, graphs). The s
 a bug shows up is marked in red. Use ← → to step, Space to play, and 0.5× / 1× / 2× for
 speed. Drag the dividers to resize the list, the code and the drawing (sizes are remembered).
 Variables are drawn as buckets (name on top, value inside; changed ones light up) and
-arrays/vectors as one long strip of boxes, with a vector's spare capacity as empty slots. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
+arrays/vectors as one long strip of boxes, with a vector's spare capacity as empty slots.
+To make each step easy to follow, Claude can add arrows for what moved where (swaps,
+copies, writes into a map), the condition being checked with real values (`5 > 1 ✓`),
+the line's calculation next to the code (`sum = 2 + 7 = 9`), where you are in the loops,
+and the call stack for recursion. Old values show crossed out in the corner of a box that
+changed, and a pointer that moved leaves a short trail (`j +1`). Marks on the timeline
+above the slider jump to the bug, to moves and to new loop passes. "Watch an example" shows a bubble sort without needing Claude. Dry runs are saved
 as JSON files in **`playground/`**; the code editor stays as you left it while you're here.
 
 ## Ask Claude

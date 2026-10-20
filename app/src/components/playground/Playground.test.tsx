@@ -108,6 +108,80 @@ test('variables are drawn as buckets: name on top, value inside', () => {
   ])
 })
 
+describe('making steps easier to follow', () => {
+  const detailed: DryRun = {
+    id: 'd1',
+    title: 'Detailed',
+    code: 'int sum = a + b;\nif (arr[j] > arr[j + 1]) swap(arr[j], arr[j + 1]);',
+    createdAt: 1,
+    steps: [
+      { line: 1, note: 'start', vars: { j: 0, sum: 0 }, structures: [{ kind: 'array', name: 'arr', values: [5, 1], pointers: { j: 0 } }], loop: 'pass 1 of 2' },
+      {
+        line: 2,
+        note: 'compare and swap',
+        vars: { j: 1, sum: 9 },
+        calc: 'sum = 2 + 7 = 9',
+        check: { expr: 'arr[j] > arr[j+1] → 5 > 1', result: true },
+        moves: [{ from: 'arr[0]', to: 'arr[1]', label: 'swap' }],
+        structures: [{ kind: 'array', name: 'arr', values: [1, 5], pointers: { j: 1 } }],
+        loop: 'pass 2 of 2',
+        callStack: ['main()', 'sort(arr)'],
+      },
+      { line: 2, note: 'oops', mistake: true, structures: [{ kind: 'array', name: 'arr', values: [1, 5] }] },
+    ],
+  }
+  beforeEach(() => usePlayground.setState({ runs: [detailed], activeId: 'd1', step: 1 }))
+
+  test('the condition being checked is shown with its result', () => {
+    render(<Playground />)
+    const check = screen.getByTestId('step-check')
+    expect(check).toHaveTextContent('arr[j] > arr[j+1] → 5 > 1')
+    expect(check).toHaveTextContent('true')
+    expect(check).toHaveAttribute('data-result', 'true')
+  })
+
+  test('the calculation shows next to the current code line', () => {
+    render(<Playground />)
+    const current = screen.getByRole('list', { name: 'Code' }).querySelector('[aria-current="step"]')!
+    expect(current).toHaveTextContent('sum = 2 + 7 = 9')
+  })
+
+  test('arrows show what moved where', () => {
+    render(<Playground />)
+    const arrows = screen.getAllByTestId('move-arrow')
+    expect(arrows).toHaveLength(1)
+    expect(arrows[0]).toHaveAttribute('data-from', 'arr[0]')
+    expect(arrows[0]).toHaveAttribute('data-to', 'arr[1]')
+    expect(arrows[0]).toHaveTextContent('swap')
+  })
+
+  test('changed values keep a crossed-out ghost of the old value', () => {
+    render(<Playground />)
+    const ghosts = screen.getAllByTestId('ghost').map((g) => g.textContent)
+    expect(ghosts).toEqual(expect.arrayContaining(['5', '1', '0']))
+  })
+
+  test('a pointer that moved leaves a trail labelled with how far it moved', () => {
+    render(<Playground />)
+    expect(screen.getByTestId('trail')).toHaveTextContent('j +1')
+  })
+
+  test('where we are in the loop, and the call stack', () => {
+    render(<Playground />)
+    expect(screen.getByTestId('step-loop')).toHaveTextContent('pass 2 of 2')
+    const stack = screen.getByRole('list', { name: 'Call stack' })
+    expect(within(stack).getAllByRole('listitem').map((f) => f.textContent)).toEqual(['sort(arr)', 'main()'])
+  })
+
+  test('the timeline marks the bug step, moves and new loop passes, and clicking one jumps there', async () => {
+    render(<Playground />)
+    const marks = within(screen.getByRole('list', { name: 'Timeline' })).getAllByRole('button')
+    expect(marks.map((m) => m.getAttribute('aria-label'))).toEqual(['Step 1: pass 1 of 2', 'Step 2: pass 2 of 2, moves', 'Step 3: the bug'])
+    await userEvent.click(marks[2])
+    expect(usePlayground.getState().step).toBe(2)
+  })
+})
+
 describe('structures', () => {
   const show = (s: Structure) => rtlRender(<StructureView structure={s} />)
 

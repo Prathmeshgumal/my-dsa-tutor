@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { cn } from '@/lib/utils'
 import {
+  cellRef,
   formatScalar,
   type ArrayViz,
   type GraphViz,
@@ -26,8 +27,9 @@ const POINTER_COLORS = ['text-violet-600 dark:text-violet-300', 'text-cyan-600 d
 
 function Figure({ name, kind, children }: { name: string; kind: string; children: React.ReactNode }) {
   return (
-    <figure aria-label={name} className="min-w-0">
-      <figcaption className="mb-2 flex items-baseline gap-2">
+    // On steps with arrows (data-arrows on an ancestor), leave room above and below the boxes for them.
+    <figure aria-label={name} className="min-w-0 in-data-[arrows=true]:pb-8">
+      <figcaption className="mb-2 flex items-baseline gap-2 in-data-[arrows=true]:mb-9">
         <span className="font-mono text-[13px] font-semibold text-foreground">{name}</span>
         <span className="text-[11px] tracking-wide text-muted-foreground uppercase">{kind.replace('_', ' ')}</span>
       </figcaption>
@@ -38,6 +40,35 @@ function Figure({ name, kind, children }: { name: string; kind: string; children
 
 const CELL = 48 // px; the strip's cells touch, so this is also the step between them
 
+/** The value a box had before this step, crossed out in its corner. */
+function Ghost({ value }: { value: Scalar }) {
+  return (
+    <span
+      data-testid="ghost"
+      title="Value before this step"
+      className="absolute -top-2.5 -right-1 z-10 rounded bg-background px-0.5 font-mono text-[10px] leading-tight font-medium text-red-500/80 line-through decoration-red-500/80"
+    >
+      {formatScalar(value)}
+    </span>
+  )
+}
+
+/** A faint arrow under the strip from where a pointer was to where it is now, e.g. "j +1". */
+function Trail({ name, from, to, top, color }: { name: string; from: number; to: number; top: number; color: string }) {
+  const delta = to - from
+  const left = Math.min(from, to) * CELL + CELL / 2
+  const width = Math.abs(delta) * CELL
+  return (
+    <div data-testid="trail" className={cn('absolute flex flex-col items-center', color)} style={{ left, top, width }}>
+      <svg width={width} height={10} className="overflow-visible opacity-60" aria-hidden>
+        <line x1={delta > 0 ? 0 : width} y1={5} x2={delta > 0 ? width - 4 : 4} y2={5} stroke="currentColor" strokeWidth={1.5} strokeDasharray="3 3" />
+        <path d={delta > 0 ? `M ${width - 6} 1 L ${width} 5 L ${width - 6} 9` : 'M 6 1 L 0 5 L 6 9'} fill="none" stroke="currentColor" strokeWidth={1.5} />
+      </svg>
+      <span className="font-mono text-[10.5px] font-semibold opacity-80">{`${name} ${delta > 0 ? '+' : ''}${delta}`}</span>
+    </div>
+  )
+}
+
 // Tints for a strip cell; strip cells share walls, so state is shown inside the cell (fill + inner ring).
 const STRIP_STATE: Record<string, string> = {
   '': 'bg-card text-foreground',
@@ -47,7 +78,7 @@ const STRIP_STATE: Record<string, string> = {
 }
 
 /** An array or vector as one long strip of joined boxes: indices above, pointers below. */
-function ArrayView({ s }: { s: ArrayViz }) {
+function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
   const state = (i: number) =>
     s.swapped?.includes(i) ? 'swapped' : s.highlight?.includes(i) ? 'highlight' : s.done?.includes(i) ? 'done' : ''
   const spare = Math.max(0, (s.capacity ?? s.values.length) - s.values.length)
@@ -57,6 +88,11 @@ function ArrayView({ s }: { s: ArrayViz }) {
   for (const [p, i] of Object.entries(s.pointers ?? {})) byIndex.set(i, [...(byIndex.get(i) ?? []), p])
   const pointerNames = Object.keys(s.pointers ?? {})
   const depth = Math.max(0, ...[...byIndex.values()].map((v) => v.length))
+  const moved = Object.entries(s.pointers ?? {}).flatMap(([p, i]) => {
+    const was = prev?.pointers?.[p]
+    return was !== undefined && was !== i ? [{ p, from: was, to: i }] : []
+  })
+  const trailsTop = 70 + depth * 18 + 4
   const wall = 'border-y-2 border-r-2 border-muted-foreground/35 first:rounded-l-lg first:border-l-2 last:rounded-r-lg'
 
   return (
@@ -70,7 +106,7 @@ function ArrayView({ s }: { s: ArrayViz }) {
           <span className="text-[12px] text-muted-foreground italic">empty</span>
         </div>
       ) : (
-        <div className="relative w-max" style={{ paddingBottom: depth ? depth * 18 + 14 : 0 }}>
+        <div className="relative w-max" style={{ paddingBottom: (depth ? depth * 18 + 14 : 0) + moved.length * 28 }}>
           <div className="flex">
             {Array.from({ length: slots }, (_, i) => (
               <span key={i} className="w-12 pb-1 text-center font-mono text-[10px] text-muted-foreground">
@@ -84,13 +120,15 @@ function ArrayView({ s }: { s: ArrayViz }) {
                 key={i}
                 data-testid="cell"
                 data-state={state(i)}
+                data-ref={cellRef(s.name, i)}
                 className={cn(
-                  'grid h-12 w-12 place-items-center font-mono text-[15px] font-semibold transition-all duration-300',
+                  'relative grid h-12 w-12 place-items-center font-mono text-[15px] font-semibold transition-all duration-300',
                   wall,
                   STRIP_STATE[state(i)],
                 )}
               >
                 {formatScalar(v)}
+                {prev && i < prev.values.length && prev.values[i] !== v && <Ghost value={prev.values[i]} />}
               </div>
             ))}
             {Array.from({ length: spare }, (_, k) => (
@@ -117,13 +155,23 @@ function ArrayView({ s }: { s: ArrayViz }) {
               </div>
             )),
           )}
+          {moved.map(({ p, from, to }, k) => (
+            <Trail
+              key={p}
+              name={p}
+              from={from}
+              to={to}
+              top={trailsTop + k * 28}
+              color={POINTER_COLORS[pointerNames.indexOf(p) % POINTER_COLORS.length]}
+            />
+          ))}
         </div>
       )}
     </Figure>
   )
 }
 
-function GridView({ s }: { s: GridViz }) {
+function GridView({ s, prev }: { s: GridViz; prev?: GridViz }) {
   const isCurrent = (r: number, c: number) => s.current?.[0] === r && s.current?.[1] === c
   const isHighlight = (r: number, c: number) => s.highlight?.some(([hr, hc]) => hr === r && hc === c)
   return (
@@ -151,9 +199,11 @@ function GridView({ s }: { s: GridViz }) {
                   <td
                     key={c}
                     data-state={st}
-                    className={cn('h-9 min-w-9 rounded-md border-2 px-1.5 text-center font-semibold transition-all duration-300', CELL_STATE[st])}
+                    data-ref={cellRef(s.name, r, c)}
+                    className={cn('relative h-9 min-w-9 rounded-md border-2 px-1.5 text-center font-semibold transition-all duration-300', CELL_STATE[st])}
                   >
                     {formatScalar(v)}
+                    {prev?.rows[r] && c < prev.rows[r].length && prev.rows[r][c] !== v && <Ghost value={prev.rows[r][c]} />}
                   </td>
                 )
               })}
@@ -165,8 +215,9 @@ function GridView({ s }: { s: GridViz }) {
   )
 }
 
-function MapView({ s }: { s: MapViz }) {
+function MapView({ s, prev }: { s: MapViz; prev?: MapViz }) {
   const hot = (k: Scalar) => s.highlight?.some((h) => h === k)
+  const before = new Map(prev?.entries ?? [])
   return (
     <Figure name={s.name} kind="map">
       <table className="min-w-40 overflow-hidden rounded-lg border font-mono text-[13px]">
@@ -188,10 +239,14 @@ function MapView({ s }: { s: MapViz }) {
             <tr
               key={i}
               data-state={hot(k) ? 'highlight' : ''}
+              data-ref={cellRef(s.name, k)}
               className={cn('border-t transition-colors duration-300', hot(k) && 'bg-violet-500/15 text-violet-700 dark:text-violet-200')}
             >
               <td className="px-3 py-1.5 font-semibold">{formatScalar(k)}</td>
-              <td className="px-3 py-1.5">{formatScalar(v)}</td>
+              <td className="relative px-3 py-1.5">
+                {formatScalar(v)}
+                {before.has(k) && before.get(k) !== v && <Ghost value={before.get(k)!} />}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -205,6 +260,7 @@ function StackView({ s }: { s: StackViz }) {
     <div
       key={i}
       data-testid="cell"
+      data-ref={cellRef(s.name, i)}
       className={cn(
         'grid h-10 min-w-12 place-items-center rounded-lg border-2 px-2 font-mono text-[14px] font-semibold transition-all duration-300',
         CELL_STATE[s.highlight?.includes(i) ? 'highlight' : ''],
@@ -251,6 +307,7 @@ function LinkedListView({ s }: { s: LinkedListViz }) {
               <div className="flex flex-col items-center gap-1">
                 <div
                   data-testid="node"
+                  data-ref={cellRef(s.name, i)}
                   className={cn(
                     'grid h-11 min-w-11 place-items-center rounded-full border-2 px-2 font-mono text-[14px] font-semibold transition-all duration-300',
                     CELL_STATE[s.highlight?.includes(i) ? 'highlight' : ''],
@@ -346,7 +403,7 @@ function TreeView({ s }: { s: TreeViz }) {
             const st = s.highlight?.includes(p.index) ? 'current' : s.done?.includes(p.index) ? 'done' : ''
             const names = pointerAt(p.index)
             return (
-              <g key={p.index} data-testid="node" className="transition-all duration-300">
+              <g key={p.index} data-testid="node" data-ref={cellRef(s.name, p.index)} className="transition-all duration-300">
                 <circle
                   cx={px(p)}
                   cy={py(p)}
@@ -429,7 +486,7 @@ function GraphView({ s }: { s: GraphViz }) {
           const p = pos.get(id)!
           const st = s.current === id ? 'current' : s.visited?.includes(id) ? 'done' : ''
           return (
-            <g key={id} data-testid="node">
+            <g key={id} data-testid="node" data-ref={cellRef(s.name, id)}>
               <circle
                 cx={p.x}
                 cy={p.y}
@@ -452,14 +509,16 @@ function GraphView({ s }: { s: GraphViz }) {
 }
 
 /** Draws one data structure from a dry-run step. */
-export function StructureView({ structure: s }: { structure: Structure }) {
+export function StructureView({ structure: s, previous }: { structure: Structure; previous?: Structure }) {
+  // The same structure in the step before, for ghosts of old values and pointer trails.
+  const prev = previous?.kind === s.kind && previous.name === s.name ? previous : undefined
   switch (s.kind) {
     case 'array':
-      return <ArrayView s={s} />
+      return <ArrayView s={s} prev={prev as ArrayViz | undefined} />
     case 'grid':
-      return <GridView s={s} />
+      return <GridView s={s} prev={prev as GridViz | undefined} />
     case 'map':
-      return <MapView s={s} />
+      return <MapView s={s} prev={prev as MapViz | undefined} />
     case 'stack':
     case 'queue':
       return <StackView s={s} />

@@ -37,3 +37,30 @@ test("capacity can't be smaller than the number of values", () => {
     /capacity 2 is smaller than its 3 values/,
   )
 })
+
+describe('arrows between boxes', () => {
+  const arr = { kind: 'array' as const, name: 'arr', values: [1, 2, 3] }
+  test('arrows can point at array cells, map keys, grid cells and variables', () => {
+    expect(
+      dryRunProblems({
+        steps: [
+          {
+            note: 'x',
+            vars: { end: 3 },
+            structures: [arr, { kind: 'map', name: 'seen', entries: [[7, 1]] }, { kind: 'grid', name: 'dp', rows: [[0, 1]] }],
+            moves: [
+              { from: 'arr[2]', to: 'arr[0]', label: 'swap' },
+              { from: 'arr[1]', to: 'seen[7]' },
+              { from: 'dp[0][1]', to: 'end' },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([])
+  })
+
+  test('an arrow to something that is not drawn in that step is a problem', () => {
+    const problems = dryRunProblems({ steps: [{ note: 'x', structures: [arr], moves: [{ from: 'arr[5]', to: 'nums[0]' }] }] })
+    expect(problems).toEqual([expect.stringMatching(/Step 1: arrow from "arr\[5\]".*not drawn/), expect.stringMatching(/arrow to "nums\[0\]"/)])
+  })
+})

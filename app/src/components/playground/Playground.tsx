@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -12,44 +12,34 @@ import {
   SkipForward,
   Sparkles,
   Trash2,
-} from "lucide-react";
-import { Kbd } from "@/components/Kbd";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { formatScalar, type DryRun } from "@/lib/dryRun";
-import { cn } from "@/lib/utils";
-import { usePlayground } from "@/state/playground";
-import { useSettings } from "@/state/settings";
-import { StructureView } from "./StructureView";
+} from 'lucide-react'
+import { Kbd } from '@/components/Kbd'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatScalar, type DryRun, type Move } from '@/lib/dryRun'
+import { cn } from '@/lib/utils'
+import { usePlayground } from '@/state/playground'
+import { useSettings } from '@/state/settings'
+import { StructureView } from './StructureView'
 
 function timeAgo(at: number): string {
-  if (!at) return "example";
-  const minutes = Math.floor(Math.max(0, Date.now() - at) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+  if (!at) return 'example'
+  const minutes = Math.floor(Math.max(0, Date.now() - at) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`
 }
 
 function RunRow({ run, active }: { run: DryRun; active: boolean }) {
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(false)
   return (
     <li
       className={cn(
-        "group flex items-center gap-1 rounded-lg pr-1 transition-colors",
-        active
-          ? "bg-violet-500/10 ring-1 ring-violet-500/25 ring-inset"
-          : "hover:bg-muted",
+        'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
+        active ? 'bg-violet-500/10 ring-1 ring-violet-500/25 ring-inset' : 'hover:bg-muted',
       )}
       onMouseLeave={() => setConfirming(false)}
     >
@@ -58,13 +48,9 @@ function RunRow({ run, active }: { run: DryRun; active: boolean }) {
         onClick={() => usePlayground.getState().open(run.id)}
         className="min-w-0 flex-1 px-2.5 py-2 text-left"
       >
-        <span className="block truncate text-[12.5px] text-foreground">
-          {run.title}
-        </span>
+        <span className="block truncate text-[12.5px] text-foreground">{run.title}</span>
         <span className="block truncate text-[11px] text-muted-foreground">
-          {[`${run.steps.length} steps`, run.file, timeAgo(run.createdAt)]
-            .filter(Boolean)
-            .join(" · ")}
+          {[`${run.steps.length} steps`, run.file, timeAgo(run.createdAt)].filter(Boolean).join(' · ')}
         </span>
       </button>
       {confirming ? (
@@ -89,85 +75,119 @@ function RunRow({ run, active }: { run: DryRun; active: boolean }) {
         </Button>
       )}
     </li>
-  );
+  )
 }
 
-function CodePanel({ code, line }: { code: string; line?: number }) {
-  const currentRef = useRef<HTMLLIElement>(null);
+function CodePanel({ code, line, calc }: { code: string; line?: number; calc?: string }) {
+  const currentRef = useRef<HTMLLIElement>(null)
   useEffect(() => {
     currentRef.current?.scrollIntoView?.({
-      block: "nearest",
-      behavior: "smooth",
-    });
-  }, [line]);
+      block: 'nearest',
+      behavior: 'smooth',
+    })
+  }, [line])
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <ol
-        aria-label="Code"
-        className="py-2 font-mono text-[13px] leading-[1.6]"
-      >
-        {code.split("\n").map((text, i) => {
-          const current = line === i + 1;
+      <ol aria-label="Code" className="py-2 font-mono text-[13px] leading-[1.6]">
+        {code.split('\n').map((text, i) => {
+          const current = line === i + 1
           return (
             <li
               key={i}
               ref={current ? currentRef : undefined}
-              aria-current={current ? "step" : undefined}
+              aria-current={current ? 'step' : undefined}
               className={cn(
-                "flex border-l-2 pr-3 transition-colors duration-200",
-                current
-                  ? "border-violet-500 bg-violet-500/12"
-                  : "border-transparent",
+                'flex border-l-2 pr-3 transition-colors duration-200',
+                current ? 'border-violet-500 bg-violet-500/12' : 'border-transparent',
               )}
             >
               <span
                 className={cn(
-                  "w-10 shrink-0 pr-3 text-right select-none",
-                  current ? "text-violet-500" : "text-muted-foreground/60",
+                  'w-10 shrink-0 pr-3 text-right select-none',
+                  current ? 'text-violet-500' : 'text-muted-foreground/60',
                 )}
               >
                 {i + 1}
               </span>
-              <span className="whitespace-pre">{text || " "}</span>
+              <span className="whitespace-pre">{text || ' '}</span>
+              {current && calc && (
+                <span
+                  data-testid="step-calc"
+                  className="ml-4 shrink-0 self-center rounded-md bg-violet-500/15 px-1.5 py-px text-[11.5px] font-semibold whitespace-pre text-violet-700 dark:text-violet-200"
+                >
+                  {calc}
+                </span>
+              )}
             </li>
-          );
+          )
         })}
       </ol>
     </ScrollArea>
-  );
+  )
 }
 
-const SPEEDS = [0.5, 1, 2];
+const SPEEDS = [0.5, 1, 2]
+
+/** Steps worth jumping to: where the bug shows up, where things move, and where a new loop pass starts. */
+function timelineMarks(run: DryRun) {
+  return run.steps.flatMap((st, i) => {
+    // Only the outer part (before " · ") counts as a new pass; inner counters change every step.
+    const outer = (l?: string) => l?.split(' · ')[0]
+    const newLoop = st.loop !== undefined && outer(st.loop) !== outer(run.steps[i - 1]?.loop)
+    const parts = [
+      st.mistake ? 'the bug' : newLoop ? st.loop : null,
+      st.moves?.length && !st.mistake ? 'moves' : null,
+    ].filter(Boolean)
+    if (!parts.length) return []
+    const kind = st.mistake ? 'bug' : st.moves?.length ? 'move' : 'loop'
+    return [{ index: i, label: `Step ${i + 1}: ${parts.join(', ')}`, kind }]
+  })
+}
+
+const MARK_STYLE: Record<string, string> = {
+  bug: 'h-3 w-1.5 bg-red-500',
+  move: 'size-2 rounded-full bg-amber-500',
+  loop: 'h-2.5 w-0.5 bg-violet-500/70',
+}
+
+function Timeline({ run, onJump }: { run: DryRun; onJump(step: number): void }) {
+  const marks = timelineMarks(run)
+  if (!marks.length) return null
+  const span = Math.max(1, run.steps.length - 1)
+  return (
+    <ul aria-label="Timeline" className="pointer-events-none absolute inset-x-1.5 top-0 h-3">
+      {marks.map((m) => (
+        <li key={m.index} className="absolute top-0 -translate-x-1/2" style={{ left: `${(m.index / span) * 100}%` }}>
+          <button
+            type="button"
+            aria-label={m.label}
+            title={m.label}
+            onClick={() => onJump(m.index)}
+            className={cn('pointer-events-auto block transition-transform hover:scale-150', MARK_STYLE[m.kind])}
+          />
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 function Controls({ run }: { run: DryRun }) {
-  const { step, playing, speed, next, prev, goTo, togglePlay, setSpeed } =
-    usePlayground();
-  const last = run.steps.length - 1;
-  const icon = (
-    label: string,
-    onClick: () => void,
-    children: React.ReactNode,
-    disabled = false,
-  ) => (
+  const { step, playing, speed, next, prev, goTo, togglePlay, setSpeed } = usePlayground()
+  const last = run.steps.length - 1
+  const icon = (label: string, onClick: () => void, children: React.ReactNode, disabled = false) => (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={onClick}
-          disabled={disabled}
-        >
+        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick} disabled={disabled}>
           {children}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
-  );
+  )
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2.5">
       <div className="flex items-center gap-0.5">
-        {icon("First step", () => goTo(0), <ChevronFirst />, step === 0)}
+        {icon('First step', () => goTo(0), <ChevronFirst />, step === 0)}
         <Button
           variant="outline"
           size="sm"
@@ -182,10 +202,10 @@ function Controls({ run }: { run: DryRun }) {
         <Button
           size="sm"
           onClick={togglePlay}
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={playing ? 'Pause' : 'Play'}
           className="glow-shimmer mx-1 w-20 border-white/15 text-white"
         >
-          {playing ? <Pause /> : <Play />} {playing ? "Pause" : "Play"}
+          {playing ? <Pause /> : <Play />} {playing ? 'Pause' : 'Play'}
         </Button>
         <Button
           variant="outline"
@@ -198,23 +218,22 @@ function Controls({ run }: { run: DryRun }) {
         >
           Next <SkipForward />
         </Button>
-        {icon("Last step", () => goTo(last), <ChevronLast />, step === last)}
+        {icon('Last step', () => goTo(last), <ChevronLast />, step === last)}
       </div>
-      <input
-        type="range"
-        aria-label="Step"
-        min={0}
-        max={last}
-        value={step}
-        onChange={(e) => goTo(Number(e.target.value))}
-        className="min-w-24 flex-1 accent-violet-500"
-      />
+      <div className="relative min-w-24 flex-1 pt-3">
+        <Timeline run={run} onJump={goTo} />
+        <input
+          type="range"
+          aria-label="Step"
+          min={0}
+          max={last}
+          value={step}
+          onChange={(e) => goTo(Number(e.target.value))}
+          className="w-full accent-violet-500"
+        />
+      </div>
       <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">{`Step ${step + 1} of ${run.steps.length}`}</span>
-      <div
-        role="radiogroup"
-        aria-label="Speed"
-        className="flex shrink-0 rounded-md bg-muted p-0.5 text-[11.5px]"
-      >
+      <div role="radiogroup" aria-label="Speed" className="flex shrink-0 rounded-md bg-muted p-0.5 text-[11.5px]">
         {SPEEDS.map((s) => (
           <button
             key={s}
@@ -223,10 +242,8 @@ function Controls({ run }: { run: DryRun }) {
             aria-checked={speed === s}
             onClick={() => setSpeed(s)}
             className={cn(
-              "rounded px-2 py-0.5 tabular-nums",
-              speed === s
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+              'rounded px-2 py-0.5 tabular-nums',
+              speed === s ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
           >
             {s}×
@@ -234,85 +251,211 @@ function Controls({ run }: { run: DryRun }) {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
 /** Width of an element, kept up to date (null until measured, e.g. in tests). */
-function useWidth<T extends HTMLElement>(): [
-  React.RefObject<T | null>,
-  number | null,
-] {
-  const ref = useRef<T>(null);
-  const [width, setWidth] = useState<number | null>(null);
+function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number | null] {
+  const ref = useRef<T>(null)
+  const [width, setWidth] = useState<number | null>(null)
   useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) =>
-      setWidth(entry.contentRect.width),
-    );
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, width];
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, width]
 }
 
 /** Side by side when there's room for both, stacked (code on top) when narrow. */
-const SIDE_BY_SIDE_MIN = 720;
+const SIDE_BY_SIDE_MIN = 720
 
 function Variable({
   name,
   value,
+  previous,
   changed,
 }: {
-  name: string;
-  value: string;
-  changed: boolean;
+  name: string
+  value: string
+  /** The value before this step, shown crossed out when it changed. */
+  previous?: string
+  changed: boolean
 }) {
   return (
     <li data-testid="var-bucket" className="flex flex-col items-center gap-1">
-      <span
-        data-testid="var-name"
-        className="max-w-28 truncate font-mono text-[11.5px] font-semibold text-muted-foreground"
-      >
-        {name}
+      <span className="flex items-baseline gap-1.5">
+        <span
+          data-testid="var-name"
+          className="max-w-28 truncate font-mono text-[11.5px] font-semibold text-muted-foreground"
+        >
+          {name}
+        </span>
+        {changed && previous !== undefined && (
+          <span
+            data-testid="ghost"
+            title="Value before this step"
+            className="font-mono text-[10px] text-red-500/80 line-through"
+          >
+            {previous}
+          </span>
+        )}
       </span>
       {/* A bucket: open at the top (|_|), value inside. */}
       <span
         data-testid="var-value"
+        data-ref={name}
         className={cn(
-          "grid h-10 min-w-12 place-items-center rounded-b-lg border-x-2 border-b-2 px-2.5 font-mono text-[14px] font-semibold transition-all duration-300",
+          'grid h-10 min-w-12 place-items-center rounded-b-lg border-x-2 border-b-2 px-2.5 font-mono text-[14px] font-semibold transition-all duration-300',
           changed
-            ? "border-violet-500 bg-violet-500/12 text-violet-700 dark:text-violet-200"
-            : "border-muted-foreground/40 text-foreground",
+            ? 'border-violet-500 bg-violet-500/12 text-violet-700 dark:text-violet-200'
+            : 'border-muted-foreground/40 text-foreground',
         )}
       >
         {value}
       </span>
     </li>
-  );
+  )
+}
+
+interface Arrow {
+  move: Move
+  path: string
+  labelX: number
+  labelY: number
+}
+
+/** Curved arrows between boxes for what moved where. Positions are measured from the drawn boxes. */
+function MoveArrows({ moves, stepKey }: { moves: Move[]; stepKey: string }) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const markerId = useId()
+  const [arrows, setArrows] = useState<Arrow[]>([])
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    const host = svg?.parentElement
+    if (!svg || !host) return
+    const measure = () => {
+      const origin = host.getBoundingClientRect()
+      const find = (ref: string) => host.querySelector(`[data-ref="${CSS.escape(ref)}"]`)?.getBoundingClientRect()
+      setArrows(
+        moves.map((move, k) => {
+          const a = find(move.from)
+          const b = find(move.to)
+          if (!a || !b) return { move, path: '', labelX: 0, labelY: 0 }
+          // From one box to the other, bowing above; the return half of a swap bows below so the two don't overlap.
+          const below = moves.slice(0, k).some((m) => m.from === move.to && m.to === move.from)
+          const x1 = a.left + a.width / 2 - origin.left
+          const x2 = b.left + b.width / 2 - origin.left
+          const lift = 30 + Math.min(60, Math.abs(x2 - x1) * 0.18)
+          if (below) {
+            const y1 = a.bottom - origin.top
+            const y2 = b.bottom - origin.top
+            const cy = Math.max(y1, y2) + lift
+            return {
+              move,
+              path: `M ${x1} ${y1 + 2} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2 + 4}`,
+              labelX: (x1 + x2) / 2,
+              labelY: cy - lift * 0.25 + 12,
+            }
+          }
+          const y1 = a.top - origin.top
+          const y2 = b.top - origin.top
+          const cy = Math.min(y1, y2) - lift
+          return {
+            move,
+            path: `M ${x1} ${y1 - 2} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2 - 4}`,
+            labelX: (x1 + x2) / 2,
+            labelY: cy + lift * 0.25 - 4,
+          }
+        }),
+      )
+    }
+    measure()
+    // Pointer and box transitions take ~300ms; measure again once they settle, and on resize.
+    const settle = setTimeout(measure, 320)
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    ro?.observe(host)
+    return () => {
+      clearTimeout(settle)
+      ro?.disconnect()
+    }
+  }, [moves, stepKey])
+
+  if (!moves.length) return null
+  return (
+    <svg ref={svgRef} aria-hidden className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible">
+      <defs>
+        <marker
+          id={markerId}
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" className="fill-amber-500" />
+        </marker>
+      </defs>
+      {arrows.map(({ move, path, labelX, labelY }, i) => (
+        <g key={`${stepKey}-${i}`} data-testid="move-arrow" data-from={move.from} data-to={move.to}>
+          {path && (
+            <path
+              d={path}
+              fill="none"
+              strokeWidth={2.25}
+              markerEnd={`url(#${markerId})`}
+              className="move-arrow stroke-amber-500"
+            />
+          )}
+          {move.label && (
+            <text
+              x={labelX}
+              y={labelY}
+              textAnchor="middle"
+              className="fill-amber-600 stroke-background font-mono text-[11px] font-semibold [paint-order:stroke] [stroke-width:4px] dark:fill-amber-300"
+            >
+              {move.label}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  )
 }
 
 function Viewer({ run }: { run: DryRun }) {
-  const stepIndex = usePlayground((s) => s.step);
-  const step = run.steps[Math.min(stepIndex, run.steps.length - 1)];
-  const before = stepIndex > 0 ? (run.steps[stepIndex - 1].vars ?? {}) : {};
-  const vars = Object.entries(step.vars ?? {});
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const sideBySide = width === null || width >= SIDE_BY_SIDE_MIN;
-  const area = sideBySide ? "code-drawing" : "code-drawing-stacked";
-  const saved = useSettings((s) => s.playgroundLayout[area]);
+  const stepIndex = usePlayground((s) => s.step)
+  const step = run.steps[Math.min(stepIndex, run.steps.length - 1)]
+  const before = stepIndex > 0 ? (run.steps[stepIndex - 1].vars ?? {}) : {}
+  const vars = Object.entries(step.vars ?? {})
+  const [ref, width] = useWidth<HTMLDivElement>()
+  const sideBySide = width === null || width >= SIDE_BY_SIDE_MIN
+  const area = sideBySide ? 'code-drawing' : 'code-drawing-stacked'
+  const saved = useSettings((s) => s.playgroundLayout[area])
+
+  const previousStructures = stepIndex > 0 ? (run.steps[stepIndex - 1].structures ?? []) : []
 
   const drawing = (
     <ScrollArea className="h-full min-h-0 min-w-0 flex-1">
-      <div className="flex flex-col gap-5 p-4 @3xl:p-5">
+      <div className="relative flex flex-col gap-5 p-4 @3xl:p-5" data-arrows={Boolean(step.moves?.length)}>
+        <MoveArrows moves={step.moves ?? []} stepKey={`${run.id}:${stepIndex}`} />
+        {step.loop && (
+          <span
+            data-testid="step-loop"
+            className="-mb-2 w-fit rounded-full bg-violet-500/10 px-2.5 py-0.5 font-mono text-[11.5px] font-medium text-violet-700 ring-1 ring-violet-500/25 dark:text-violet-200"
+          >
+            {step.loop}
+          </span>
+        )}
         <div
           data-testid="step-note"
           aria-live="polite"
           className={cn(
-            "rounded-xl border px-4 py-3 text-[13.5px] leading-relaxed transition-colors",
-            step.mistake
-              ? "border-red-500/40 bg-red-500/10"
-              : "border-violet-500/25 bg-violet-500/[0.06]",
+            'rounded-xl border px-4 py-3 text-[13.5px] leading-relaxed transition-colors',
+            step.mistake ? 'border-red-500/40 bg-red-500/10' : 'border-violet-500/25 bg-violet-500/[0.06]',
           )}
         >
           {step.mistake && (
@@ -324,51 +467,84 @@ function Viewer({ run }: { run: DryRun }) {
             {step.line ? `line ${step.line}` : `step ${stepIndex + 1}`}
           </span>
           {step.note}
+          {step.check && (
+            <span
+              data-testid="step-check"
+              data-result={String(step.check.result)}
+              className={cn(
+                'mt-2 flex w-fit items-center gap-2 rounded-lg px-2.5 py-1 font-mono text-[12.5px] ring-1',
+                step.check.result
+                  ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300'
+                  : 'bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300',
+              )}
+            >
+              <span>{step.check.expr}</span>
+              <span className="font-sans text-[11.5px] font-semibold">{step.check.result ? '✓ true' : '✗ false'}</span>
+            </span>
+          )}
         </div>
 
         {vars.length > 0 && (
-          <ul
-            aria-label="Variables"
-            className="flex flex-wrap items-end gap-x-4 gap-y-3"
-          >
+          <ul aria-label="Variables" className="flex flex-wrap items-end gap-x-4 gap-y-3">
             {vars.map(([k, v]) => (
               <Variable
                 key={k}
                 name={k}
                 value={formatScalar(v)}
+                previous={k in before ? formatScalar(before[k]) : undefined}
                 changed={stepIndex > 0 && before[k] !== v}
               />
             ))}
           </ul>
         )}
 
+        {step.callStack && step.callStack.length > 0 && (
+          <div>
+            <div className="mb-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">Call stack</div>
+            <ul aria-label="Call stack" className="flex w-fit flex-col gap-1">
+              {[...step.callStack].reverse().map((frame, i) => (
+                <li
+                  key={`${frame}-${i}`}
+                  className={cn(
+                    'rounded-md border px-2.5 py-1 font-mono text-[12.5px]',
+                    i === 0
+                      ? 'border-violet-500 bg-violet-500/12 font-semibold text-violet-700 dark:text-violet-200'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  {frame}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {(step.structures ?? []).map((s, i) => (
-          <StructureView key={`${s.kind}-${s.name}-${i}`} structure={s} />
+          <StructureView
+            key={`${s.kind}-${s.name}-${i}`}
+            structure={s}
+            previous={previousStructures.find((p) => p.kind === s.kind && p.name === s.name)}
+          />
         ))}
 
         {step.output !== undefined && (
           <div>
-            <div className="mb-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">
-              Output so far
-            </div>
+            <div className="mb-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">Output so far</div>
             <pre
               data-testid="step-output"
               className="rounded-lg border bg-card px-3 py-2 font-mono text-[12.5px] whitespace-pre-wrap"
             >
-              {step.output || " "}
+              {step.output || ' '}
             </pre>
           </div>
         )}
       </div>
     </ScrollArea>
-  );
+  )
 
   return (
     // A container, so the layout follows the space left by the side panels, not the window.
-    <div
-      ref={ref}
-      className="@container flex h-full min-h-0 min-w-0 flex-1 flex-col"
-    >
+    <div ref={ref} className="@container flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-5 py-3">
         <h1 className="text-[15px] font-semibold">{run.title}</h1>
         {run.file && (
@@ -378,7 +554,7 @@ function Viewer({ run }: { run: DryRun }) {
         )}
         {run.input && (
           <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            input{" "}
+            input{' '}
             <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">
               {run.input}
             </code>
@@ -389,37 +565,21 @@ function Viewer({ run }: { run: DryRun }) {
       {run.code ? (
         <ResizablePanelGroup
           key={area}
-          orientation={sideBySide ? "horizontal" : "vertical"}
-          defaultLayout={
-            saved ??
-            (sideBySide ? { code: 42, drawing: 58 } : { code: 35, drawing: 65 })
-          }
-          onLayoutChanged={(l) =>
-            useSettings.getState().setPlaygroundLayout(area, l)
-          }
+          orientation={sideBySide ? 'horizontal' : 'vertical'}
+          defaultLayout={saved ?? (sideBySide ? { code: 42, drawing: 58 } : { code: 35, drawing: 65 })}
+          onLayoutChanged={(l) => useSettings.getState().setPlaygroundLayout(area, l)}
           className="min-h-0 flex-1"
         >
-          <ResizablePanel
-            id="code"
-            minSize="15"
-            className="flex min-h-0 min-w-0 flex-col bg-card/30"
-          >
-            <section
-              aria-label="Code panel"
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <CodePanel code={run.code} line={step.line} />
+          <ResizablePanel id="code" minSize="15" className="flex min-h-0 min-w-0 flex-col bg-card/30">
+            <section aria-label="Code panel" className="flex min-h-0 flex-1 flex-col">
+              <CodePanel code={run.code} line={step.line} calc={step.calc} />
             </section>
           </ResizablePanel>
           <ResizableHandle
             withHandle
             className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
           />
-          <ResizablePanel
-            id="drawing"
-            minSize="25"
-            className="flex min-h-0 min-w-0 flex-col"
-          >
+          <ResizablePanel id="drawing" minSize="25" className="flex min-h-0 min-w-0 flex-col">
             {drawing}
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -428,7 +588,7 @@ function Viewer({ run }: { run: DryRun }) {
       )}
       <Controls run={run} />
     </div>
-  );
+  )
 }
 
 function Empty() {
@@ -438,71 +598,55 @@ function Empty() {
         <Clapperboard className="size-6" aria-hidden />
       </span>
       <div className="max-w-md space-y-1.5">
-        <p className="text-[15px] font-medium">
-          Watch your code run, step by step
-        </p>
+        <p className="text-[15px] font-medium">Watch your code run, step by step</p>
         <p className="text-[13px] text-muted-foreground">
-          Ask Claude something like “dry run my code with input [3, 1, 2]” or
-          “show me where my loop goes wrong”. Its dry run appears here with your
-          code, the variables and the data structures drawn out.
+          Ask Claude something like “dry run my code with input [3, 1, 2]” or “show me where my loop goes wrong”. Its
+          dry run appears here with your code, the variables and the data structures drawn out.
         </p>
       </div>
-      <Button
-        variant="outline"
-        onClick={() => usePlayground.getState().openExample()}
-      >
+      <Button variant="outline" onClick={() => usePlayground.getState().openExample()}>
         <Sparkles /> Watch an example
       </Button>
     </div>
-  );
+  )
 }
 
 /** Full-screen view of dry-run visualizations. */
 export function Playground() {
-  const { runs, activeId } = usePlayground();
-  const run = runs.find((r) => r.id === activeId) ?? null;
-  const savedOuter = useSettings((s) => s.playgroundLayout["list-main"]);
+  const { runs, activeId } = usePlayground()
+  const run = runs.find((r) => r.id === activeId) ?? null
+  const savedOuter = useSettings((s) => s.playgroundLayout['list-main'])
 
   useEffect(() => {
-    void usePlayground.getState().load();
-  }, []);
+    void usePlayground.getState().load()
+  }, [])
 
   // ← → step, space plays/pauses, unless typing somewhere or on a button (which handles space itself).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (
-        t?.closest('input, textarea, [contenteditable="true"], .monaco-editor')
-      )
-        return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const pg = usePlayground.getState();
-      if (e.key === "ArrowRight") pg.next();
-      else if (e.key === "ArrowLeft") pg.prev();
-      else if (e.key === " " && !t?.closest("button")) pg.togglePlay();
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, [contenteditable="true"], .monaco-editor')) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const pg = usePlayground.getState()
+      if (e.key === 'ArrowRight') pg.next()
+      else if (e.key === 'ArrowLeft') pg.prev()
+      else if (e.key === ' ' && !t?.closest('button')) pg.togglePlay()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <main aria-label="Playground" className="flex min-h-0 min-w-0 flex-1">
       <ResizablePanelGroup
         orientation="horizontal"
         defaultLayout={savedOuter ?? { list: 18, main: 82 }}
-        onLayoutChanged={(l) =>
-          useSettings.getState().setPlaygroundLayout("list-main", l)
-        }
+        onLayoutChanged={(l) => useSettings.getState().setPlaygroundLayout('list-main', l)}
         className="min-h-0 min-w-0 flex-1"
       >
-        <ResizablePanel
-          id="list"
-          minSize="10"
-          maxSize="40"
-          className="flex min-h-0 flex-col"
-        >
+        <ResizablePanel id="list" minSize="10" maxSize="40" className="flex min-h-0 flex-col">
           <aside className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center gap-2 px-3 pt-3 pb-2">
               <Clapperboard className="size-4 text-violet-500" aria-hidden />
@@ -510,18 +654,13 @@ export function Playground() {
             </div>
             <ScrollArea className="min-h-0 flex-1">
               {runs.length ? (
-                <ul
-                  aria-label="Dry runs"
-                  className="flex flex-col gap-0.5 p-2 pt-0"
-                >
+                <ul aria-label="Dry runs" className="flex flex-col gap-0.5 p-2 pt-0">
                   {runs.map((r) => (
                     <RunRow key={r.id} run={r} active={r.id === activeId} />
                   ))}
                 </ul>
               ) : (
-                <p className="px-4 py-6 text-[12px] text-muted-foreground">
-                  No dry runs yet.
-                </p>
+                <p className="px-4 py-6 text-[12px] text-muted-foreground">No dry runs yet.</p>
               )}
             </ScrollArea>
             <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
@@ -533,14 +672,10 @@ export function Playground() {
           withHandle
           className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
         />
-        <ResizablePanel
-          id="main"
-          minSize="40"
-          className="flex min-h-0 min-w-0 flex-col"
-        >
+        <ResizablePanel id="main" minSize="40" className="flex min-h-0 min-w-0 flex-col">
           {run ? <Viewer run={run} /> : <Empty />}
         </ResizablePanel>
       </ResizablePanelGroup>
     </main>
-  );
+  )
 }
