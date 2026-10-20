@@ -168,7 +168,17 @@ function Controls({ run }: { run: DryRun }) {
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2.5">
       <div className="flex items-center gap-0.5">
         {icon("First step", () => goTo(0), <ChevronFirst />, step === 0)}
-        {icon("Previous step", prev, <SkipBack />, step === 0)}
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Previous step"
+          title="Previous step (←)"
+          onClick={prev}
+          disabled={step === 0}
+          className="ml-1"
+        >
+          <SkipBack /> Prev
+        </Button>
         <Button
           size="sm"
           onClick={togglePlay}
@@ -177,7 +187,17 @@ function Controls({ run }: { run: DryRun }) {
         >
           {playing ? <Pause /> : <Play />} {playing ? "Pause" : "Play"}
         </Button>
-        {icon("Next step", next, <SkipForward />, step === last)}
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Next step"
+          title="Next step (→)"
+          onClick={next}
+          disabled={step === last}
+          className="mr-1"
+        >
+          Next <SkipForward />
+        </Button>
         {icon("Last step", () => goTo(last), <ChevronLast />, step === last)}
       </div>
       <input
