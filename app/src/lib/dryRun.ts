@@ -109,6 +109,8 @@ export interface DryRunStep {
   loop?: string
   /** For recursion: the calls in progress, outermost first, e.g. ["main()", "fib(4)", "fib(3)"] */
   callStack?: string[]
+  /** The part of the algorithm this step belongs to, e.g. "Transpose"; carries on until the next phase. */
+  phase?: string
 }
 
 export interface Move {
@@ -147,6 +149,8 @@ export interface DryRun {
   language?: 'cpp' | 'java' | 'python'
   code?: string
   input?: string
+  /** The correct answer for this input; the last step's output is checked against it. */
+  expected?: string
   createdAt: number
   steps: DryRunStep[]
 }

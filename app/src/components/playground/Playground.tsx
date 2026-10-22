@@ -30,10 +30,12 @@ import { languageFromFilename } from '@/lib/languages'
 import { useAiChat } from '@/state/aiChat'
 import { dryRunSource, editCode, useCurrentCode, useDryRunFix, type DryRunSource } from '@/state/dryRunFix'
 import { formatScalar, type DryRun, type Move } from '@/lib/dryRun'
+import { currentPhase, lineHits, stepChanges } from '@/lib/dryRunInsights'
 import { cn } from '@/lib/utils'
 import { ProblemTag } from '@/components/problems/ProblemTag'
 import { usePlayground } from '@/state/playground'
 import { useSettings } from '@/state/settings'
+import { FinalCheck, InputCard, Legend, PhaseBands, StartVsEnd, StepChanges, TraceTable } from './Explain'
 import { StructureView } from './StructureView'
 
 function timeAgo(at: number): string {
@@ -91,7 +93,8 @@ function RunRow({ run, active }: { run: DryRun; active: boolean }) {
   )
 }
 
-function CodePanel({ code, line, calc }: { code: string; line?: number; calc?: string }) {
+/** The code, with the line this step runs; lines that have run are tinted, with how often they ran. */
+function CodePanel({ code, line, calc, hits }: { code: string; line?: number; calc?: string; hits: Map<number, number> }) {
   const currentRef = useRef<HTMLLIElement>(null)
   useEffect(() => {
     currentRef.current?.scrollIntoView?.({
@@ -104,14 +107,16 @@ function CodePanel({ code, line, calc }: { code: string; line?: number; calc?: s
       <ol aria-label="Code" className="py-2 font-mono text-[13px] leading-[1.6]">
         {code.split('\n').map((text, i) => {
           const current = line === i + 1
+          const ran = hits.get(i + 1) ?? 0
           return (
             <li
               key={i}
               ref={current ? currentRef : undefined}
               aria-current={current ? 'step' : undefined}
+              data-hits={ran}
               className={cn(
                 'flex border-l-2 pr-3 transition-colors duration-200',
-                current ? 'border-violet-500 bg-violet-500/12' : 'border-transparent',
+                current ? 'border-violet-500 bg-violet-500/12' : ran ? 'border-violet-500/20 bg-violet-500/[0.035]' : 'border-transparent',
               )}
             >
               <span
@@ -129,6 +134,14 @@ function CodePanel({ code, line, calc }: { code: string; line?: number; calc?: s
                   className="ml-4 shrink-0 self-center rounded-md bg-violet-500/15 px-1.5 py-px text-[11.5px] font-semibold whitespace-pre text-violet-700 dark:text-violet-200"
                 >
                   {calc}
+                </span>
+              )}
+              {ran > 1 && (
+                <span
+                  title={`Has run ${ran} times so far`}
+                  className="ml-auto shrink-0 self-center pl-3 text-[10.5px] text-muted-foreground tabular-nums"
+                >
+                  ×{ran}
                 </span>
               )}
             </li>
@@ -244,6 +257,7 @@ function Controls({ run }: { run: DryRun }) {
           onChange={(e) => goTo(Number(e.target.value))}
           className="w-full accent-violet-500"
         />
+        <PhaseBands run={run} onJump={goTo} />
       </div>
       <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">{`Step ${step + 1} of ${run.steps.length}`}</span>
       <div role="radiogroup" aria-label="Speed" className="flex shrink-0 rounded-md bg-muted p-0.5 text-[11.5px]">
@@ -575,11 +589,65 @@ function Viewer({ run }: { run: DryRun }) {
   const saved = useSettings((s) => s.playgroundLayout[area])
 
   const previousStructures = stepIndex > 0 ? (run.steps[stepIndex - 1].structures ?? []) : []
+  const startStructures = run.steps[0].structures ?? []
+  const isLast = stepIndex >= run.steps.length - 1
+  const changes = stepChanges(stepIndex > 0 ? run.steps[stepIndex - 1] : undefined, step)
+  const phase = currentPhase(run, stepIndex)
+  const [view, setView] = useState<'steps' | 'table'>('steps')
+  const goTo = usePlayground((s) => s.goTo)
+
+  const toolbar = (
+    <div className="flex items-center gap-2">
+      <div role="radiogroup" aria-label="View" className="flex rounded-md bg-muted p-0.5 text-[12px]">
+        {(['steps', 'table'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={view === v}
+            onClick={() => setView(v)}
+            className={cn(
+              'rounded px-2.5 py-0.5',
+              view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {v === 'steps' ? 'Steps' : 'Table'}
+          </button>
+        ))}
+      </div>
+      <div className="ml-auto">
+        <Legend />
+      </div>
+    </div>
+  )
+
+  const table = (
+    <ScrollArea className="h-full min-h-0 min-w-0 flex-1">
+      <div className="flex flex-col gap-4 p-4 @3xl:p-5">
+        {toolbar}
+        <InputCard run={run} />
+        <div className="overflow-x-auto rounded-xl border">
+          <TraceTable run={run} step={stepIndex} onJump={goTo} />
+        </div>
+        {isLast && <FinalCheck run={run} />}
+      </div>
+    </ScrollArea>
+  )
 
   const drawing = (
     <ScrollArea className="h-full min-h-0 min-w-0 flex-1">
       <div className="relative flex flex-col gap-5 p-4 @3xl:p-5" data-arrows={Boolean(step.moves?.length)}>
         <MoveArrows moves={step.moves ?? []} stepKey={`${run.id}:${stepIndex}`} />
+        {toolbar}
+        <InputCard run={run} />
+        {phase && (
+          <span
+            data-testid="step-phase"
+            className="-mb-3 w-fit text-[11px] font-semibold tracking-wide text-cyan-700 uppercase dark:text-cyan-300"
+          >
+            {phase}
+          </span>
+        )}
         {step.loop && (
           <span
             data-testid="step-loop"
@@ -622,6 +690,8 @@ function Viewer({ run }: { run: DryRun }) {
           )}
         </div>
 
+        <StepChanges changes={changes} />
+
         {vars.length > 0 && (
           <ul aria-label="Variables" className="flex flex-wrap items-end gap-x-4 gap-y-3">
             {vars.map(([k, v]) => (
@@ -662,6 +732,7 @@ function Viewer({ run }: { run: DryRun }) {
             key={`${s.kind}-${s.name}-${i}`}
             structure={s}
             previous={previousStructures.find((p) => p.kind === s.kind && p.name === s.name)}
+            start={stepIndex > 0 ? startStructures.find((p) => p.kind === s.kind && p.name === s.name) : undefined}
           />
         ))}
 
@@ -676,9 +747,13 @@ function Viewer({ run }: { run: DryRun }) {
             </pre>
           </div>
         )}
+
+        {isLast && <FinalCheck run={run} />}
+        {run.steps.length > 1 && <StartVsEnd key={String(isLast)} run={run} isLast={isLast} />}
       </div>
     </ScrollArea>
   )
+  const content = view === 'table' ? table : drawing
 
   return (
     // A container, so the layout follows the space left by the side panels, not the window.
@@ -688,14 +763,6 @@ function Viewer({ run }: { run: DryRun }) {
         {run.file && (
           <span className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11.5px] text-muted-foreground">
             <FileCode2 className="size-3" aria-hidden /> {run.file}
-          </span>
-        )}
-        {run.input && (
-          <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            input{' '}
-            <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11.5px] text-foreground">
-              {run.input}
-            </code>
           </span>
         )}
         {source && current !== null && (
@@ -716,7 +783,7 @@ function Viewer({ run }: { run: DryRun }) {
               {editing && source && current !== null ? (
                 <CodeEditor source={source} code={current} />
               ) : (
-                <CodePanel code={run.code} line={step.line} calc={step.calc} />
+                <CodePanel code={run.code} line={step.line} calc={step.calc} hits={lineHits(run, stepIndex)} />
               )}
             </section>
           </ResizablePanel>
@@ -725,11 +792,11 @@ function Viewer({ run }: { run: DryRun }) {
             className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
           />
           <ResizablePanel id="drawing" minSize="25" className="flex min-h-0 min-w-0 flex-col">
-            {drawing}
+            {content}
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
-        <div className="flex min-h-0 flex-1">{drawing}</div>
+        <div className="flex min-h-0 flex-1">{content}</div>
       )}
       <Controls run={run} />
     </div>

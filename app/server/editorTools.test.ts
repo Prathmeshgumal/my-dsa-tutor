@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { CodeRunner, RunResult } from '../src/lib/runner/types.ts'
-import { createEditorTools, type ApprovalRequest, type EditorToolDeps } from './editorTools'
+import { createEditorTools, toSdkTools, type ApprovalRequest, type EditorToolDeps } from './editorTools'
 import { CASE_MARK, RESULT_MARK } from '../src/lib/cppHarness.ts'
 import { readEntry } from './problemStore.ts'
 
@@ -235,6 +235,20 @@ describe('visualizations', () => {
     const saved = JSON.parse(await readFile(path.join(playgroundDir, `${run.id}.json`), 'utf8'))
     expect(saved).toEqual(run)
     expect(result.text).toContain('Playground')
+  })
+
+  test('create_visualization keeps the expected answer and each step’s phase', async () => {
+    const { tools, deps } = setup()
+    const phased = [{ ...steps[0], phase: 'Set up' }, ...steps.slice(1)]
+    await tools.create_visualization({ title: 'x', file: 'sort.cpp', input: '3 1 2', expected: '1 2 3', steps: phased })
+    expect(vi.mocked(deps.onVisualization).mock.calls[0][0]).toMatchObject({ expected: '1 2 3', steps: phased })
+  })
+
+  test('the model is told about expected and phase', () => {
+    const viz = toSdkTools(setup().tools).find((t) => t.name === 'create_visualization')!
+    const shape = viz.inputSchema as unknown as { expected?: unknown; steps: { element: { shape: Record<string, unknown> } } }
+    expect(shape.expected).toBeDefined()
+    expect(shape.steps.element.shape).toHaveProperty('phase')
   })
 
   test('without a file it can still visualize an idea (no code panel)', async () => {

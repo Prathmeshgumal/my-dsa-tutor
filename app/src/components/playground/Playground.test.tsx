@@ -322,3 +322,91 @@ describe('hiding the list of dry runs', () => {
     expect(useSettings.getState()).toMatchObject({ screen: 'editor', playgroundListOpen: true })
   })
 })
+
+describe('explaining the dry run', () => {
+  const rich: DryRun = {
+    id: 'r2',
+    title: 'Dry run: reverse [1,2,3]',
+    code: 'int i = 0;\nint j = 2;\nswap(a[i], a[j]);\ni++; j--;',
+    input: 'a = [1,2,3]',
+    expected: '3 2 1',
+    createdAt: 1,
+    steps: [
+      { line: 1, phase: 'Set up', note: 'Start.', vars: { i: 0, j: 2 }, structures: [{ kind: 'array', name: 'a', values: [1, 2, 3] }] },
+      { line: 3, phase: 'Swap ends', note: 'Swap the ends.', vars: { i: 0, j: 2 }, structures: [{ kind: 'array', name: 'a', values: [3, 2, 1] }] },
+      { line: 4, note: 'Move inwards.', vars: { i: 1, j: 1 }, structures: [{ kind: 'array', name: 'a', values: [3, 2, 1] }], output: '3 2 1' },
+    ],
+  }
+  beforeEach(() => usePlayground.setState({ runs: [rich], activeId: 'r2', step: 0 }))
+
+  test('the input and the expected answer are shown up front', () => {
+    render(<Playground />)
+    const card = screen.getByRole('region', { name: 'Input and expected answer' })
+    expect(card).toHaveTextContent('a = [1,2,3]')
+    expect(card).toHaveTextContent('3 2 1')
+  })
+
+  test('each step lists what it changed', () => {
+    usePlayground.setState({ step: 1 })
+    render(<Playground />)
+    const changes = screen.getByRole('list', { name: 'What changed' })
+    expect(changes).toHaveTextContent('a[0]1→3')
+    expect(changes).toHaveTextContent('a[2]3→1')
+  })
+
+  test('boxes that differ from the start are marked', () => {
+    usePlayground.setState({ step: 2 })
+    render(<Playground />)
+    const drawing = screen.getAllByRole('figure', { name: 'a' })[0]
+    const marked = [...drawing.querySelectorAll('[data-since-start="true"]')].map((c) => c.getAttribute('data-ref'))
+    expect(marked).toEqual(['a[0]', 'a[2]'])
+  })
+
+  test('the last step checks the answer and shows the start next to the end', () => {
+    usePlayground.setState({ step: 2 })
+    render(<Playground />)
+    expect(screen.getByTestId('final-check')).toHaveTextContent(/matches the expected answer/i)
+    const compare = screen.getByRole('region', { name: 'Start vs end' })
+    expect(within(compare).getByText('Start')).toBeInTheDocument()
+    expect(within(compare).getByText('End')).toBeInTheDocument()
+  })
+
+  test('a wrong answer says so', () => {
+    usePlayground.setState({ runs: [{ ...rich, expected: '1 2 3' }], step: 2 })
+    render(<Playground />)
+    expect(screen.getByTestId('final-check')).toHaveTextContent(/expected 1 2 3/i)
+  })
+
+  test('the code shows how many times each line has run', () => {
+    usePlayground.setState({ step: 2 })
+    render(<Playground />)
+    const lines = screen.getByRole('list', { name: 'Code' }).querySelectorAll('li')
+    expect(lines[0].getAttribute('data-hits')).toBe('1')
+    expect(lines[1].getAttribute('data-hits')).toBe('0')
+  })
+
+  test('the phase shows on the step and on the timeline', () => {
+    usePlayground.setState({ step: 2 })
+    render(<Playground />)
+    expect(screen.getByTestId('step-phase')).toHaveTextContent('Swap ends')
+    expect(screen.getByRole('list', { name: 'Phases' })).toHaveTextContent('Set up')
+  })
+
+  test('the trace table lists every step, and clicking a row jumps there', async () => {
+    render(<Playground />)
+    await userEvent.click(screen.getByRole('radio', { name: 'Table' }))
+    const table = screen.getByRole('table', { name: 'Trace table' })
+    const rows = within(table).getAllByRole('row')
+    expect(rows[0]).toHaveTextContent(/Step.*Line.*i.*j.*Output/)
+    expect(rows).toHaveLength(4)
+    await userEvent.click(rows[3])
+    expect(usePlayground.getState().step).toBe(2)
+    expect(rows[3]).toHaveAttribute('aria-current', 'step')
+  })
+
+  test('a legend explains the colours', async () => {
+    render(<Playground />)
+    await userEvent.click(screen.getByRole('button', { name: 'What the colours mean' }))
+    expect(screen.getByRole('list', { name: 'Colour legend' })).toHaveTextContent(/changed since the start/i)
+  })
+})

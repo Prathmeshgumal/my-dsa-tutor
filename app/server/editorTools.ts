@@ -365,12 +365,14 @@ export function createEditorTools(deps: EditorToolDeps) {
         file,
         problem: slug,
         input,
+        expected,
         steps,
       }: {
         title: string
         file?: string
         problem?: string
         input?: string
+        expected?: string
         steps: DryRunStep[]
       }) => {
         // The code comes from the real file, so step line numbers match what the student sees.
@@ -393,6 +395,7 @@ export function createEditorTools(deps: EditorToolDeps) {
           ...(shown ? { file: shown, language: languageFromFilename(shown)!.id, code } : {}),
           ...(belongsTo ? { problem: belongsTo } : {}),
           ...(input ? { input } : {}),
+          ...(expected !== undefined ? { expected } : {}),
           createdAt: Date.now(),
           steps,
         }
@@ -672,6 +675,10 @@ const step = z.object({
   calc: z.string().optional().describe('The calculation on this line with real values, e.g. "sum = 2 + 7 = 9"'),
   loop: z.string().optional().describe('Where we are in the loops, e.g. "pass 2 of 3 · j = 1"'),
   callStack: z.array(z.string()).optional().describe('For recursion: calls in progress, outermost first, e.g. ["main()", "fib(4)", "fib(3)"]'),
+  phase: z
+    .string()
+    .optional()
+    .describe('The part of the algorithm this step starts, e.g. "Transpose" or "Reverse each row"; set it on the first step of each part only'),
 })
 
 /** The same tools, described for the Agent SDK's in-process MCP server. */
@@ -759,6 +766,10 @@ export function toSdkTools(tools: EditorTools) {
           .describe('File the steps walk through: a solutions file, or with "problem" one of its code files (default solution.cpp)'),
         problem: z.string().optional().describe("Slug of a practice problem: trace the student's code for it (solution.cpp unless file says otherwise)"),
         input: z.string().optional().describe('The input used'),
+        expected: z
+          .string()
+          .optional()
+          .describe('The correct output for this input, printed the way the code prints it; the last step\'s output is checked against it'),
         steps: z.array(step),
       },
       async (args) => asResult(await tools.create_visualization(args)),

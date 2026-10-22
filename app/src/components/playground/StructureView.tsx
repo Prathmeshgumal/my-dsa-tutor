@@ -13,6 +13,7 @@ import {
   type Structure,
   type TreeViz,
 } from '@/lib/dryRun'
+import { cellsChangedSince } from '@/lib/dryRunInsights'
 
 // Shared look for one value box, by state.
 const CELL_STATE: Record<string, string> = {
@@ -55,6 +56,17 @@ function Ghost({ value }: { value: Scalar }) {
   )
 }
 
+/** A cyan bar along the bottom of a box whose value is no longer what it was at the start. */
+function SinceStart() {
+  return (
+    <span
+      aria-hidden
+      title="Changed since the start"
+      className="pointer-events-none absolute inset-x-1 bottom-0.5 h-[3px] rounded-full bg-cyan-500 dark:bg-cyan-400"
+    />
+  )
+}
+
 /** A faint arrow under the strip from where a pointer was to where it is now, e.g. "j +1". */
 function Trail({ name, from, to, top, color }: { name: string; from: number; to: number; top: number; color: string }) {
   const delta = to - from
@@ -80,7 +92,7 @@ const STRIP_STATE: Record<string, string> = {
 }
 
 /** An array or vector as one long strip of joined boxes: indices above, pointers below. */
-function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
+function ArrayView({ s, prev, since }: { s: ArrayViz; prev?: ArrayViz; since: Set<string> }) {
   const state = (i: number) =>
     s.swapped?.includes(i) ? 'swapped' : s.highlight?.includes(i) ? 'highlight' : s.done?.includes(i) ? 'done' : ''
   const spare = Math.max(0, (s.capacity ?? s.values.length) - s.values.length)
@@ -124,6 +136,7 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
                 data-testid="cell"
                 data-state={state(i)}
                 data-ref={cellRef(s.name, i)}
+                data-since-start={since.has(cellRef(s.name, i)) || undefined}
                 className={cn(
                   'relative grid h-12 w-12 place-items-center font-mono text-[15px] font-semibold transition-all duration-300',
                   wall,
@@ -133,6 +146,7 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
                 {/* With the old value in the corner, the new one sits a little lower so they don't touch. */}
                 <span className={cn(changedAt(i) && 'translate-y-1.5')}>{formatScalar(v)}</span>
                 {changedAt(i) && <Ghost value={prev!.values[i]} />}
+                {since.has(cellRef(s.name, i)) && <SinceStart />}
               </div>
             ))}
             {Array.from({ length: spare }, (_, k) => (
@@ -175,7 +189,7 @@ function ArrayView({ s, prev }: { s: ArrayViz; prev?: ArrayViz }) {
   )
 }
 
-function GridView({ s, prev }: { s: GridViz; prev?: GridViz }) {
+function GridView({ s, prev, since }: { s: GridViz; prev?: GridViz; since: Set<string> }) {
   const isCurrent = (r: number, c: number) => s.current?.[0] === r && s.current?.[1] === c
   const isHighlight = (r: number, c: number) => s.highlight?.some(([hr, hc]) => hr === r && hc === c)
   return (
@@ -204,10 +218,12 @@ function GridView({ s, prev }: { s: GridViz; prev?: GridViz }) {
                     key={c}
                     data-state={st}
                     data-ref={cellRef(s.name, r, c)}
+                    data-since-start={since.has(cellRef(s.name, r, c)) || undefined}
                     className={cn('relative h-9 min-w-9 rounded-md border-2 px-1.5 text-center font-semibold transition-all duration-300', CELL_STATE[st])}
                   >
                     {formatScalar(v)}
                     {prev?.rows[r] && c < prev.rows[r].length && prev.rows[r][c] !== v && <Ghost value={prev.rows[r][c]} />}
+                    {since.has(cellRef(s.name, r, c)) && <SinceStart />}
                   </td>
                 )
               })}
@@ -219,7 +235,7 @@ function GridView({ s, prev }: { s: GridViz; prev?: GridViz }) {
   )
 }
 
-function MapView({ s, prev }: { s: MapViz; prev?: MapViz }) {
+function MapView({ s, prev, since }: { s: MapViz; prev?: MapViz; since: Set<string> }) {
   const hot = (k: Scalar) => s.highlight?.some((h) => h === k)
   const before = new Map(prev?.entries ?? [])
   return (
@@ -244,12 +260,14 @@ function MapView({ s, prev }: { s: MapViz; prev?: MapViz }) {
               key={i}
               data-state={hot(k) ? 'highlight' : ''}
               data-ref={cellRef(s.name, k)}
+              data-since-start={since.has(cellRef(s.name, k)) || undefined}
               className={cn('border-t transition-colors duration-300', hot(k) && 'bg-violet-500/15 text-violet-700 dark:text-violet-200')}
             >
               <td className="px-3 py-1.5 font-semibold">{formatScalar(k)}</td>
               <td className="relative px-3 py-1.5">
                 {formatScalar(v)}
                 {before.has(k) && before.get(k) !== v && <Ghost value={before.get(k)!} />}
+                {since.has(cellRef(s.name, k)) && <SinceStart />}
               </td>
             </tr>
           ))}
@@ -512,17 +530,21 @@ function GraphView({ s }: { s: GraphViz }) {
   )
 }
 
-/** Draws one data structure from a dry-run step. */
-export function StructureView({ structure: s, previous }: { structure: Structure; previous?: Structure }) {
-  // The same structure in the step before, for ghosts of old values and pointer trails.
-  const prev = previous?.kind === s.kind && previous.name === s.name ? previous : undefined
+/**
+ * Draws one data structure from a dry-run step. previous (the step before) gives ghosts of old values and
+ * pointer trails; start (the first step) marks boxes whose value has changed since then.
+ */
+export function StructureView({ structure: s, previous, start }: { structure: Structure; previous?: Structure; start?: Structure }) {
+  const same = (x?: Structure) => (x?.kind === s.kind && x.name === s.name ? x : undefined)
+  const prev = same(previous)
+  const since = cellsChangedSince(same(start), s)
   switch (s.kind) {
     case 'array':
-      return <ArrayView s={s} prev={prev as ArrayViz | undefined} />
+      return <ArrayView s={s} prev={prev as ArrayViz | undefined} since={since} />
     case 'grid':
-      return <GridView s={s} prev={prev as GridViz | undefined} />
+      return <GridView s={s} prev={prev as GridViz | undefined} since={since} />
     case 'map':
-      return <MapView s={s} prev={prev as MapViz | undefined} />
+      return <MapView s={s} prev={prev as MapViz | undefined} since={since} />
     case 'stack':
     case 'queue':
       return <StackView s={s} />
