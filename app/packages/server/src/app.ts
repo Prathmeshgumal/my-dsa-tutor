@@ -69,7 +69,8 @@ async function serveFile(res: ServerResponse, file: string, cache: string): Prom
   res.setHeader('Content-Type', TYPES[path.extname(file)] ?? 'application/octet-stream')
   res.setHeader('Content-Length', info.size)
   res.setHeader('Cache-Control', cache)
-  createReadStream(file).pipe(res)
+  // A file deleted mid-send (say, a rebuild while the server runs) ends this response, not the server.
+  createReadStream(file).on('error', () => res.destroy()).pipe(res)
   return true
 }
 
@@ -100,6 +101,10 @@ function forwardToPiston(pistonUrl: string, req: IncomingMessage, res: ServerRes
     if (!res.headersSent) sendJson(res, 502, { error: 'Couldn’t reach Piston. Is it running? (docker compose up -d)' })
     else res.destroy()
   })
+  // The browser gave up (Stop, closed tab): don't keep Piston's side open waiting for an answer nobody reads.
+  res.on('close', () => {
+    if (!res.writableFinished) outgoing.destroy()
+  })
   req.pipe(outgoing)
 }
 
@@ -107,6 +112,9 @@ function forwardToPiston(pistonUrl: string, req: IncomingMessage, res: ServerRes
 function forwardUpgrade(pistonUrl: string, req: IncomingMessage, socket: Duplex, head: Buffer, open: Set<Duplex>) {
   const target = pistonTarget(pistonUrl, req.url ?? '/')
   const outgoing = request(target, { method: 'GET', headers: { ...req.headers, host: target.host } })
+  // Node stops watching the browser's connection once it's handed over here; without this, a tab dropping
+  // before Piston answers would crash the server.
+  socket.on('error', () => outgoing.destroy())
   outgoing.on('upgrade', (answer, pistonSocket, pistonHead) => {
     const lines = [`HTTP/1.1 101 ${answer.statusMessage ?? 'Switching Protocols'}`]
     for (let i = 0; i < answer.rawHeaders.length; i += 2) lines.push(`${answer.rawHeaders[i]}: ${answer.rawHeaders[i + 1]}`)
@@ -159,6 +167,7 @@ export function createAppServer(config: Config, { distDir, logger }: { distDir: 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const allowed = isAllowedHost(req.headers.host) && !fromAnotherSite(req) && /^\/piston(\/|$)/.test(req.url ?? '')
     if (!allowed) {
+      socket.on('error', () => socket.destroy())
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
       return
     }

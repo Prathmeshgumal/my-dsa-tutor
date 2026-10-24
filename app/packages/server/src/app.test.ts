@@ -13,15 +13,22 @@ let app: Server
 let base: string
 let piston: Server
 const pistonSockets: Socket[] = []
+let pistonHangs = false
+const pistonRequests: import('node:http').IncomingMessage[] = []
 
 /** Just enough of Piston: one HTTP route, and a WebSocket that answers "got it" to anything. */
 async function startPiston() {
   piston = createServer((req, res) => {
+    if (pistonHangs) {
+      pistonRequests.push(req)
+      return
+    }
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify({ path: req.url, method: req.method }))
   })
   piston.on('upgrade', (req, socket: Socket) => {
     pistonSockets.push(socket)
+    if (pistonHangs) return
     const accept = createHash('sha1')
       .update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
       .digest('base64')
@@ -56,6 +63,8 @@ afterEach(async () => {
   piston.closeAllConnections()
   await new Promise((r) => piston.close(r))
   pistonSockets.length = 0
+  pistonHangs = false
+  pistonRequests.length = 0
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -167,4 +176,40 @@ test('if Piston is down, runs get a clear 502', async () => {
   expect(res.status).toBe(502)
   expect((await res.json()).error).toMatch(/Piston/)
   piston.listen(0) // so afterEach can close it
+})
+
+/** Sends a WebSocket request by hand and then drops the connection abruptly, as a closed tab can. */
+async function upgradeThenReset(headers: Record<string, string>, waitFor: () => boolean) {
+  const { connect } = await import('node:net')
+  const { port } = new URL(base)
+  const client = connect(Number(port), '127.0.0.1')
+  client.on('error', () => {})
+  await new Promise((r) => client.once('connect', r))
+  const lines = Object.entries({ Host: `127.0.0.1:${port}`, ...headers }).map(([k, v]) => `${k}: ${v}`)
+  client.write(`GET /piston/connect HTTP/1.1\r\n${lines.join('\r\n')}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`)
+  await vi.waitFor(() => expect(waitFor()).toBe(true))
+  client.resetAndDestroy()
+  await new Promise((r) => setTimeout(r, 50))
+}
+
+test('a tab that drops while Piston is still answering doesn’t take the server down', async () => {
+  pistonHangs = true
+  await upgradeThenReset({}, () => pistonSockets.length > 0)
+  expect((await fetch(`${base}/`)).status).toBe(200)
+})
+
+test('a refused WebSocket that drops straight away doesn’t take the server down', async () => {
+  await upgradeThenReset({ Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' }, () => true)
+  expect((await fetch(`${base}/`)).status).toBe(200)
+})
+
+test('a run the browser gives up on is dropped at Piston too, not left hanging', async () => {
+  pistonHangs = true
+  const stop = new AbortController()
+  const res = fetch(`${base}/piston/execute`, { method: 'POST', body: '{}', signal: stop.signal }).catch(() => null)
+  await vi.waitFor(() => expect(pistonRequests).toHaveLength(1))
+  const closed = new Promise((r) => pistonRequests[0].socket.once('close', r))
+  stop.abort()
+  await res
+  await closed
 })
