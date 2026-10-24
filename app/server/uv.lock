@@ -237,6 +237,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
+    { name = "pyuca" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchfiles" },
     { name = "websockets" },
@@ -254,6 +255,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.120.0" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.12.3" },
+    { name = "pyuca", specifier = "==1.2" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.38.0" },
     { name = "watchfiles", specifier = "==1.1.1" },
     { name = "websockets", specifier = "==15.0.1" },
@@ -681,6 +683,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5b/42/55c32bb9b12693c092ad250a0e82edb5b31ddeda6eb772de5f308b3804ad/python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e", size = 46881, upload-time = "2026-06-04T16:18:58.647Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23", size = 30042, upload-time = "2026-06-04T16:18:57.319Z" },
+]
+
+[[package]]
+name = "pyuca"
+version = "1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/32/95beca7e3308581c6da4735c7102b0c0cbb30a6b863cc1a8e44e6d2f5c3c/pyuca-1.2.tar.gz", hash = "sha256:8a382fe74627f08c0d18908c0713ca4a20aad5385f077579e56208beea2893b2", size = 1398641, upload-time = "2017-09-25T23:12:12.163Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/88/aeeee34d88f841aca712a8c18fbd62a33eaad8f2dbe535e87f3c829b02f9/pyuca-1.2-py2.py3-none-any.whl", hash = "sha256:abaa12e1bd2c7c68ca8396ff8383bc0654a739cef3ae68fd7af58bf29af0a91e", size = 1464896, upload-time = "2017-09-25T23:12:15.67Z" },
 ]
 
 [[package]]

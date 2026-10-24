@@ -69,7 +69,9 @@ def test_refused_upgrades(server, path, headers):
     while chunk := s.recv(4096):
         answer += chunk
     s.close()
-    assert answer == b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"
+    # A browser only sees a refused WebSocket as failing; the status and the closed connection are what count.
+    assert answer.startswith(b"HTTP/1.1 403 Forbidden\r\n"), answer
+    assert b"\r\nconnection: close\r\n" in answer.lower()
 
 
 def test_a_dropped_websocket_leaves_the_server_fine(server):
