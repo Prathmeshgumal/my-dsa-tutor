@@ -164,3 +164,18 @@ Startup 599 ms, idle memory 130.7 MB.
   compares every request Claude receives over two turns (tools, a bad input, a run, an approved edit, a resumed turn
   with an image) with a recording from Node. They are identical. The benchmark now also times chat with the real
   engine: first words and a whole reply with one tool call are the same on both servers (~265 ms and ~330 ms).
+
+## Task 5 notes (switch over)
+- **Ruling: Node stays until you say it can go.** Both servers ship side by side; nothing about the Node one changed.
+  - Docker: `./start.sh --python` / `./start.sh --node` (sets `EDITOR_DOCKERFILE` in `.env`; `app/Dockerfile.python`
+    builds the page with Node, then runs Python 3.14 with the Claude Code 2.1.302 engine copied from that stage).
+  - Without Docker: `npm run start:python`, `npm run dev:python` (Vite starts the Python server, restarts it when
+    its code changes, and forwards `/api` and `/piston` to it).
+  - Browser tests: `npm run test:e2e:python`. CI runs a second job: the Python tests, the contract tests against
+    both servers, and the browser tests against Python.
+- **Checked:** browser tests 7/7 on both servers; the Python image answers health, files, runs and a full Claude
+  reply from the real engine inside the container; on a copy of your real data folders, `/api/state`, files, notes,
+  problems and playground are byte-identical from both servers (your 26 chats included).
+- **Left for when you're happy:** delete `app/packages/server`, `app/Dockerfile`, the Node CI job and the `--node`
+  switch; move `@anthropic-ai/claude-agent-sdk@0.3.302` to `app/package.json` so the engine stays installed; keep
+  `tests/support/node_tools_probe.ts` and the recorded fixtures (re-recording needs the Node server, so do it first).

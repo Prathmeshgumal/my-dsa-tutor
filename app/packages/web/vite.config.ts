@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
@@ -26,8 +27,43 @@ function api(): Plugin {
   }
 }
 
+// `npm run dev:python`: the API comes from the Python server (app/server) instead, started here and restarted
+// when its code changes. Vite forwards /api and /piston to it; the Python server does its own same-site checks.
+const python = process.env.DSA_SERVER === 'python'
+const pythonUrl = `http://127.0.0.1:${process.env.DSA_PYTHON_PORT ?? config.port + 1}`
+
+function pythonApi(): Plugin {
+  return {
+    name: 'editor-api-python',
+    apply: 'serve',
+    configureServer(server) {
+      const appDir = path.resolve(import.meta.dirname, '../..')
+      const child = spawn('uv', ['run', '--project', 'server', 'watchfiles', '--filter', 'python', 'python -m dsa_server', 'server/src'], {
+        cwd: appDir,
+        env: { ...process.env, PORT: new URL(pythonUrl).port, HOST: '127.0.0.1' },
+        stdio: 'inherit',
+      })
+      const stop = () => child.kill('SIGINT')
+      server.httpServer?.once('close', stop)
+      // Vite exits on Ctrl+C without closing its server, so the Python server is stopped on the way out too.
+      process.once('exit', stop)
+      for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+        process.once(signal, () => {
+          stop()
+          process.exit(0)
+        })
+      }
+    },
+  }
+}
+
+const pythonProxy = {
+  '/api': { target: pythonUrl },
+  '/piston': { target: pythonUrl, ws: true },
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), api()],
+  plugins: [react(), tailwindcss(), python ? pythonApi() : api()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -41,7 +77,7 @@ export default defineConfig({
     // From the config; if it's taken, say so instead of quietly using another port.
     port: config.port,
     strictPort: true,
-    proxy: {
+    proxy: python ? pythonProxy : {
       // ws: interactive runs talk to Piston over a WebSocket (/piston/connect).
       '/piston': {
         target: config.pistonUrl,

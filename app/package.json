@@ -10,9 +10,12 @@
     "dev": "npm run dev -w @dsa/web",
     "build": "tsc -b && npm run build -w @dsa/web",
     "start": "node packages/server/src/main.ts",
+    "start:python": "uv run --project server python -m dsa_server",
+    "dev:python": "DSA_SERVER=python npm run dev -w @dsa/web",
     "lint": "oxlint",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:python": "E2E_SERVER=python playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

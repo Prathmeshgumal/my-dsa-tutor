@@ -33,3 +33,37 @@ jobs:
           name: playwright-report
           path: app/test-results
           retention-days: 7
+
+  # The Python server (app/server): its own tests, the checks that it behaves exactly like the Node server
+  # (both are started and compared), and the browser tests against it.
+  python-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.12.19
+          python-version: 3.14.7
+      - run: npm ci
+      - run: npm run build
+      - run: uv sync --project server --frozen
+      - name: Tests against the Python server
+        run: CONTRACT_SERVER=python uv run --project server pytest server/tests -q
+      - name: The same contract tests against the Node server
+        run: CONTRACT_SERVER=node uv run --project server pytest server/tests/contract -q
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-python
+          path: app/test-results
+          retention-days: 7

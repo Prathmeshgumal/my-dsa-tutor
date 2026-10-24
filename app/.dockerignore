@@ -5,3 +5,6 @@ dist
 e2e/.data
 test-results
 playwright-report
+server/.venv
+**/__pycache__
+server/.pytest_cache

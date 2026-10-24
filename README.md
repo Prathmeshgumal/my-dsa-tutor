@@ -40,6 +40,23 @@ Not using Docker for the editor? `docker compose up -d piston piston-setup`, the
 `npx playwright install chromium`). The code is in three parts under `app/packages`: `web` (the
 page), `server` (the API) and `core` (what both use).
 
+### Trying the Python server
+
+The editor's server is being moved from Node to Python (`app/server`). Both are kept for now,
+and they behave the same: same files, chats, settings and port, and Claude gets exactly the same
+requests (it uses the same Claude Code engine). To switch:
+
+```sh
+./start.sh --python   # rebuild and run the editor on the Python server (remembered in .env)
+./start.sh --node     # back to the Node server
+```
+
+Without Docker: `npm run start:python` (needs [uv](https://docs.astral.sh/uv/)), or
+`npm run dev:python` for working on it, which reloads the page and the Python server as you
+change the code. `npm run test:e2e:python` runs the browser tests against it, and
+`cd server && CONTRACT_SERVER=python uv run pytest` its own tests (`CONTRACT_SERVER=node` runs
+the same contract tests against the Node server).
+
 Updating from a version before the editor ran on its own server? Docker's old
 `project-me_editor-node-modules` volume isn't used any more; `docker volume rm
 project-me_editor-node-modules` frees its space.
