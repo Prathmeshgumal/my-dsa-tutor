@@ -39,6 +39,7 @@ export function CommandMenu() {
   const theme = useResolvedTheme()
   const outputPosition = useSettings((s) => s.outputPosition)
   const outputOpen = useSettings((s) => s.outputOpen)
+  const section = useSettings((s) => s.section)
 
   // Capture phase: Monaco swallows Ctrl+K (its chord prefix) before a bubbling listener would see it.
   useEffect(() => {
@@ -87,9 +88,11 @@ export function CommandMenu() {
             <CommandItem value="New file" onSelect={run(openNewFileDialog)}>
               <FilePlus2 /> New file
             </CommandItem>
-            <CommandItem value="Ask Claude" onSelect={run(() => useSettings.getState().setAiOpen(true))}>
-              <Sparkles /> Ask Claude
-            </CommandItem>
+            {section !== 'chats' && (
+              <CommandItem value="Ask Claude" onSelect={run(() => useSettings.getState().setAiOpen(true))}>
+                <Sparkles /> Ask Claude
+              </CommandItem>
+            )}
             <CommandItem value="Open Playground" onSelect={run(() => useSettings.getState().setSection('dryruns'))}>
               <Clapperboard /> Open Playground
             </CommandItem>

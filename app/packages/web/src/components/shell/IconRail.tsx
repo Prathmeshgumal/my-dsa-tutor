@@ -50,27 +50,32 @@ export function IconRail() {
         )
       })}
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden />
+      {/* On Chats the chat is the page, so there is no Claude panel to open beside it. */}
+      {section !== 'chats' && (
+        <>
+          <div className="my-1 h-px w-6 bg-border" aria-hidden />
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="Claude"
-            aria-pressed={aiOpen}
-            onClick={() => useSettings.getState().setAiOpen(!aiOpen)}
-            className={cn(
-              item,
-              aiOpen
-                ? 'bg-violet-500/15 text-violet-600 ring-1 ring-violet-500/30 ring-inset dark:text-violet-300'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <Sparkles />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{aiOpen ? 'Hide Claude' : 'Ask Claude'}</TooltipContent>
-      </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Claude"
+                aria-pressed={aiOpen}
+                onClick={() => useSettings.getState().setAiOpen(!aiOpen)}
+                className={cn(
+                  item,
+                  aiOpen
+                    ? 'bg-violet-500/15 text-violet-600 ring-1 ring-violet-500/30 ring-inset dark:text-violet-300'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <Sparkles />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{aiOpen ? 'Hide Claude' : 'Ask Claude'}</TooltipContent>
+          </Tooltip>
+        </>
+      )}
 
       <div className="flex-1" />
       <Tooltip>

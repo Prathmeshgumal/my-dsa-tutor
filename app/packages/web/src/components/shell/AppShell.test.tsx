@@ -107,6 +107,14 @@ test('on the Chats section the chat is the page, so Claude isn’t also on the r
   expect(screen.queryByRole('complementary', { name: 'Claude' })).not.toBeInTheDocument()
 })
 
+test('on the Chats section there is no Claude button to press, since it would do nothing; it comes back elsewhere', async () => {
+  renderShell()
+  await userEvent.click(rail().getByRole('button', { name: 'Chats' }))
+  expect(rail().queryByRole('button', { name: 'Claude' })).not.toBeInTheDocument()
+  await userEvent.click(rail().getByRole('button', { name: 'Code' }))
+  expect(rail().getByRole('button', { name: 'Claude' })).toBeInTheDocument()
+})
+
 test('search bar calls onOpenCommand', async () => {
   const onOpenCommand = vi.fn()
   renderShell({ onOpenCommand })

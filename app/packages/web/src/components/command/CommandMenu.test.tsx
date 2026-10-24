@@ -22,7 +22,7 @@ beforeEach(() => {
   useCommandMenu.setState({ open: false })
   useFileDialogs.setState({ kind: null, fileId: null })
   useSettingsDialog.setState({ open: false })
-  useSettings.setState({ theme: 'dark' })
+  useSettings.setState({ theme: 'dark', section: 'code' })
 })
 
 test.each([
@@ -136,4 +136,14 @@ test('Open Playground switches to the Playground', async () => {
   useSettings.setState({ section: 'code' })
   await choose(/open playground/i)
   expect(useSettings.getState().section).toBe('dryruns')
+})
+
+test('Ask Claude is offered except on the Chats section, where the chat is already the page', () => {
+  useCommandMenu.setState({ open: true })
+  const { unmount } = render(<CommandMenu />)
+  expect(screen.getByRole('option', { name: /ask claude/i })).toBeInTheDocument()
+  unmount()
+  useSettings.setState({ section: 'chats' })
+  render(<CommandMenu />)
+  expect(screen.queryByRole('option', { name: /ask claude/i })).not.toBeInTheDocument()
 })
