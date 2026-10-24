@@ -1142,6 +1142,32 @@
    "execution": {
     "taskSupport": "forbidden"
    }
+  },
+  {
+   "name": "set_problem_link",
+   "description": "Save where a problem's question lives on the web, so the student gets a button that opens it (an LC icon for LeetCode). Saved straight away, no approval needed. Use it whenever a problem without a link is a LeetCode question: https://leetcode.com/problems/<slug>/ with LeetCode's own slug. Only for a question you're sure of; null removes the link. Defaults to the problem on screen.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "The question's web address (https://...), or null to remove it"
+     }
+    },
+    "required": [
+     "link"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
   }
  ]
 }

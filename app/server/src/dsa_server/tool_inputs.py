@@ -390,6 +390,7 @@ INPUTS: dict[str, Obj] = {
     "run_tests": Obj({"slug": _opt(Str()), "file": _opt(Str()), "all": _opt(Bool())}),
     "save_code_version": Obj({"slug": _opt(Str()), "name": Str(), "content": Str(), "explanation": _explanation}),
     "list_attempts": Obj({"slug": _opt(Str())}),
+    "set_problem_link": Obj({"slug": _opt(Str()), "link": Nullable(Str())}),
 }
 
 

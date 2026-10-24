@@ -159,7 +159,7 @@ def describe_problem(entry: dict, notes: list[str], dry_runs: list[str]) -> str:
         )
     lines = [
         f"# {tmpl(problem['title'])} ({tmpl(problem['difficulty'])}) — {entry['slug']}{', solved' if entry['solved'] else ''}",
-        *([f"Link: {problem['link']}"] if isinstance(problem.get("link"), str) else []),
+        f"Link: {problem['link']}" if isinstance(problem.get("link"), str) else "Link: none yet (if it's a LeetCode question, add it with set_problem_link)",
         "",
         tmpl(problem["description"]),
         "",
@@ -607,6 +607,15 @@ class EditorTools:
             },
             f"The user declined saving {name}.",
         )
+
+    async def set_problem_link(self, link: str | None, slug: str | None = None) -> dict:
+        # Only says where the question lives and is easy to change, so it's saved without asking.
+        entry = self.problem(slug)
+        if link is not None and not store.web_link(link):
+            raise ToolError("The link must be a web address starting with https:// or http://.")
+        store.write_link(self.problems_dir, entry["slug"], link)
+        self.send({"type": "problem_changed", "slug": entry["slug"], "open": False})
+        return {"text": f"Saved the link on {entry['slug']}; the student can open the question from the problem." if link else f"Removed the link from {entry['slug']}."}
 
     async def list_attempts(self, slug: str | None = None) -> dict:
         entry = self.problem(slug)

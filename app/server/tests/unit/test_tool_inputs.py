@@ -150,6 +150,6 @@ def test_claude_sees_the_link_when_there_is_one():
 
     problem = {"title": "Two Sum", "difficulty": "easy", "description": "d", "params": [{"name": "n", "type": "int"}], "compare": "exact", "tests": []}
     entry = {"slug": "two-sum", "solved": False, "problem": problem, "solution": "", "versions": [], "driver": ""}
-    assert "Link:" not in describe_problem(entry, [], [])
+    assert describe_problem(entry, [], []).splitlines()[1].startswith("Link: none yet")
     lines = describe_problem({**entry, "problem": {**problem, "link": "https://leetcode.com/problems/two-sum/"}}, [], []).splitlines()
     assert lines[1] == "Link: https://leetcode.com/problems/two-sum/"

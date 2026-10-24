@@ -44,6 +44,7 @@ const TOOL_LABEL: Record<string, { label: (detail: string) => string; icon: type
   run_tests: { label: () => 'Ran the test cases', icon: Play },
   save_code_version: { label: () => 'Proposed another version of your code', icon: FilePlus2 },
   list_attempts: { label: () => 'Checked your submissions', icon: ListChecks },
+  set_problem_link: { label: () => 'Added the question link', icon: ListChecks },
 }
 
 function ToolList({ tools }: { tools: ToolActivity[] }) {

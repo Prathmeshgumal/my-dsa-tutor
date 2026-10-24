@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Circle,
   CloudUpload,
+  ExternalLink,
   ListChecks,
   Loader2,
   Play,
@@ -33,7 +34,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   codeOf,
-  guessLeetCodeLink,
   isWebLink,
   linkLabel,
   SOLUTION_FILE,
@@ -128,92 +128,31 @@ function ProblemList() {
   )
 }
 
-/** A button to the question on the site it came from (LeetCode, mostly), or a way to add one. Only web addresses
- * become links, so a saved "javascript:" can't run anything. */
-function QuestionLink({ entry }: { entry: ProblemEntry }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const { link, title } = entry.problem
-  const edit = (value: string | null) => {
-    setDraft(value)
-    setError(null)
-  }
-  // The box closes only once the server has kept the link; if it turns it down, the box stays with the reason.
-  const save = async (value: string | null) => {
-    try {
-      await useProblems.getState().setLink(value)
-      edit(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-  const problem = error && (
-    <p role="alert" className="basis-full text-[12px] text-red-600 dark:text-red-400">
-      {error}
-    </p>
-  )
-  if (draft !== null) {
-    const ok = isWebLink(draft.trim())
-    return (
-      <form
-        className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (ok) void save(draft.trim())
-        }}
-      >
-        <input
-          aria-label="Link to the question"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && edit(null)}
-          autoFocus
-          className="h-6 min-w-0 flex-1 rounded border bg-background px-1.5 text-[12px] outline-none focus:border-violet-500"
-        />
-        <Button type="submit" size="sm" className="h-6 px-2 text-[12px]" disabled={!ok} aria-label="Save link">
-          Save
-        </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => edit(null)}>
-          Cancel
-        </Button>
-        {link && (
-          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => void save(null)}>
-            Remove link
-          </Button>
-        )}
-        {problem}
-      </form>
-    )
-  }
-  if (link && isWebLink(link)) {
-    return (
-      <span className="ml-auto flex flex-wrap items-center gap-1">
-        <a href={link} target="_blank" rel="noreferrer" className="rounded-full border px-2 py-0.5 font-medium hover:bg-muted">
-          {linkLabel(link)} ↗
-        </a>
-        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => edit(link)}>
-          Edit
-        </button>
-        <button
-          type="button"
-          aria-label="Remove link"
-          className="text-muted-foreground hover:text-foreground"
-          onClick={() => void save(null)}
-        >
-          Remove
-        </button>
-        {problem}
-      </span>
-    )
-  }
+/** An icon that opens the question on the site it came from: "LC" for LeetCode, else the site's name. Claude adds the
+ * link when it knows where the question is from. Only web addresses become links, so a saved "javascript:" can't run. */
+function QuestionLink({ link }: { link: string | undefined }) {
+  if (!link || !isWebLink(link)) return null
+  const site = linkLabel(link)
   return (
-    <button
-      type="button"
-      className="ml-auto text-muted-foreground hover:text-foreground"
-      onClick={() => edit(link ?? guessLeetCodeLink(title))}
+    <a
+      href={link}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`Open on ${site}`}
+      title={`Open on ${site}`}
+      className={cn(
+        'ml-auto flex h-6 items-center gap-1 rounded-md border px-1.5 font-semibold transition-colors hover:bg-muted',
+        site === 'LeetCode' ? 'text-[#ffa116]' : 'text-muted-foreground hover:text-foreground',
+      )}
     >
-      Add link
-    </button>
+      {site === 'LeetCode' ? (
+        'LC'
+      ) : (
+        <>
+          {site} <ExternalLink className="size-3" aria-hidden />
+        </>
+      )}
+    </a>
   )
 }
 
@@ -274,7 +213,7 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
                   <CheckCircle2 className="size-3.5" aria-hidden /> Solved
                 </span>
               )}
-              <QuestionLink key={entry.slug} entry={entry} />
+              <QuestionLink link={problem.link} />
             </div>
             <div className="text-[13.5px] leading-relaxed">
               <Markdown>{problem.description}</Markdown>

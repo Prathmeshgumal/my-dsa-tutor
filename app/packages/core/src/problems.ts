@@ -132,11 +132,6 @@ export function linkLabel(url: string): string {
   return /(^|\.)leetcode\.(com|cn)$/.test(host) ? 'LeetCode' : host
 }
 
-/** LeetCode's address for a title, as a starting point for "Add link": "Two Sum II" → …/problems/two-sum-ii/ */
-export function guessLeetCodeLink(title: string): string {
-  return `https://leetcode.com/problems/${slugify(title)}/`
-}
-
 /** A slug not in `taken`: two-sum, two-sum-2, two-sum-3… */
 export function uniqueSlug(title: string, taken: string[]): string {
   const base = slugify(title)

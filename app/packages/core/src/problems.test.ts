@@ -4,7 +4,6 @@ import {
   buildStdin,
   casesFor,
   describeInput,
-  guessLeetCodeLink,
   isWebLink,
   judgeOutput,
   linkLabel,
@@ -220,10 +219,5 @@ describe('links to the question', () => {
     expect(linkLabel('https://leetcode.com/problems/two-sum/')).toBe('LeetCode')
     expect(linkLabel('https://leetcode.cn/problems/two-sum/')).toBe('LeetCode')
     expect(linkLabel('https://www.naukri.com/code360/x')).toBe('naukri.com')
-  })
-
-  it('guesses the LeetCode address from the title', () => {
-    expect(guessLeetCodeLink('3Sum')).toBe('https://leetcode.com/problems/3sum/')
-    expect(guessLeetCodeLink('Two Sum II')).toBe('https://leetcode.com/problems/two-sum-ii/')
   })
 })

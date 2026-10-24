@@ -182,12 +182,27 @@ const withProblem = (extra: Partial<ProblemEntry['problem']>) =>
     fetchImpl: ((url: string) => json(url === '/api/problems' ? [{ ...entry, problem: { ...entry.problem, ...extra } }] : [])) as typeof fetch,
   })
 
-test('a LeetCode problem has a button that opens the question', async () => {
+test('a LeetCode problem has an LC icon that opens the question in a new tab', async () => {
   withProblem({ link: 'https://leetcode.com/problems/two-sum/' })
   renderScreen()
-  const link = await screen.findByRole('link', { name: /LeetCode/ })
+  const link = await screen.findByRole('link', { name: 'Open on LeetCode' })
   expect(link).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
   expect(link).toHaveAttribute('target', '_blank')
+  expect(link).toHaveTextContent('LC')
+  for (const name of ['Add link', 'Edit', 'Remove link']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+})
+
+test('a question from another site opens there too', async () => {
+  withProblem({ link: 'https://www.naukri.com/code360/problems/x' })
+  renderScreen()
+  expect(await screen.findByRole('link', { name: 'Open on naukri.com' })).toHaveAttribute('href', 'https://www.naukri.com/code360/problems/x')
+})
+
+test('with no link there is nothing to fill in by hand: Claude adds it', async () => {
+  renderScreen()
+  await screen.findByRole('heading', { name: 'Two Sum' })
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Add link' })).not.toBeInTheDocument()
 })
 
 test('a link that isn’t a web address is never shown as one', async () => {
@@ -197,23 +212,6 @@ test('a link that isn’t a web address is never shown as one', async () => {
   expect(screen.queryByRole('link')).not.toBeInTheDocument()
 })
 
-test('Add link suggests the LeetCode address and saves what you confirm', async () => {
-  const sent: { url: string; body: unknown }[] = []
-  configureProblems({
-    fetchImpl: ((url: string, init?: RequestInit) => {
-      if (init?.method === 'PUT') sent.push({ url, body: JSON.parse(init.body as string) })
-      return url === '/api/problems' ? json([entry]) : Promise.resolve(new Response(null, { status: 204 }))
-    }) as typeof fetch,
-  })
-  renderScreen()
-  fireEvent.click(await screen.findByRole('button', { name: 'Add link' }))
-  const box = screen.getByRole('textbox', { name: 'Link to the question' })
-  expect(box).toHaveValue('https://leetcode.com/problems/two-sum/')
-  fireEvent.click(screen.getByRole('button', { name: 'Save link' }))
-  expect(await screen.findByRole('link', { name: /LeetCode/ })).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
-  expect(sent).toEqual([{ url: '/api/problems/two-sum/link', body: { link: 'https://leetcode.com/problems/two-sum/' } }])
-})
-
 test('a note linked to the problem opens in the Notes section', async () => {
   useSettings.setState({ section: 'problems' })
   renderScreen()
@@ -221,36 +219,6 @@ test('a note linked to the problem opens in the Notes section', async () => {
   fireEvent.click(await screen.findByRole('button', { name: /^Hash map trick/ }))
   await vi.waitFor(() => expect(useNotes.getState().activeName).toBe('note-1.md'))
   expect(useSettings.getState().section).toBe('notes')
-})
-
-test('a link the server turns down keeps the box open and says why', async () => {
-  configureProblems({
-    fetchImpl: ((url: string, init?: RequestInit) =>
-      init?.method === 'PUT'
-        ? Promise.resolve(new Response(JSON.stringify({ error: 'The link must be a web address.' }), { status: 400 }))
-        : json(url === '/api/problems' ? [entry] : [])) as typeof fetch,
-  })
-  renderScreen()
-  fireEvent.click(await screen.findByRole('button', { name: 'Add link' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Save link' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('The link must be a web address.')
-  expect(screen.getByRole('textbox', { name: 'Link to the question' })).toHaveValue('https://leetcode.com/problems/two-sum/')
-})
-
-test('a saved link can be removed straight from the problem', async () => {
-  const sent: unknown[] = []
-  configureProblems({
-    fetchImpl: ((url: string, init?: RequestInit) => {
-      if (init?.method === 'PUT') sent.push(JSON.parse(init.body as string))
-      return url === '/api/problems'
-        ? json([{ ...entry, problem: { ...entry.problem, link: 'https://leetcode.com/problems/two-sum/' } }])
-        : Promise.resolve(new Response(null, { status: 204 }))
-    }) as typeof fetch,
-  })
-  renderScreen()
-  fireEvent.click(await screen.findByRole('button', { name: 'Remove link' }))
-  expect(await screen.findByRole('button', { name: 'Add link' })).toBeInTheDocument()
-  expect(sent).toEqual([{ link: null }])
 })
 
 test('code typed but not saved yet is written when you leave the Problems section', async () => {
