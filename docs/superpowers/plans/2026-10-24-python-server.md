@@ -105,4 +105,40 @@ Editor tools, approvals, turns that survive reconnects, chat, apply.
 - The Docker editor runs on Python with your token, and your data is untouched.
 
 ## Baseline numbers (Node)
-_Filled in by task 0._
+Median of 3 runs (`uv run python bench/bench.py node`, saved in `app/server/bench/results-node.json`).
+One run's p95 moves 10–60 % from run to run on the same server, so every result is a median of 3.
+
+| Measure | p50 ms | p95 ms |
+|---|---|---|
+| List files (60 files) | 2.132 | 3.598 |
+| Save a file | 0.741 | 1.491 |
+| GET /api/state (1 MB chats) | 4.596 | 7.459 |
+| Save 1 MB chat state | 3.891 | 8.084 |
+| Page (index.html) | 0.576 | 1.418 |
+| Static asset (JS) | 0.938 | 1.84 |
+| /api/health | 1.171 | 2.545 |
+| /piston HTTP, added time | 0.502 | 1.282 |
+| Interactive run, first output | 0.618 | 1.591 |
+| Interactive run, typed line round trip | 0.381 | 1.191 |
+| Outside edit reaches the page (incl. 300 ms settle) | 301.959 | 302.571 |
+
+Startup 599 ms, idle memory 130.7 MB.
+
+## How the checks work (task 0 notes)
+- **Contract tests** (`app/server/tests/contract`, 186 tests) start a real server on a scratch data folder
+  with a pretend Piston, and check status codes, bodies, headers, SSE, WebSockets and files on disk.
+- **Claude checks** point the server at a stand-in engine (`tests/support/fake_claude.py`) through
+  `DSA_CLAUDE_CLI`, a test-only setting. It records everything the SDK sends it: command line,
+  environment, initialize request (system prompt and all 20 tool definitions), the prompt, and every tool
+  result. Then it plays back a scripted reply. Four scenarios (reads, changes with approvals, runs and dry
+  runs, images and errors) are recorded from Node in `tests/fixtures/engine`. Together with the page's events,
+  what Piston was sent (the C++ harness) and the files written, they must match exactly. This replaces the
+  separate prompt, tool, mapper and harness fixtures listed above, and checks them end to end instead.
+- **Ruling: one known Node bug is not copied.** Node 24's recursive `fs.watch` on Linux stops reporting a file
+  name after a quick save, rename and delete (reproduced with `fs.watch` alone, no editor code). You see it as
+  an outside edit to a renamed-away name never showing in the editor. The test for it is marked as a known
+  Node failure; the Python server must pass it. Cost if wrong: none to you, it only adds a refresh that was
+  missing.
+- **Ruling: the test server gets no `CLAUDE*`/`ANTHROPIC*` variables** from whoever runs the tests (a Claude
+  Code session leaks `CLAUDE_EFFORT` and others). The SDK's own are recorded: `CLAUDE_AGENT_SDK_VERSION`,
+  `CLAUDE_CODE_ENTRYPOINT` (`sdk-ts`) and `CLAUDE_CODE_SDK_READS_SESSION_STATE`.

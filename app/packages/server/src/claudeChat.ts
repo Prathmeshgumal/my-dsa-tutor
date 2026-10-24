@@ -409,6 +409,8 @@ export function createClaudeChatMiddleware({
             allowedTools: TOOL_NAMES.map((n) => `${TOOL_PREFIX}${n}`),
             canUseTool: async (toolName) => ({ behavior: 'deny', message: `${toolName} isn't available in the editor.` }),
             maxTurns: 30,
+            // Test seam: the server's checks point this at a stand-in engine (server/tests/support/fake_claude.py).
+            ...(process.env.DSA_CLAUDE_CLI ? { pathToClaudeCodeExecutable: process.env.DSA_CLAUDE_CLI } : {}),
           },
         })
         try {

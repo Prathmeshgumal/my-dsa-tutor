@@ -1,0 +1,2629 @@
+{
+ "events": [
+  {
+   "type": "turn",
+   "turnId": "<id0>"
+  },
+  {
+   "type": "session",
+   "sessionId": "00000000-0000-4000-8000-000000000001"
+  },
+  {
+   "type": "run",
+   "file": "two_sum.cpp",
+   "result": {
+    "status": "success",
+    "statusText": "Accepted",
+    "stdout": "ran 114 chars\nstdin: 5\n",
+    "stderr": "",
+    "compileOutput": "",
+    "timeMs": 3,
+    "memoryKb": 1184
+   },
+   "stdin": "5\n"
+  },
+  {
+   "type": "run",
+   "file": "two_sum.cpp",
+   "result": {
+    "status": "success",
+    "statusText": "Accepted",
+    "stdout": "ran 114 chars\nstdin: ",
+    "stderr": "",
+    "compileOutput": "",
+    "timeMs": 3,
+    "memoryKb": 1184
+   },
+   "stdin": ""
+  },
+  {
+   "type": "visualization",
+   "run": {
+    "id": "<id2>",
+    "title": "Dry run",
+    "file": "two_sum.cpp",
+    "language": "cpp",
+    "code": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    cout << n * 2 << endl;\n}\n",
+    "problem": "two-sum",
+    "createdAt": "<time>",
+    "steps": [
+     {
+      "line": 5,
+      "note": "Read n",
+      "vars": {
+       "n": 5
+      }
+     },
+     {
+      "line": 6,
+      "note": "Print double",
+      "vars": {
+       "n": 5
+      },
+      "output": "10\n",
+      "calc": "n * 2 = 10"
+     }
+    ]
+   }
+  },
+  {
+   "type": "visualization",
+   "run": {
+    "id": "<id3>",
+    "title": "Linked",
+    "file": "solution.cpp",
+    "language": "cpp",
+    "code": "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n",
+    "problem": "two-sum",
+    "expected": "10",
+    "createdAt": "<time>",
+    "steps": [
+     {
+      "line": 5,
+      "note": "Read n",
+      "vars": {
+       "n": 5
+      }
+     },
+     {
+      "line": 6,
+      "note": "Print double",
+      "vars": {
+       "n": 5
+      },
+      "output": "10\n",
+      "calc": "n * 2 = 10"
+     }
+    ]
+   }
+  },
+  {
+   "type": "error",
+   "message": "Claude stopped with an error."
+  }
+ ],
+ "engine": [
+  {
+   "kind": "argv",
+   "value": [
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--input-format",
+    "stream-json",
+    "--max-turns=30",
+    "--permission-prompt-tool=stdio",
+    "--allowedTools=mcp__editor__get_editor_state,mcp__editor__list_files,mcp__editor__read_file,mcp__editor__get_last_run,mcp__editor__run_code,mcp__editor__edit_file,mcp__editor__create_file,mcp__editor__list_notes,mcp__editor__read_note,mcp__editor__create_note,mcp__editor__edit_note,mcp__editor__create_visualization,mcp__editor__list_problems,mcp__editor__get_problem,mcp__editor__create_problem,mcp__editor__add_test_case,mcp__editor__edit_solution,mcp__editor__run_tests,mcp__editor__save_code_version,mcp__editor__list_attempts",
+    "--tools=",
+    "--setting-sources=",
+    "--strict-mcp-config",
+    "--include-partial-messages"
+   ]
+  },
+  {
+   "kind": "env",
+   "value": {
+    "CLAUDE_AGENT_SDK_VERSION": "0.3.302",
+    "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
+    "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1"
+   }
+  },
+  {
+   "kind": "control_request",
+   "value": {
+    "subtype": "initialize",
+    "sdkMcpServers": [
+     "editor"
+    ],
+    "sdkMcpServerManifests": {
+     "editor": {
+      "initializeResult": {
+       "protocolVersion": "2025-11-25",
+       "capabilities": {
+        "tools": {
+         "listChanged": true
+        }
+       },
+       "serverInfo": {
+        "name": "editor",
+        "version": "1.0.0"
+       }
+      },
+      "toolsListResult": {
+       "tools": [
+        {
+         "name": "get_editor_state",
+         "description": "Which file is open in the editor (and its language) and which tabs are open.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "list_files",
+         "description": "List the user's solution files with their length in lines.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "read_file",
+         "description": "Read a solution file with line numbers. Reads the saved file, which matches what the editor shows.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string",
+            "description": "File name, e.g. two_sum.cpp"
+           },
+           "start_line": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+           },
+           "end_line": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+           }
+          },
+          "required": [
+           "name"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "get_last_run",
+         "description": "What the editor's output panel shows: the last run's result, stdout, stderr or compiler errors, time and memory.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "run_code",
+         "description": "Compile and run a solution file (defaults to the open file) with optional stdin, e.g. to test a case. The result also appears in the user's output panel. Runs the saved file.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "description": "File to run; defaults to the open file",
+            "type": "string"
+           },
+           "stdin": {
+            "description": "Input for the program",
+            "type": "string"
+           }
+          }
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "edit_file",
+         "description": "Propose replacing one exact, unique piece of a file. The user sees the change and must approve it before it is applied. Keep each edit small and focused.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string"
+           },
+           "old_text": {
+            "type": "string",
+            "description": "Exact text to replace, copied from read_file (without line numbers); must appear exactly once"
+           },
+           "new_text": {
+            "type": "string",
+            "description": "Replacement text"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "name",
+           "old_text",
+           "new_text",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "create_file",
+         "description": "Propose a new solution file (.cpp, .java or .py). The user must approve it. Never overwrites.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string"
+           },
+           "content": {
+            "type": "string"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "name",
+           "content",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "list_notes",
+         "description": "List the user's Markdown notes (file name and title). Notes are separate from code files.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "read_note",
+         "description": "Read one of the user's Markdown notes.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string",
+            "description": "e.g. note-1.md"
+           }
+          },
+          "required": [
+           "name"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "create_note",
+         "description": "Propose a new Markdown note in the Notes panel. Start it with a \"# Title\" line. The user must approve it.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "content": {
+            "type": "string",
+            "description": "The whole note in Markdown, starting with a # title"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "content",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "edit_note",
+         "description": "Propose replacing one exact, unique piece of a note (e.g. to add to it). The user must approve it.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string"
+           },
+           "old_text": {
+            "type": "string",
+            "description": "Exact text to replace, copied from read_note; must appear exactly once"
+           },
+           "new_text": {
+            "type": "string"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "name",
+           "old_text",
+           "new_text",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "create_visualization",
+         "description": "Show a step-by-step dry run in the Playground: the code with the current line, a note per step, variables, and data structures drawn visually (arrays with pointers, DP grids, maps, stacks/queues, linked lists, binary trees, graphs). Use it to dry run the student's code or to explain a bug or an idea. Pass \"file\" to show that file's code; \"line\" in each step refers to it. Each step is a full snapshot (repeat structures and vars every step). One step per meaningful line; at most 200 steps. Mark the step where things go wrong with mistake: true.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "title": {
+            "type": "string",
+            "description": "e.g. \"Dry run: twoSum on [2,7,11,15], target 9\""
+           },
+           "file": {
+            "description": "File the steps walk through: a solutions file, or with \"problem\" one of its code files (default solution.cpp)",
+            "type": "string"
+           },
+           "problem": {
+            "description": "Slug of a practice problem: trace the student's code for it (solution.cpp unless file says otherwise)",
+            "type": "string"
+           },
+           "input": {
+            "description": "The input used",
+            "type": "string"
+           },
+           "expected": {
+            "description": "The correct output for this input, printed the way the code prints it; the last step's output is checked against it",
+            "type": "string"
+           },
+           "steps": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "line": {
+               "description": "1-based line of the file that runs in this step",
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              },
+              "note": {
+               "type": "string",
+               "description": "What happens in this step, in plain words (one or two short sentences)"
+              },
+              "vars": {
+               "description": "Variable values after this step",
+               "type": "object",
+               "propertyNames": {
+                "type": "string"
+               },
+               "additionalProperties": {
+                "type": [
+                 "number",
+                 "string",
+                 "boolean",
+                 "null"
+                ]
+               }
+              },
+              "structures": {
+               "description": "Data structures after this step (repeat them every step)",
+               "type": "array",
+               "items": {
+                "oneOf": [
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "array"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "values": {
+                    "type": "array",
+                    "items": {
+                     "type": [
+                      "number",
+                      "string",
+                      "boolean",
+                      "null"
+                     ]
+                    }
+                   },
+                   "pointers": {
+                    "description": "Named indices drawn as arrows, e.g. {\"i\":0,\"j\":3}",
+                    "type": "object",
+                    "propertyNames": {
+                     "type": "string"
+                    },
+                    "additionalProperties": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "highlight": {
+                    "description": "Indices being compared/read",
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "swapped": {
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "done": {
+                    "description": "Indices already final",
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "capacity": {
+                    "description": "For a vector: allocated slots; extra ones are drawn as empty spare slots",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "values"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "grid"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "rows": {
+                    "type": "array",
+                    "items": {
+                     "type": "array",
+                     "items": {
+                      "type": [
+                       "number",
+                       "string",
+                       "boolean",
+                       "null"
+                      ]
+                     }
+                    },
+                    "description": "A DP table or matrix"
+                   },
+                   "rowLabels": {
+                    "type": "array",
+                    "items": {
+                     "type": "string"
+                    }
+                   },
+                   "colLabels": {
+                    "type": "array",
+                    "items": {
+                     "type": "string"
+                    }
+                   },
+                   "current": {
+                    "description": "[row, col] being filled",
+                    "type": "array",
+                    "items": [
+                     {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                     },
+                     {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                     }
+                    ],
+                    "additionalItems": false,
+                    "minItems": 2,
+                    "maxItems": 2
+                   },
+                   "highlight": {
+                    "description": "[row, col] cells it reads",
+                    "type": "array",
+                    "items": {
+                     "type": "array",
+                     "items": [
+                      {
+                       "type": "integer",
+                       "minimum": -9007199254740991,
+                       "maximum": 9007199254740991
+                      },
+                      {
+                       "type": "integer",
+                       "minimum": -9007199254740991,
+                       "maximum": 9007199254740991
+                      }
+                     ],
+                     "additionalItems": false,
+                     "minItems": 2,
+                     "maxItems": 2
+                    }
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "rows"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "map"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "entries": {
+                    "type": "array",
+                    "items": {
+                     "type": "array",
+                     "items": [
+                      {
+                       "type": [
+                        "number",
+                        "string",
+                        "boolean",
+                        "null"
+                       ]
+                      },
+                      {
+                       "type": [
+                        "number",
+                        "string",
+                        "boolean",
+                        "null"
+                       ]
+                      }
+                     ],
+                     "additionalItems": false,
+                     "minItems": 2,
+                     "maxItems": 2
+                    }
+                   },
+                   "highlight": {
+                    "description": "Keys just added or read",
+                    "type": "array",
+                    "items": {
+                     "type": [
+                      "number",
+                      "string",
+                      "boolean",
+                      "null"
+                     ]
+                    }
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "entries"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "enum": [
+                     "stack",
+                     "queue"
+                    ]
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "values": {
+                    "type": "array",
+                    "items": {
+                     "type": [
+                      "number",
+                      "string",
+                      "boolean",
+                      "null"
+                     ]
+                    },
+                    "description": "Stack: bottom→top. Queue: front→back."
+                   },
+                   "highlight": {
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "values"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "linked_list"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "nodes": {
+                    "type": "array",
+                    "items": {
+                     "type": [
+                      "number",
+                      "string",
+                      "boolean",
+                      "null"
+                     ]
+                    }
+                   },
+                   "pointers": {
+                    "description": "e.g. {\"slow\":1,\"fast\":3,\"prev\":null}",
+                    "type": "object",
+                    "propertyNames": {
+                     "type": "string"
+                    },
+                    "additionalProperties": {
+                     "anyOf": [
+                      {
+                       "type": "integer",
+                       "minimum": -9007199254740991,
+                       "maximum": 9007199254740991
+                      },
+                      {
+                       "type": "null"
+                      }
+                     ]
+                    }
+                   },
+                   "highlight": {
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "cycleTo": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "nodes"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "tree"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "nodes": {
+                    "type": "array",
+                    "items": {
+                     "type": [
+                      "number",
+                      "string",
+                      "boolean",
+                      "null"
+                     ]
+                    },
+                    "description": "Binary tree in level order with nulls, LeetCode style"
+                   },
+                   "highlight": {
+                    "description": "Level-order indices being visited",
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "done": {
+                    "type": "array",
+                    "items": {
+                     "type": "integer",
+                     "minimum": -9007199254740991,
+                     "maximum": 9007199254740991
+                    }
+                   },
+                   "pointers": {
+                    "type": "object",
+                    "propertyNames": {
+                     "type": "string"
+                    },
+                    "additionalProperties": {
+                     "anyOf": [
+                      {
+                       "type": "integer",
+                       "minimum": -9007199254740991,
+                       "maximum": 9007199254740991
+                      },
+                      {
+                       "type": "null"
+                      }
+                     ]
+                    }
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "nodes"
+                  ]
+                 },
+                 {
+                  "type": "object",
+                  "properties": {
+                   "kind": {
+                    "type": "string",
+                    "const": "graph"
+                   },
+                   "name": {
+                    "type": "string"
+                   },
+                   "nodes": {
+                    "type": "array",
+                    "items": {
+                     "type": "string"
+                    }
+                   },
+                   "edges": {
+                    "type": "array",
+                    "items": {
+                     "anyOf": [
+                      {
+                       "type": "array",
+                       "items": [
+                        {
+                         "type": "string"
+                        },
+                        {
+                         "type": "string"
+                        }
+                       ],
+                       "additionalItems": false,
+                       "minItems": 2,
+                       "maxItems": 2
+                      },
+                      {
+                       "type": "array",
+                       "items": [
+                        {
+                         "type": "string"
+                        },
+                        {
+                         "type": "string"
+                        },
+                        {
+                         "type": [
+                          "number",
+                          "string",
+                          "boolean",
+                          "null"
+                         ]
+                        }
+                       ],
+                       "additionalItems": false,
+                       "minItems": 3,
+                       "maxItems": 3
+                      }
+                     ]
+                    }
+                   },
+                   "directed": {
+                    "type": "boolean"
+                   },
+                   "current": {
+                    "type": "string"
+                   },
+                   "visited": {
+                    "type": "array",
+                    "items": {
+                     "type": "string"
+                    }
+                   },
+                   "activeEdges": {
+                    "type": "array",
+                    "items": {
+                     "type": "array",
+                     "items": [
+                      {
+                       "type": "string"
+                      },
+                      {
+                       "type": "string"
+                      }
+                     ],
+                     "additionalItems": false,
+                     "minItems": 2,
+                     "maxItems": 2
+                    }
+                   }
+                  },
+                  "required": [
+                   "kind",
+                   "name",
+                   "nodes",
+                   "edges"
+                  ]
+                 }
+                ]
+               }
+              },
+              "output": {
+               "description": "Everything printed so far",
+               "type": "string"
+              },
+              "mistake": {
+               "description": "true on the step where the bug shows up",
+               "type": "boolean"
+              },
+              "moves": {
+               "description": "Arrows for what moved where in this step. Name boxes like \"arr[3]\", \"seen[7]\" (map key), \"dp[1][2]\", \"st[0]\", or a variable name. Both ends must be drawn in this step.",
+               "type": "array",
+               "items": {
+                "type": "object",
+                "properties": {
+                 "from": {
+                  "type": "string"
+                 },
+                 "to": {
+                  "type": "string"
+                 },
+                 "label": {
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "from",
+                 "to"
+                ]
+               }
+              },
+              "check": {
+               "description": "The condition this step evaluates, with real values: {\"expr\":\"arr[j] > arr[j+1] → 5 > 1\",\"result\":true}",
+               "type": "object",
+               "properties": {
+                "expr": {
+                 "type": "string"
+                },
+                "result": {
+                 "type": "boolean"
+                }
+               },
+               "required": [
+                "expr",
+                "result"
+               ]
+              },
+              "calc": {
+               "description": "The calculation on this line with real values, e.g. \"sum = 2 + 7 = 9\"",
+               "type": "string"
+              },
+              "loop": {
+               "description": "Where we are in the loops, e.g. \"pass 2 of 3 · j = 1\"",
+               "type": "string"
+              },
+              "callStack": {
+               "description": "For recursion: calls in progress, outermost first, e.g. [\"main()\", \"fib(4)\", \"fib(3)\"]",
+               "type": "array",
+               "items": {
+                "type": "string"
+               }
+              },
+              "phase": {
+               "description": "The part of the algorithm this step starts, e.g. \"Transpose\" or \"Reverse each row\"; set it on the first step of each part only",
+               "type": "string"
+              }
+             },
+             "required": [
+              "note"
+             ]
+            }
+           }
+          },
+          "required": [
+           "title",
+           "steps"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "list_problems",
+         "description": "List the practice problems (slug, title, difficulty, solved, number of submissions).",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "get_problem",
+         "description": "Read a practice problem: description, parameters, every test case, the student's solution.cpp with line numbers, and the hidden driver. Defaults to the problem on screen.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           }
+          }
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "create_problem",
+         "description": "Turn a question the student shares (pasted text, a screenshot, LeetCode/codehelp/anywhere) into a practice problem with LeetCode-style layout: description on the left, only class Solution in the editor, test cases checked automatically. The student approves it, then it opens on the Problem screen.\n\nHow tests run: the program is HARNESS + starter/solution + driver. The harness already includes <bits/stdc++.h>, \"using namespace std\", ListNode and TreeNode (LeetCode definitions), and:\n- judge::read<T>() reads one input line as T: int, long long, double, bool, char (\"a\"), string (\"abc\"), vector<...> of those (nested too, e.g. [[1,2],[3]]), ListNode* ([1,2,3]) and TreeNode* (level order with null).\n- judge::run(f) runs every case: f reads one case's input with judge::read and returns the answer, which is printed in LeetCode format and compared with \"expected\".\nSo a driver is usually just:\nint main() {\n    judge::run([] {\n        auto nums = judge::read<vector<int>>();\n        auto target = judge::read<int>();\n        return Solution().twoSum(nums, target);\n    });\n}\nFor in-place problems (void), call the method and return the modified argument. Don't define ListNode/TreeNode or main elsewhere.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "title": {
+            "type": "string",
+            "description": "e.g. \"Two Sum\""
+           },
+           "difficulty": {
+            "type": "string",
+            "enum": [
+             "easy",
+             "medium",
+             "hard"
+            ]
+           },
+           "description": {
+            "type": "string",
+            "description": "The problem statement in Markdown, with its examples (Input/Output/Explanation) and constraints, faithful to the source"
+           },
+           "params": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "name": {
+               "type": "string"
+              },
+              "type": {
+               "type": "string",
+               "description": "C++ type, e.g. vector<int>"
+              }
+             },
+             "required": [
+              "name",
+              "type"
+             ]
+            },
+            "description": "The function parameters, in order"
+           },
+           "compare": {
+            "description": "any_order when the answer list can be in any order; any_order_nested when inner lists can also be (e.g. 3Sum triplets)",
+            "type": "string",
+            "enum": [
+             "exact",
+             "any_order",
+             "any_order_nested"
+            ]
+           },
+           "tests": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "input": {
+               "type": "array",
+               "items": {
+                "type": "string"
+               },
+               "description": "One value per parameter, LeetCode format: \"[2,7,11,15]\", \"9\", \"\\\"abc\\\"\""
+              },
+              "expected": {
+               "type": "string",
+               "description": "The answer in LeetCode format, e.g. \"[0,1]\", \"true\", \"\\\"bab\\\"\", \"2.50000\" for doubles"
+              },
+              "example": {
+               "type": "boolean",
+               "description": "true for the examples given in the problem"
+              }
+             },
+             "required": [
+              "input",
+              "expected",
+              "example"
+             ]
+            },
+            "description": "The problem's examples, plus a few more cases covering edge cases (empty, single element, duplicates, negatives, large values)"
+           },
+           "starter": {
+            "type": "string",
+            "description": "The class Solution { public: ... }; skeleton the student fills in (empty function body), like LeetCode"
+           },
+           "driver": {
+            "type": "string",
+            "description": "The hidden main() using judge::run and judge::read"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "title",
+           "difficulty",
+           "description",
+           "params",
+           "tests",
+           "starter",
+           "driver",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "add_test_case",
+         "description": "Propose an extra test case for a problem (e.g. an edge case the student's code misses). The student approves it. Defaults to the problem on screen.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           },
+           "input": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            },
+            "description": "One value per parameter, LeetCode format"
+           },
+           "expected": {
+            "type": "string",
+            "description": "The correct answer, LeetCode format"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "input",
+           "expected",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "edit_solution",
+         "description": "Propose replacing one exact, unique piece of a problem's solution.cpp. The student must approve it. Only when they ask for a change.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           },
+           "file": {
+            "description": "Which code file: solution.cpp (default: the one open on screen) or another version",
+            "type": "string"
+           },
+           "old_text": {
+            "type": "string",
+            "description": "Exact text to replace, copied from get_problem (without line numbers); must appear exactly once"
+           },
+           "new_text": {
+            "type": "string"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "old_text",
+           "new_text",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "run_tests",
+         "description": "Run a problem's test cases against the saved solution.cpp and see each case's result and anything it printed. By default the examples and the student's own cases; all: true runs every case. Doesn't record a submission.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           },
+           "file": {
+            "description": "Which code file to test (default: the one open on screen, else solution.cpp)",
+            "type": "string"
+           },
+           "all": {
+            "type": "boolean"
+           }
+          }
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "save_code_version",
+         "description": "Save another version of the code for a problem next to solution.cpp, e.g. brute-force.cpp to compare with the optimal one. The student approves it.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           },
+           "name": {
+            "type": "string",
+            "description": "e.g. brute-force.cpp"
+           },
+           "content": {
+            "type": "string",
+            "description": "The whole file: a class Solution like solution.cpp"
+           },
+           "explanation": {
+            "type": "string",
+            "description": "One short sentence the user sees: why this change."
+           }
+          },
+          "required": [
+           "name",
+           "content",
+           "explanation"
+          ]
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        },
+        {
+         "name": "list_attempts",
+         "description": "The student's past submissions for a problem: time, result and the code they submitted.",
+         "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+           "slug": {
+            "type": "string"
+           }
+          }
+         },
+         "execution": {
+          "taskSupport": "forbidden"
+         }
+        }
+       ]
+      }
+     }
+    },
+    "systemPrompt": [
+     "You are the coding assistant inside a small browser editor where a student practises data structures and algorithms in C++, Java and Python.\n\nYou can only act through these tools:\n- get_editor_state: which file is open and which tabs are open\n- list_files / read_file: the student's solution files (read_file shows line numbers)\n- get_last_run: what the output panel shows (last result, output, compiler errors, and the input it was given)\n- run_code: compile and run a file, optionally with stdin, to test it; the student sees the result in their output panel\n- edit_file / create_file: propose a change; the student sees it and must approve it before it is applied\n- list_notes / read_note: the student's Markdown notes (shown in the editor's Notes panel)\n- create_note / edit_note: propose a new note or a change to one; also needs approval. When the student asks you to save or add something to their notes, use these (not comments in code).\n- create_visualization: show a step-by-step dry run in the Playground (code with the current line, variables, and data structures drawn as arrays with pointers, DP grids, maps, stacks, queues, linked lists, trees, graphs)\n- list_problems / get_problem / create_problem / add_test_case / edit_solution / run_tests / list_attempts: practice problems on the Problem screen (LeetCode style: description, class Solution in the editor, test cases checked automatically)\n\nPractice problems:\n- When the student shares a question to solve (pasted text, a screenshot, a LeetCode or codehelp problem), create it with create_problem instead of writing a .cpp file, so they get the problem layout. Copy the statement faithfully; add a few edge cases beyond the examples, with answers you've worked out carefully.\n- When the Problem screen is showing, <editor_context> names the problem; use get_problem to read it and its solution (not read_file).\n- To explain the question, work from its description and examples. Don't hand out the solution unless asked.\n- If their code misses an edge case, show it with add_test_case rather than putting tests in their code.\n- Use run_tests to check claims about their solution. Only the student's Submit records an attempt or marks a problem solved.\n- Everything about a problem belongs to it: while it's open, notes you create, dry runs (pass \"problem\" to create_visualization so it traces their solution) and this chat are linked to it automatically. A problem can have several versions of the code (e.g. brute force and optimal): save_code_version adds one, and edit_solution / run_tests take a \"file\".\n\nDry runs:\n- When the student asks for a dry run, asks why their code is wrong, or would understand something better by seeing it, use create_visualization.\n- Trace the student's actual code from their file (pass \"file\"), with a small input. Read the file first so every step's line number is right.\n- Be faithful: show what the code really does, including the bug. Mark the step where it goes wrong with mistake: true, and explain it in that step's note.\n- Before creating it, run the code with the same input (run_code) and make sure the final values and output in your trace match the real run.\n- Keep it focused: one step per meaningful line, usually 10–60 steps. Afterwards, point out in chat what to watch for.\n- Make each step easy to follow: add \"moves\" arrows when values go somewhere (swaps, copies, shifts, writes into a map), \"check\" on steps that evaluate a condition (with the real values and whether it's true), \"calc\" when a line computes something (e.g. \"sum = 2 + 7 = 9\"), \"loop\" for where you are in the loops (e.g. \"pass 2 of 3 · j = 1\"), and \"callStack\" for recursion. Old values and pointer moves are shown automatically.\n- For a vector, pass its capacity so spare slots show.\n- Pass \"expected\": the correct output for that input, printed the way the code prints it, and keep \"output\" up to date so the last step shows what the code really printed. The student then sees straight away whether the answer is right.\n- When the algorithm has parts (e.g. \"Transpose\", then \"Reverse each row\"; or \"Build the map\", then \"Look up pairs\"), set \"phase\" on the first step of each part. They show as bands on the timeline.\n\nHow to help:\n- When the student presses Run, the program runs like a terminal: it prints its prompts and waits while they type each answer and press Enter (get_last_run shows what they typed). run_code takes stdin up front for your own test runs.\n- Each message starts with an <editor_context> block naming the open file, with its current code. Treat that code as current.\n- Prefer explaining and hinting over handing out full solutions, unless the student asks for code or a fix.\n- Check your claims: read the code, look at the last run, and run the code (with test input when useful) before saying something is fixed or correct.\n- Only change files when the student asks you to. Keep each edit small and give a one-line explanation. If an edit is declined, don't try again another way; ask what they want.\n- Be concise. Use Markdown, with fenced code blocks for code."
+    ]
+   }
+  },
+  {
+   "kind": "user",
+   "value": {
+    "type": "user",
+    "session_id": "",
+    "message": {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "<editor_context>\nThe user is looking at `two_sum.cpp` in the editor. Its current contents:\n```cpp\n#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    cout << n * 2 << endl;\n}\n\n```\nThe Problem screen is showing \"Two Sum\" (slug two-sum); use get_problem to read it.\n</editor_context>\n\nrun it"
+      }
+     ]
+    },
+    "parent_tool_use_id": null
+   }
+  },
+  {
+   "kind": "tools",
+   "value": {
+    "tools": [
+     {
+      "name": "get_editor_state",
+      "description": "Which file is open in the editor (and its language) and which tabs are open.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {}
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "list_files",
+      "description": "List the user's solution files with their length in lines.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {}
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "read_file",
+      "description": "Read a solution file with line numbers. Reads the saved file, which matches what the editor shows.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string",
+         "description": "File name, e.g. two_sum.cpp"
+        },
+        "start_line": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 9007199254740991
+        },
+        "end_line": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 9007199254740991
+        }
+       },
+       "required": [
+        "name"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "get_last_run",
+      "description": "What the editor's output panel shows: the last run's result, stdout, stderr or compiler errors, time and memory.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {}
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "run_code",
+      "description": "Compile and run a solution file (defaults to the open file) with optional stdin, e.g. to test a case. The result also appears in the user's output panel. Runs the saved file.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "description": "File to run; defaults to the open file",
+         "type": "string"
+        },
+        "stdin": {
+         "description": "Input for the program",
+         "type": "string"
+        }
+       }
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "edit_file",
+      "description": "Propose replacing one exact, unique piece of a file. The user sees the change and must approve it before it is applied. Keep each edit small and focused.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "old_text": {
+         "type": "string",
+         "description": "Exact text to replace, copied from read_file (without line numbers); must appear exactly once"
+        },
+        "new_text": {
+         "type": "string",
+         "description": "Replacement text"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "name",
+        "old_text",
+        "new_text",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "create_file",
+      "description": "Propose a new solution file (.cpp, .java or .py). The user must approve it. Never overwrites.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "content": {
+         "type": "string"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "name",
+        "content",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "list_notes",
+      "description": "List the user's Markdown notes (file name and title). Notes are separate from code files.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {}
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "read_note",
+      "description": "Read one of the user's Markdown notes.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string",
+         "description": "e.g. note-1.md"
+        }
+       },
+       "required": [
+        "name"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "create_note",
+      "description": "Propose a new Markdown note in the Notes panel. Start it with a \"# Title\" line. The user must approve it.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "content": {
+         "type": "string",
+         "description": "The whole note in Markdown, starting with a # title"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "content",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "edit_note",
+      "description": "Propose replacing one exact, unique piece of a note (e.g. to add to it). The user must approve it.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "old_text": {
+         "type": "string",
+         "description": "Exact text to replace, copied from read_note; must appear exactly once"
+        },
+        "new_text": {
+         "type": "string"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "name",
+        "old_text",
+        "new_text",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "create_visualization",
+      "description": "Show a step-by-step dry run in the Playground: the code with the current line, a note per step, variables, and data structures drawn visually (arrays with pointers, DP grids, maps, stacks/queues, linked lists, binary trees, graphs). Use it to dry run the student's code or to explain a bug or an idea. Pass \"file\" to show that file's code; \"line\" in each step refers to it. Each step is a full snapshot (repeat structures and vars every step). One step per meaningful line; at most 200 steps. Mark the step where things go wrong with mistake: true.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "title": {
+         "type": "string",
+         "description": "e.g. \"Dry run: twoSum on [2,7,11,15], target 9\""
+        },
+        "file": {
+         "description": "File the steps walk through: a solutions file, or with \"problem\" one of its code files (default solution.cpp)",
+         "type": "string"
+        },
+        "problem": {
+         "description": "Slug of a practice problem: trace the student's code for it (solution.cpp unless file says otherwise)",
+         "type": "string"
+        },
+        "input": {
+         "description": "The input used",
+         "type": "string"
+        },
+        "expected": {
+         "description": "The correct output for this input, printed the way the code prints it; the last step's output is checked against it",
+         "type": "string"
+        },
+        "steps": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "line": {
+            "description": "1-based line of the file that runs in this step",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+           },
+           "note": {
+            "type": "string",
+            "description": "What happens in this step, in plain words (one or two short sentences)"
+           },
+           "vars": {
+            "description": "Variable values after this step",
+            "type": "object",
+            "propertyNames": {
+             "type": "string"
+            },
+            "additionalProperties": {
+             "type": [
+              "number",
+              "string",
+              "boolean",
+              "null"
+             ]
+            }
+           },
+           "structures": {
+            "description": "Data structures after this step (repeat them every step)",
+            "type": "array",
+            "items": {
+             "oneOf": [
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "array"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "values": {
+                 "type": "array",
+                 "items": {
+                  "type": [
+                   "number",
+                   "string",
+                   "boolean",
+                   "null"
+                  ]
+                 }
+                },
+                "pointers": {
+                 "description": "Named indices drawn as arrows, e.g. {\"i\":0,\"j\":3}",
+                 "type": "object",
+                 "propertyNames": {
+                  "type": "string"
+                 },
+                 "additionalProperties": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "highlight": {
+                 "description": "Indices being compared/read",
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "swapped": {
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "done": {
+                 "description": "Indices already final",
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "capacity": {
+                 "description": "For a vector: allocated slots; extra ones are drawn as empty spare slots",
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "values"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "grid"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "rows": {
+                 "type": "array",
+                 "items": {
+                  "type": "array",
+                  "items": {
+                   "type": [
+                    "number",
+                    "string",
+                    "boolean",
+                    "null"
+                   ]
+                  }
+                 },
+                 "description": "A DP table or matrix"
+                },
+                "rowLabels": {
+                 "type": "array",
+                 "items": {
+                  "type": "string"
+                 }
+                },
+                "colLabels": {
+                 "type": "array",
+                 "items": {
+                  "type": "string"
+                 }
+                },
+                "current": {
+                 "description": "[row, col] being filled",
+                 "type": "array",
+                 "items": [
+                  {
+                   "type": "integer",
+                   "minimum": -9007199254740991,
+                   "maximum": 9007199254740991
+                  },
+                  {
+                   "type": "integer",
+                   "minimum": -9007199254740991,
+                   "maximum": 9007199254740991
+                  }
+                 ],
+                 "additionalItems": false,
+                 "minItems": 2,
+                 "maxItems": 2
+                },
+                "highlight": {
+                 "description": "[row, col] cells it reads",
+                 "type": "array",
+                 "items": {
+                  "type": "array",
+                  "items": [
+                   {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   },
+                   {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                 }
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "rows"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "map"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "entries": {
+                 "type": "array",
+                 "items": {
+                  "type": "array",
+                  "items": [
+                   {
+                    "type": [
+                     "number",
+                     "string",
+                     "boolean",
+                     "null"
+                    ]
+                   },
+                   {
+                    "type": [
+                     "number",
+                     "string",
+                     "boolean",
+                     "null"
+                    ]
+                   }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                 }
+                },
+                "highlight": {
+                 "description": "Keys just added or read",
+                 "type": "array",
+                 "items": {
+                  "type": [
+                   "number",
+                   "string",
+                   "boolean",
+                   "null"
+                  ]
+                 }
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "entries"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "enum": [
+                  "stack",
+                  "queue"
+                 ]
+                },
+                "name": {
+                 "type": "string"
+                },
+                "values": {
+                 "type": "array",
+                 "items": {
+                  "type": [
+                   "number",
+                   "string",
+                   "boolean",
+                   "null"
+                  ]
+                 },
+                 "description": "Stack: bottom→top. Queue: front→back."
+                },
+                "highlight": {
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "values"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "linked_list"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "nodes": {
+                 "type": "array",
+                 "items": {
+                  "type": [
+                   "number",
+                   "string",
+                   "boolean",
+                   "null"
+                  ]
+                 }
+                },
+                "pointers": {
+                 "description": "e.g. {\"slow\":1,\"fast\":3,\"prev\":null}",
+                 "type": "object",
+                 "propertyNames": {
+                  "type": "string"
+                 },
+                 "additionalProperties": {
+                  "anyOf": [
+                   {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   },
+                   {
+                    "type": "null"
+                   }
+                  ]
+                 }
+                },
+                "highlight": {
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "cycleTo": {
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "nodes"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "tree"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "nodes": {
+                 "type": "array",
+                 "items": {
+                  "type": [
+                   "number",
+                   "string",
+                   "boolean",
+                   "null"
+                  ]
+                 },
+                 "description": "Binary tree in level order with nulls, LeetCode style"
+                },
+                "highlight": {
+                 "description": "Level-order indices being visited",
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "done": {
+                 "type": "array",
+                 "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                 }
+                },
+                "pointers": {
+                 "type": "object",
+                 "propertyNames": {
+                  "type": "string"
+                 },
+                 "additionalProperties": {
+                  "anyOf": [
+                   {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                   },
+                   {
+                    "type": "null"
+                   }
+                  ]
+                 }
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "nodes"
+               ]
+              },
+              {
+               "type": "object",
+               "properties": {
+                "kind": {
+                 "type": "string",
+                 "const": "graph"
+                },
+                "name": {
+                 "type": "string"
+                },
+                "nodes": {
+                 "type": "array",
+                 "items": {
+                  "type": "string"
+                 }
+                },
+                "edges": {
+                 "type": "array",
+                 "items": {
+                  "anyOf": [
+                   {
+                    "type": "array",
+                    "items": [
+                     {
+                      "type": "string"
+                     },
+                     {
+                      "type": "string"
+                     }
+                    ],
+                    "additionalItems": false,
+                    "minItems": 2,
+                    "maxItems": 2
+                   },
+                   {
+                    "type": "array",
+                    "items": [
+                     {
+                      "type": "string"
+                     },
+                     {
+                      "type": "string"
+                     },
+                     {
+                      "type": [
+                       "number",
+                       "string",
+                       "boolean",
+                       "null"
+                      ]
+                     }
+                    ],
+                    "additionalItems": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                   }
+                  ]
+                 }
+                },
+                "directed": {
+                 "type": "boolean"
+                },
+                "current": {
+                 "type": "string"
+                },
+                "visited": {
+                 "type": "array",
+                 "items": {
+                  "type": "string"
+                 }
+                },
+                "activeEdges": {
+                 "type": "array",
+                 "items": {
+                  "type": "array",
+                  "items": [
+                   {
+                    "type": "string"
+                   },
+                   {
+                    "type": "string"
+                   }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                 }
+                }
+               },
+               "required": [
+                "kind",
+                "name",
+                "nodes",
+                "edges"
+               ]
+              }
+             ]
+            }
+           },
+           "output": {
+            "description": "Everything printed so far",
+            "type": "string"
+           },
+           "mistake": {
+            "description": "true on the step where the bug shows up",
+            "type": "boolean"
+           },
+           "moves": {
+            "description": "Arrows for what moved where in this step. Name boxes like \"arr[3]\", \"seen[7]\" (map key), \"dp[1][2]\", \"st[0]\", or a variable name. Both ends must be drawn in this step.",
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "from": {
+               "type": "string"
+              },
+              "to": {
+               "type": "string"
+              },
+              "label": {
+               "type": "string"
+              }
+             },
+             "required": [
+              "from",
+              "to"
+             ]
+            }
+           },
+           "check": {
+            "description": "The condition this step evaluates, with real values: {\"expr\":\"arr[j] > arr[j+1] → 5 > 1\",\"result\":true}",
+            "type": "object",
+            "properties": {
+             "expr": {
+              "type": "string"
+             },
+             "result": {
+              "type": "boolean"
+             }
+            },
+            "required": [
+             "expr",
+             "result"
+            ]
+           },
+           "calc": {
+            "description": "The calculation on this line with real values, e.g. \"sum = 2 + 7 = 9\"",
+            "type": "string"
+           },
+           "loop": {
+            "description": "Where we are in the loops, e.g. \"pass 2 of 3 · j = 1\"",
+            "type": "string"
+           },
+           "callStack": {
+            "description": "For recursion: calls in progress, outermost first, e.g. [\"main()\", \"fib(4)\", \"fib(3)\"]",
+            "type": "array",
+            "items": {
+             "type": "string"
+            }
+           },
+           "phase": {
+            "description": "The part of the algorithm this step starts, e.g. \"Transpose\" or \"Reverse each row\"; set it on the first step of each part only",
+            "type": "string"
+           }
+          },
+          "required": [
+           "note"
+          ]
+         }
+        }
+       },
+       "required": [
+        "title",
+        "steps"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "list_problems",
+      "description": "List the practice problems (slug, title, difficulty, solved, number of submissions).",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {}
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "get_problem",
+      "description": "Read a practice problem: description, parameters, every test case, the student's solution.cpp with line numbers, and the hidden driver. Defaults to the problem on screen.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        }
+       }
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "create_problem",
+      "description": "Turn a question the student shares (pasted text, a screenshot, LeetCode/codehelp/anywhere) into a practice problem with LeetCode-style layout: description on the left, only class Solution in the editor, test cases checked automatically. The student approves it, then it opens on the Problem screen.\n\nHow tests run: the program is HARNESS + starter/solution + driver. The harness already includes <bits/stdc++.h>, \"using namespace std\", ListNode and TreeNode (LeetCode definitions), and:\n- judge::read<T>() reads one input line as T: int, long long, double, bool, char (\"a\"), string (\"abc\"), vector<...> of those (nested too, e.g. [[1,2],[3]]), ListNode* ([1,2,3]) and TreeNode* (level order with null).\n- judge::run(f) runs every case: f reads one case's input with judge::read and returns the answer, which is printed in LeetCode format and compared with \"expected\".\nSo a driver is usually just:\nint main() {\n    judge::run([] {\n        auto nums = judge::read<vector<int>>();\n        auto target = judge::read<int>();\n        return Solution().twoSum(nums, target);\n    });\n}\nFor in-place problems (void), call the method and return the modified argument. Don't define ListNode/TreeNode or main elsewhere.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "title": {
+         "type": "string",
+         "description": "e.g. \"Two Sum\""
+        },
+        "difficulty": {
+         "type": "string",
+         "enum": [
+          "easy",
+          "medium",
+          "hard"
+         ]
+        },
+        "description": {
+         "type": "string",
+         "description": "The problem statement in Markdown, with its examples (Input/Output/Explanation) and constraints, faithful to the source"
+        },
+        "params": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string"
+           },
+           "type": {
+            "type": "string",
+            "description": "C++ type, e.g. vector<int>"
+           }
+          },
+          "required": [
+           "name",
+           "type"
+          ]
+         },
+         "description": "The function parameters, in order"
+        },
+        "compare": {
+         "description": "any_order when the answer list can be in any order; any_order_nested when inner lists can also be (e.g. 3Sum triplets)",
+         "type": "string",
+         "enum": [
+          "exact",
+          "any_order",
+          "any_order_nested"
+         ]
+        },
+        "tests": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "input": {
+            "type": "array",
+            "items": {
+             "type": "string"
+            },
+            "description": "One value per parameter, LeetCode format: \"[2,7,11,15]\", \"9\", \"\\\"abc\\\"\""
+           },
+           "expected": {
+            "type": "string",
+            "description": "The answer in LeetCode format, e.g. \"[0,1]\", \"true\", \"\\\"bab\\\"\", \"2.50000\" for doubles"
+           },
+           "example": {
+            "type": "boolean",
+            "description": "true for the examples given in the problem"
+           }
+          },
+          "required": [
+           "input",
+           "expected",
+           "example"
+          ]
+         },
+         "description": "The problem's examples, plus a few more cases covering edge cases (empty, single element, duplicates, negatives, large values)"
+        },
+        "starter": {
+         "type": "string",
+         "description": "The class Solution { public: ... }; skeleton the student fills in (empty function body), like LeetCode"
+        },
+        "driver": {
+         "type": "string",
+         "description": "The hidden main() using judge::run and judge::read"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "title",
+        "difficulty",
+        "description",
+        "params",
+        "tests",
+        "starter",
+        "driver",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "add_test_case",
+      "description": "Propose an extra test case for a problem (e.g. an edge case the student's code misses). The student approves it. Defaults to the problem on screen.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        },
+        "input": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "One value per parameter, LeetCode format"
+        },
+        "expected": {
+         "type": "string",
+         "description": "The correct answer, LeetCode format"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "input",
+        "expected",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "edit_solution",
+      "description": "Propose replacing one exact, unique piece of a problem's solution.cpp. The student must approve it. Only when they ask for a change.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        },
+        "file": {
+         "description": "Which code file: solution.cpp (default: the one open on screen) or another version",
+         "type": "string"
+        },
+        "old_text": {
+         "type": "string",
+         "description": "Exact text to replace, copied from get_problem (without line numbers); must appear exactly once"
+        },
+        "new_text": {
+         "type": "string"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "old_text",
+        "new_text",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "run_tests",
+      "description": "Run a problem's test cases against the saved solution.cpp and see each case's result and anything it printed. By default the examples and the student's own cases; all: true runs every case. Doesn't record a submission.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        },
+        "file": {
+         "description": "Which code file to test (default: the one open on screen, else solution.cpp)",
+         "type": "string"
+        },
+        "all": {
+         "type": "boolean"
+        }
+       }
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "save_code_version",
+      "description": "Save another version of the code for a problem next to solution.cpp, e.g. brute-force.cpp to compare with the optimal one. The student approves it.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string",
+         "description": "e.g. brute-force.cpp"
+        },
+        "content": {
+         "type": "string",
+         "description": "The whole file: a class Solution like solution.cpp"
+        },
+        "explanation": {
+         "type": "string",
+         "description": "One short sentence the user sees: why this change."
+        }
+       },
+       "required": [
+        "name",
+        "content",
+        "explanation"
+       ]
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     },
+     {
+      "name": "list_attempts",
+      "description": "The student's past submissions for a problem: time, result and the code they submitted.",
+      "inputSchema": {
+       "$schema": "http://json-schema.org/draft-07/schema#",
+       "type": "object",
+       "properties": {
+        "slug": {
+         "type": "string"
+        }
+       }
+      },
+      "execution": {
+       "taskSupport": "forbidden"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "run_code",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "File: two_sum.cpp\nResult: Accepted (3 ms, 1184 KB)\nInput (stdin):\n5\n\nstdout:\nran 114 chars\nstdin: 5\n"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "run_code",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "File: two_sum.cpp\nResult: Accepted (3 ms, 1184 KB)\nInput (stdin):\n(nothing typed)\nstdout:\nran 114 chars\nstdin: "
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "run_tests",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "solution.cpp: Wrong Answer: 0/1 cases passed (3 ms)\nCase 1 [not_run]: nums = [2,7,11,15], target = 9 → expected [0,1]"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "run_tests",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "solution.cpp: Wrong Answer: 0/1 cases passed (3 ms)\nCase 1 [not_run]: nums = [2,7,11,15], target = 9 → expected [0,1]"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "create_visualization",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Saved \"Dry run\" (2 steps). The student can watch it in the Playground; a card in the chat opens it."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "create_visualization",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Saved \"Linked\" (2 steps). The student can watch it in the Playground; a card in the chat opens it."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "tool_result",
+   "value": {
+    "name": "create_visualization",
+    "result": {
+     "content": [
+      {
+       "type": "text",
+       "text": "The visualization wasn't saved. Fix these and call create_visualization again:\n- It needs at least one step."
+      }
+     ],
+     "isError": true
+    }
+   }
+  },
+  {
+   "kind": "done",
+   "value": null
+  }
+ ],
+ "piston": [
+  {
+   "language": "c++",
+   "version": "*",
+   "files": [
+    {
+     "name": "main",
+     "content": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    cout << n * 2 << endl;\n}\n"
+    }
+   ],
+   "stdin": "5\n",
+   "run_timeout": 3000
+  },
+  {
+   "language": "c++",
+   "version": "*",
+   "files": [
+    {
+     "name": "main",
+     "content": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    cout << n * 2 << endl;\n}\n"
+    }
+   ],
+   "stdin": "",
+   "run_timeout": 3000
+  },
+  {
+   "language": "c++",
+   "version": "*",
+   "files": [
+    {
+     "name": "main",
+     "content": "#include <bits/stdc++.h>\nusing namespace std;\n\nstruct ListNode {\n    int val;\n    ListNode *next;\n    ListNode() : val(0), next(nullptr) {}\n    ListNode(int x) : val(x), next(nullptr) {}\n    ListNode(int x, ListNode *next) : val(x), next(next) {}\n};\n\nstruct TreeNode {\n    int val;\n    TreeNode *left;\n    TreeNode *right;\n    TreeNode() : val(0), left(nullptr), right(nullptr) {}\n    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}\n    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}\n};\n\nnamespace judge {\nstruct Reader {\n    const string &s;\n    size_t i = 0;\n    [[noreturn]] void fail(const string &why) {\n        cerr << \"Bad test input (\" << why << \"): \" << s << endl;\n        exit(3);\n    }\n    void ws() { while (i < s.size() && isspace((unsigned char)s[i])) i++; }\n    bool eat(char c) {\n        ws();\n        if (i < s.size() && s[i] == c) { i++; return true; }\n        return false;\n    }\n    void expect(char c) { if (!eat(c)) fail(string(\"expected '\") + c + \"'\"); }\n    string token() {\n        ws();\n        size_t j = i;\n        while (i < s.size() && !strchr(\",]\", s[i]) && !isspace((unsigned char)s[i])) i++;\n        if (j == i) fail(\"missing value\");\n        return s.substr(j, i - j);\n    }\n    string str() {\n        ws();\n        if (i >= s.size() || (s[i] != '\"' && s[i] != '\\'')) fail(\"expected a quoted string\");\n        char q = s[i++];\n        string out;\n        while (i < s.size() && s[i] != q) {\n            if (s[i] == '\\\\' && i + 1 < s.size()) {\n                char e = s[++i];\n                out += e == 'n' ? '\\n' : e == 't' ? '\\t' : e;\n            } else {\n                out += s[i];\n            }\n            i++;\n        }\n        if (i >= s.size()) fail(\"unclosed string\");\n        i++;\n        return out;\n    }\n    template <class N> N number() {\n        string t = token();\n        try {\n            if constexpr (is_floating_point_v<N>) return (N)stod(t);\n            else return (N)stoll(t);\n        } catch (...) {\n            fail(\"not a number: \" + t);\n        }\n    }\n};\n\ntemplate <class T> struct Parse {\n    static T get(Reader &r) {\n        if constexpr (is_same_v<T, bool>) {\n            string t = r.token();\n            if (t == \"true\" || t == \"1\") return true;\n            if (t == \"false\" || t == \"0\") return false;\n            r.fail(\"expected true or false\");\n        } else if constexpr (is_same_v<T, char>) {\n            string t = r.str();\n            if (t.size() != 1) r.fail(\"expected one character\");\n            return t[0];\n        } else if constexpr (is_arithmetic_v<T>) {\n            return r.template number<T>();\n        } else if constexpr (is_same_v<T, string>) {\n            return r.str();\n        } else {\n            static_assert(sizeof(T) == 0, \"judge::read can't read this type\");\n        }\n    }\n};\n\ntemplate <class T> struct Parse<vector<T>> {\n    static vector<T> get(Reader &r) {\n        vector<T> v;\n        r.expect('[');\n        if (r.eat(']')) return v;\n        do v.push_back(Parse<T>::get(r)); while (r.eat(','));\n        r.expect(']');\n        return v;\n    }\n};\n\ntemplate <> struct Parse<ListNode *> {\n    static ListNode *get(Reader &r) {\n        ListNode dummy;\n        ListNode *tail = &dummy;\n        for (int x : Parse<vector<int>>::get(r)) tail = tail->next = new ListNode(x);\n        return dummy.next;\n    }\n};\n\ntemplate <> struct Parse<TreeNode *> {\n    static TreeNode *get(Reader &r) {\n        vector<TreeNode *> nodes;\n        r.expect('[');\n        if (!r.eat(']')) {\n            do {\n                string t = r.token();\n                nodes.push_back(t == \"null\" ? nullptr : new TreeNode(stoi(t)));\n            } while (r.eat(','));\n            r.expect(']');\n        }\n        if (nodes.empty() || !nodes[0]) return nullptr;\n        size_t child = 1;\n        for (size_t p = 0; p < nodes.size() && child < nodes.size(); p++) {\n            if (!nodes[p]) continue;\n            if (child < nodes.size()) nodes[p]->left = nodes[child++];\n            if (child < nodes.size()) nodes[p]->right = nodes[child++];\n        }\n        return nodes[0];\n    }\n};\n\ninline string quote(const string &s) {\n    string out = \"\\\"\";\n    for (char c : s) {\n        if (c == '\"' || c == '\\\\') out += '\\\\', out += c;\n        else if (c == '\\n') out += \"\\\\n\";\n        else if (c == '\\t') out += \"\\\\t\";\n        else out += c;\n    }\n    return out + \"\\\"\";\n}\n\ntemplate <class T> string show(const T &x) {\n    if constexpr (is_same_v<T, bool>) {\n        return x ? \"true\" : \"false\";\n    } else if constexpr (is_same_v<T, char>) {\n        return quote(string(1, x));\n    } else if constexpr (is_integral_v<T>) {\n        return to_string(x);\n    } else if constexpr (is_floating_point_v<T>) {\n        ostringstream o;\n        o << fixed << setprecision(5) << x;\n        return o.str();\n    } else if constexpr (is_same_v<T, string>) {\n        return quote(x);\n    } else if constexpr (is_same_v<T, ListNode *>) {\n        string out = \"[\";\n        int n = 0;\n        for (ListNode *p = x; p && n < 10000; p = p->next, n++) out += (n ? \",\" : \"\") + to_string(p->val);\n        return out + \"]\";\n    } else if constexpr (is_same_v<T, TreeNode *>) {\n        vector<string> parts;\n        queue<TreeNode *> q;\n        if (x) q.push(x);\n        while (!q.empty()) {\n            TreeNode *n = q.front();\n            q.pop();\n            if (!n) { parts.push_back(\"null\"); continue; }\n            parts.push_back(to_string(n->val));\n            q.push(n->left);\n            q.push(n->right);\n        }\n        while (!parts.empty() && parts.back() == \"null\") parts.pop_back();\n        string out = \"[\";\n        for (size_t i = 0; i < parts.size(); i++) out += (i ? \",\" : \"\") + parts[i];\n        return out + \"]\";\n    } else {\n        // Any container: vector, set, deque, ...\n        string out = \"[\";\n        bool first = true;\n        for (typename T::value_type e : x) {\n            out += (first ? \"\" : \",\") + show(e);\n            first = false;\n        }\n        return out + \"]\";\n    }\n}\n\n/** Reads one test-input line as a T, e.g. read<vector<int>>() for \"[2,7,11,15]\". */\ntemplate <class T> T read() {\n    string line;\n    if (!getline(cin, line)) {\n        cerr << \"Bad test input: a case has fewer lines than the driver reads\" << endl;\n        exit(3);\n    }\n    Reader r{line};\n    T v = Parse<T>::get(r);\n    r.ws();\n    if (r.i != line.size()) r.fail(\"unexpected text after the value\");\n    return v;\n}\n\n/** Runs every case: f reads one case's input and returns the answer to print. */\ntemplate <class F> void run(F f) {\n    string line;\n    getline(cin, line);\n    int cases = stoi(line);\n    for (int c = 0; c < cases; c++) {\n        auto answer = f();\n        cout << \"\\n@@RESULT@@\\n\" << show(answer) << \"\\n@@CASE@@\\n\" << flush;\n    }\n}\n} // namespace judge\n\n#line 1 \"solution.cpp\"\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n\n#line 1 \"driver.cpp\"\n\n"
+    }
+   ],
+   "stdin": "1\n[2,7,11,15]\n9\n",
+   "run_timeout": 3000
+  },
+  {
+   "language": "c++",
+   "version": "*",
+   "files": [
+    {
+     "name": "main",
+     "content": "#include <bits/stdc++.h>\nusing namespace std;\n\nstruct ListNode {\n    int val;\n    ListNode *next;\n    ListNode() : val(0), next(nullptr) {}\n    ListNode(int x) : val(x), next(nullptr) {}\n    ListNode(int x, ListNode *next) : val(x), next(next) {}\n};\n\nstruct TreeNode {\n    int val;\n    TreeNode *left;\n    TreeNode *right;\n    TreeNode() : val(0), left(nullptr), right(nullptr) {}\n    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}\n    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}\n};\n\nnamespace judge {\nstruct Reader {\n    const string &s;\n    size_t i = 0;\n    [[noreturn]] void fail(const string &why) {\n        cerr << \"Bad test input (\" << why << \"): \" << s << endl;\n        exit(3);\n    }\n    void ws() { while (i < s.size() && isspace((unsigned char)s[i])) i++; }\n    bool eat(char c) {\n        ws();\n        if (i < s.size() && s[i] == c) { i++; return true; }\n        return false;\n    }\n    void expect(char c) { if (!eat(c)) fail(string(\"expected '\") + c + \"'\"); }\n    string token() {\n        ws();\n        size_t j = i;\n        while (i < s.size() && !strchr(\",]\", s[i]) && !isspace((unsigned char)s[i])) i++;\n        if (j == i) fail(\"missing value\");\n        return s.substr(j, i - j);\n    }\n    string str() {\n        ws();\n        if (i >= s.size() || (s[i] != '\"' && s[i] != '\\'')) fail(\"expected a quoted string\");\n        char q = s[i++];\n        string out;\n        while (i < s.size() && s[i] != q) {\n            if (s[i] == '\\\\' && i + 1 < s.size()) {\n                char e = s[++i];\n                out += e == 'n' ? '\\n' : e == 't' ? '\\t' : e;\n            } else {\n                out += s[i];\n            }\n            i++;\n        }\n        if (i >= s.size()) fail(\"unclosed string\");\n        i++;\n        return out;\n    }\n    template <class N> N number() {\n        string t = token();\n        try {\n            if constexpr (is_floating_point_v<N>) return (N)stod(t);\n            else return (N)stoll(t);\n        } catch (...) {\n            fail(\"not a number: \" + t);\n        }\n    }\n};\n\ntemplate <class T> struct Parse {\n    static T get(Reader &r) {\n        if constexpr (is_same_v<T, bool>) {\n            string t = r.token();\n            if (t == \"true\" || t == \"1\") return true;\n            if (t == \"false\" || t == \"0\") return false;\n            r.fail(\"expected true or false\");\n        } else if constexpr (is_same_v<T, char>) {\n            string t = r.str();\n            if (t.size() != 1) r.fail(\"expected one character\");\n            return t[0];\n        } else if constexpr (is_arithmetic_v<T>) {\n            return r.template number<T>();\n        } else if constexpr (is_same_v<T, string>) {\n            return r.str();\n        } else {\n            static_assert(sizeof(T) == 0, \"judge::read can't read this type\");\n        }\n    }\n};\n\ntemplate <class T> struct Parse<vector<T>> {\n    static vector<T> get(Reader &r) {\n        vector<T> v;\n        r.expect('[');\n        if (r.eat(']')) return v;\n        do v.push_back(Parse<T>::get(r)); while (r.eat(','));\n        r.expect(']');\n        return v;\n    }\n};\n\ntemplate <> struct Parse<ListNode *> {\n    static ListNode *get(Reader &r) {\n        ListNode dummy;\n        ListNode *tail = &dummy;\n        for (int x : Parse<vector<int>>::get(r)) tail = tail->next = new ListNode(x);\n        return dummy.next;\n    }\n};\n\ntemplate <> struct Parse<TreeNode *> {\n    static TreeNode *get(Reader &r) {\n        vector<TreeNode *> nodes;\n        r.expect('[');\n        if (!r.eat(']')) {\n            do {\n                string t = r.token();\n                nodes.push_back(t == \"null\" ? nullptr : new TreeNode(stoi(t)));\n            } while (r.eat(','));\n            r.expect(']');\n        }\n        if (nodes.empty() || !nodes[0]) return nullptr;\n        size_t child = 1;\n        for (size_t p = 0; p < nodes.size() && child < nodes.size(); p++) {\n            if (!nodes[p]) continue;\n            if (child < nodes.size()) nodes[p]->left = nodes[child++];\n            if (child < nodes.size()) nodes[p]->right = nodes[child++];\n        }\n        return nodes[0];\n    }\n};\n\ninline string quote(const string &s) {\n    string out = \"\\\"\";\n    for (char c : s) {\n        if (c == '\"' || c == '\\\\') out += '\\\\', out += c;\n        else if (c == '\\n') out += \"\\\\n\";\n        else if (c == '\\t') out += \"\\\\t\";\n        else out += c;\n    }\n    return out + \"\\\"\";\n}\n\ntemplate <class T> string show(const T &x) {\n    if constexpr (is_same_v<T, bool>) {\n        return x ? \"true\" : \"false\";\n    } else if constexpr (is_same_v<T, char>) {\n        return quote(string(1, x));\n    } else if constexpr (is_integral_v<T>) {\n        return to_string(x);\n    } else if constexpr (is_floating_point_v<T>) {\n        ostringstream o;\n        o << fixed << setprecision(5) << x;\n        return o.str();\n    } else if constexpr (is_same_v<T, string>) {\n        return quote(x);\n    } else if constexpr (is_same_v<T, ListNode *>) {\n        string out = \"[\";\n        int n = 0;\n        for (ListNode *p = x; p && n < 10000; p = p->next, n++) out += (n ? \",\" : \"\") + to_string(p->val);\n        return out + \"]\";\n    } else if constexpr (is_same_v<T, TreeNode *>) {\n        vector<string> parts;\n        queue<TreeNode *> q;\n        if (x) q.push(x);\n        while (!q.empty()) {\n            TreeNode *n = q.front();\n            q.pop();\n            if (!n) { parts.push_back(\"null\"); continue; }\n            parts.push_back(to_string(n->val));\n            q.push(n->left);\n            q.push(n->right);\n        }\n        while (!parts.empty() && parts.back() == \"null\") parts.pop_back();\n        string out = \"[\";\n        for (size_t i = 0; i < parts.size(); i++) out += (i ? \",\" : \"\") + parts[i];\n        return out + \"]\";\n    } else {\n        // Any container: vector, set, deque, ...\n        string out = \"[\";\n        bool first = true;\n        for (typename T::value_type e : x) {\n            out += (first ? \"\" : \",\") + show(e);\n            first = false;\n        }\n        return out + \"]\";\n    }\n}\n\n/** Reads one test-input line as a T, e.g. read<vector<int>>() for \"[2,7,11,15]\". */\ntemplate <class T> T read() {\n    string line;\n    if (!getline(cin, line)) {\n        cerr << \"Bad test input: a case has fewer lines than the driver reads\" << endl;\n        exit(3);\n    }\n    Reader r{line};\n    T v = Parse<T>::get(r);\n    r.ws();\n    if (r.i != line.size()) r.fail(\"unexpected text after the value\");\n    return v;\n}\n\n/** Runs every case: f reads one case's input and returns the answer to print. */\ntemplate <class F> void run(F f) {\n    string line;\n    getline(cin, line);\n    int cases = stoi(line);\n    for (int c = 0; c < cases; c++) {\n        auto answer = f();\n        cout << \"\\n@@RESULT@@\\n\" << show(answer) << \"\\n@@CASE@@\\n\" << flush;\n    }\n}\n} // namespace judge\n\n#line 1 \"solution.cpp\"\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n\n#line 1 \"driver.cpp\"\n\n"
+    }
+   ],
+   "stdin": "1\n[2,7,11,15]\n9\n",
+   "run_timeout": 3000
+  }
+ ],
+ "files": {
+  "notes/note-1.md": "# Arrays\n\nContiguous memory.\n",
+  "playground/<id3>.json": "{\"id\":\"<id3>\",\"title\":\"Linked\",\"file\":\"solution.cpp\",\"language\":\"cpp\",\"code\":\"class Solution {\\npublic:\\n    vector<int> twoSum(vector<int>& nums, int target) {\\n        return {};\\n    }\\n};\\n\",\"problem\":\"two-sum\",\"expected\":\"10\",\"createdAt\":<time>,\"steps\":[{\"line\":5,\"note\":\"Read n\",\"vars\":{\"n\":5}},{\"line\":6,\"note\":\"Print double\",\"vars\":{\"n\":5},\"output\":\"10\\n\",\"calc\":\"n * 2 = 10\"}],\"formatVersion\":1}",
+  "playground/<id2>.json": "{\"id\":\"<id2>\",\"title\":\"Dry run\",\"file\":\"two_sum.cpp\",\"language\":\"cpp\",\"code\":\"#include <bits/stdc++.h>\\nusing namespace std;\\n\\nint main() {\\n    int n;\\n    cin >> n;\\n    cout << n * 2 << endl;\\n}\\n\",\"problem\":\"two-sum\",\"createdAt\":<time>,\"steps\":[{\"line\":5,\"note\":\"Read n\",\"vars\":{\"n\":5}},{\"line\":6,\"note\":\"Print double\",\"vars\":{\"n\":5},\"output\":\"10\\n\",\"calc\":\"n * 2 = 10\"}],\"formatVersion\":1}",
+  "problems/two-sum/driver.cpp": "",
+  "problems/two-sum/problem.json": "{\n  \"title\": \"Two Sum\",\n  \"difficulty\": \"easy\",\n  \"description\": \"Find two indices that add up to target.\",\n  \"params\": [\n    {\n      \"name\": \"nums\",\n      \"type\": \"vector<int>\"\n    },\n    {\n      \"name\": \"target\",\n      \"type\": \"int\"\n    }\n  ],\n  \"compare\": \"any_order\",\n  \"tests\": [\n    {\n      \"input\": [\n        \"[2,7,11,15]\",\n        \"9\"\n      ],\n      \"expected\": \"[0,1]\",\n      \"example\": true,\n      \"addedBy\": \"problem\"\n    }\n  ],\n  \"createdAt\": <time>,\n  \"formatVersion\": 1\n}",
+  "problems/two-sum/solution.cpp": "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n",
+  "solutions/bfs.py": "print('bfs')\n",
+  "solutions/two_sum.cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    cin >> n;\n    cout << n * 2 << endl;\n}\n"
+ }
+}
