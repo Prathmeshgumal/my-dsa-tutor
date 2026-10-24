@@ -1,50 +1,61 @@
-import { FileCode2, ListChecks, Play, Search } from 'lucide-react'
-import { ShimmerButton } from '@/components/glow/ShimmerButton'
+import { ChevronRight, Search } from 'lucide-react'
 import { Kbd } from '@/components/Kbd'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { LANGUAGES, languageFromFilename, type LanguageId } from '@dsa/core/languages'
+import { noteTitle } from '@dsa/core/noteTitle'
 import { shortcut } from '@/lib/platform'
 import { cn } from '@/lib/utils'
+import { activeChat, useAiChat } from '@/state/aiChat'
+import { useNotes } from '@/state/notes'
+import { usePlayground } from '@/state/playground'
 import { activeProblem, useProblems } from '@/state/problems'
+import { SECTIONS, type Section } from '@/state/sections'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 
 interface Props {
   narrow: boolean
-  onRun(): void
-  running: boolean
-  canRun: boolean
   onOpenCommand(): void
 }
 
-export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props) {
-  const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId) ?? null)
-  const setActiveLanguage = useWorkspace((s) => s.setActiveLanguage)
-  const language = file ? languageFromFilename(file.name) : null
-  const onProblem = useSettings((s) => s.section === 'problems')
-  const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
+const NOTHING_OPEN: Record<Section, string> = {
+  problems: 'No problem open',
+  code: 'No file open',
+  notes: 'No note open',
+  dryruns: 'No dry run open',
+  chats: 'New chat',
+}
+
+/** The title of what's open in a section, or null. */
+function useOpenTitle(section: Section): string | null {
+  const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
+  const problem = useProblems((s) => activeProblem(s)?.problem.title ?? null)
+  const note = useNotes((s) => {
+    const n = s.notes.find((x) => x.name === s.activeName)
+    return n ? noteTitle(n.content) : null
+  })
+  const run = usePlayground((s) => s.runs.find((r) => r.id === s.activeId)?.title ?? null)
+  const chat = useAiChat((s) => activeChat(s)?.title ?? null)
+  return { problems: problem, code: file, notes: note, dryruns: run, chats: chat }[section]
+}
+
+export function TopBar({ narrow, onOpenCommand }: Props) {
+  const section = useSettings((s) => s.section)
+  const title = useOpenTitle(section)
+  const label = SECTIONS.find((s) => s.id === section)!.label
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b px-3">
       <div className="grid size-6 place-items-center rounded-[7px] bg-gradient-to-br from-violet-500 to-cyan-400 font-mono text-xs font-bold text-white shadow-[0_0_12px_-2px_rgba(168,85,247,0.6)]">
         {'{}'}
       </div>
-      <div className="flex min-w-0 items-center gap-1.5 text-sm" data-testid="active-file-name">
-        {onProblem ? (
-          <ListChecks className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        ) : (
-          <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        )}
-        {onProblem ? (
-          <span className={cn('truncate', problemTitle ? 'font-medium' : 'text-muted-foreground')}>{problemTitle ?? 'No problem open'}</span>
-        ) : file ? (
-          <span className="truncate font-medium">{file.name}</span>
-        ) : (
-          <span className="text-muted-foreground">No file open</span>
-        )}
-      </div>
+      <nav aria-label="You are here" className="flex min-w-0 items-center gap-1 text-sm">
+        <span className="shrink-0 text-muted-foreground">{label}</span>
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+        <span className={cn('truncate', title ? 'font-medium' : 'text-muted-foreground', section === 'code' && title && 'font-mono')}>
+          {title ?? NOTHING_OPEN[section]}
+        </span>
+      </nav>
 
       <div className="flex-1" />
 
@@ -64,26 +75,6 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
           <Kbd className="ml-auto">{shortcut('K')}</Kbd>
         </button>
       )}
-
-      {/* Problems are C++ for now, so there's no language to pick there. */}
-      {!onProblem && <Select value={language?.id ?? ''} onValueChange={(v) => setActiveLanguage(v as LanguageId)} disabled={!file}>
-        <SelectTrigger size="sm" className="w-[104px]" aria-label="Language">
-          <SelectValue placeholder="Language" />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.values(LANGUAGES).map((l) => (
-            <SelectItem key={l.id} value={l.id}>
-              {l.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>}
-
-      <ShimmerButton onClick={onRun} disabled={!canRun} loading={running} aria-label="Run">
-        {!running && <Play className="size-3 fill-current" aria-hidden />}
-        Run
-        <Kbd className="border-white/20 bg-white/15 text-white">{shortcut('↵')}</Kbd>
-      </ShimmerButton>
 
       <ThemeToggle />
     </header>

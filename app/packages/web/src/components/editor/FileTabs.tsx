@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useWorkspace } from '@/state/workspace'
+import { CodeToolbar } from './CodeToolbar'
 import { focusEditor } from './editorFocus'
 import { openDeleteDialog, openNewFileDialog, openRenameDialog } from './FileDialogs'
 
@@ -100,6 +101,7 @@ export function FileTabs() {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      <CodeToolbar />
     </div>
   )
 }

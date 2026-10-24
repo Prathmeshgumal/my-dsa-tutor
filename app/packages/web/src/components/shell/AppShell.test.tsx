@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
+import { useAiChat } from '@/state/aiChat'
+import { useNotes } from '@/state/notes'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { mockMatchMedia } from '@/test/matchMedia'
@@ -14,9 +16,6 @@ function renderShell(props: ShellProps = {}) {
     <AppShell
       editor={<div>EDITOR</div>}
       output={<div>OUTPUT</div>}
-      onRun={() => {}}
-      running={false}
-      canRun
       connection="connected"
       cursor={{ line: 7, col: 42 }}
       onOpenCommand={() => {}}
@@ -24,6 +23,8 @@ function renderShell(props: ShellProps = {}) {
     />,
   )
 }
+
+const rail = () => within(screen.getByRole('navigation', { name: 'Sidebar' }))
 
 beforeEach(() => {
   useSettings.setState({
@@ -38,16 +39,32 @@ beforeEach(() => {
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
 })
 
-test('top bar shows active file name and run shortcut hint', () => {
+test('top bar shows where you are: section and open file, and no Run', () => {
   renderShell()
-  expect(screen.getByTestId('active-file-name')).toHaveTextContent('main.cpp')
-  expect(screen.getByRole('button', { name: 'Run' })).toHaveTextContent(/⌘↵|Ctrl ↵/)
+  expect(screen.getByRole('navigation', { name: 'You are here' })).toHaveTextContent('Codemain.cpp')
+  expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Run' })).not.toBeInTheDocument()
+  expect(within(screen.getByRole('banner')).queryByRole('combobox', { name: 'Language' })).not.toBeInTheDocument()
 })
 
 test('top bar shows a placeholder when no file is open', () => {
   useWorkspace.setState({ files: [], openIds: [], activeId: null })
-  renderShell({ canRun: false })
-  expect(screen.getByTestId('active-file-name')).toHaveTextContent('No file open')
+  renderShell()
+  expect(screen.getByRole('navigation', { name: 'You are here' })).toHaveTextContent('CodeNo file open')
+})
+
+test('top bar names the open item on every section', async () => {
+  useNotes.setState({ notes: [{ name: 'note-1.md', content: '# Two pointers' }], activeName: 'note-1.md' })
+  useAiChat.setState({ chats: [{ id: 'c', title: 'Why BFS?', sessionId: null, messages: [], updatedAt: 0 }], activeChatId: 'c' })
+  renderShell()
+  const here = () => screen.getByRole('navigation', { name: 'You are here' })
+  await userEvent.click(rail().getByRole('button', { name: 'Notes' }))
+  expect(here()).toHaveTextContent('NotesTwo pointers')
+  await userEvent.click(rail().getByRole('button', { name: 'Chats' }))
+  expect(here()).toHaveTextContent('ChatsWhy BFS?')
+  await userEvent.click(rail().getByRole('button', { name: 'Problems' }))
+  expect(here()).toHaveTextContent('ProblemsNo problem open')
+  await userEvent.click(rail().getByRole('button', { name: 'Dry runs' }))
+  expect(here()).toHaveTextContent('Dry runsNo dry run open')
 })
 
 test('renders editor and output slots', () => {
@@ -55,27 +72,6 @@ test('renders editor and output slots', () => {
   expect(screen.getByText('EDITOR')).toBeInTheDocument()
   expect(screen.getByText('OUTPUT')).toBeInTheDocument()
 })
-
-test('Run button calls onRun', async () => {
-  const onRun = vi.fn()
-  renderShell({ onRun })
-  await userEvent.click(screen.getByRole('button', { name: 'Run' }))
-  expect(onRun).toHaveBeenCalledOnce()
-})
-
-test('Run button disabled when canRun=false', () => {
-  renderShell({ canRun: false })
-  expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
-})
-
-test('Run button disabled and busy while running', () => {
-  renderShell({ running: true })
-  const run = screen.getByRole('button', { name: 'Run' })
-  expect(run).toBeDisabled()
-  expect(run).toHaveAttribute('aria-busy', 'true')
-})
-
-const rail = () => within(screen.getByRole('navigation', { name: 'Sidebar' }))
 
 test('the left bar: five sections, then Claude, then Setup', () => {
   renderShell()

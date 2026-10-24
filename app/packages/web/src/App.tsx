@@ -28,13 +28,8 @@ const modalOpen = () =>
 
 export default function App() {
   const [cursor, setCursor] = useState<{ line: number; col: number } | null>(null)
-  const onProblem = useSettings((s) => s.section === 'problems')
-  const fileRunning = useRun((s) => s.state === 'running')
-  const testing = useProblems((s) => s.testing !== null)
-  const hasProblem = useProblems((s) => s.activeSlug !== null)
   const connection = useRun((s) => s.connection)
   const hasActiveFile = useWorkspace((s) => s.ready && s.activeId !== null)
-  const running = onProblem ? testing : fileRunning
 
   // Problems are loaded up front: notes, dry runs and chats show which problem they belong to.
   useEffect(() => {
@@ -112,9 +107,6 @@ export default function App() {
       <AppShell
         editor={<EditorPanel onCursorChange={setCursor} onRunShortcut={runActiveFile} />}
         output={<OutputPanel />}
-        onRun={runActiveFile}
-        running={running}
-        canRun={onProblem ? hasProblem : hasActiveFile}
         connection={connection}
         cursor={hasActiveFile ? cursor : null}
         onOpenCommand={() => useCommandMenu.getState().setOpen(true)}
