@@ -292,7 +292,7 @@ export function createClaudeChatMiddleware({
   playgroundDir,
   problemsDir,
   queryImpl = query,
-  runner = createPistonRunner({ baseUrl: `${process.env.PISTON_URL ?? 'http://127.0.0.1:2000'}/api/v2` }),
+  runner = createPistonRunner({ baseUrl: 'http://127.0.0.1:2000/api/v2' }),
   approvals = createApprovals(),
   turns = createTurns(),
   logger,
