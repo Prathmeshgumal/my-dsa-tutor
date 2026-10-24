@@ -155,42 +155,19 @@ test('closing the panel does not crash when scrolling returns a promise (newer C
 
 test('the header shows which chat is open', () => {
   render(<AiPanel />)
-  expect(screen.getByRole('button', { name: 'Chats' })).toHaveTextContent('New chat')
+  expect(screen.getByRole('heading', { name: 'New chat' })).toBeInTheDocument()
   act(() => showMessages([{ id: '1', role: 'user', text: 'hi', tools: [] }]))
-  expect(screen.getByRole('button', { name: 'Chats' })).toHaveTextContent('hi')
+  expect(screen.getByRole('heading', { name: 'hi' })).toBeInTheDocument()
 })
 
-test('the chat list switches between chats', async () => {
-  useAiChat.setState({ chats: [chatWith('a', 'Two sum help'), chatWith('b', 'BFS question')], activeChatId: 'a' })
+test('the panel just talks: no chat list, and All chats opens the Chats section on this chat', async () => {
+  useSettings.setState({ section: 'code' })
+  useAiChat.setState({ chats: [chatWith('a', 'Two sum help'), chatWith('b', 'BFS question')], activeChatId: 'b' })
   render(<AiPanel />)
-  const toggle = screen.getByRole('button', { name: 'Chats' })
-  expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await userEvent.click(toggle)
-  expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  const list = screen.getByRole('list', { name: 'Chats' })
-  expect(within(list).getAllByRole('listitem')).toHaveLength(2)
-  await userEvent.click(within(list).getByRole('button', { name: 'BFS question' }))
-  expect(selectChat).toHaveBeenCalledWith('b')
   expect(screen.queryByRole('list', { name: 'Chats' })).not.toBeInTheDocument()
-})
-
-test('deleting a chat asks for a second click', async () => {
-  useAiChat.setState({ chats: [chatWith('a', 'Two sum help')], activeChatId: 'a' })
-  render(<AiPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Chats' }))
-  await userEvent.click(screen.getByRole('button', { name: 'Delete chat: Two sum help' }))
-  expect(deleteChat).not.toHaveBeenCalled()
-  await userEvent.click(screen.getByRole('button', { name: 'Confirm delete chat: Two sum help' }))
-  expect(deleteChat).toHaveBeenCalledWith('a')
-})
-
-test('new chat from the list view goes back to an empty conversation', async () => {
-  render(<AiPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Chats' }))
-  expect(screen.getByText('No chats yet')).toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: 'New chat' }))
-  expect(newChat).toHaveBeenCalled()
-  expect(screen.queryByRole('list', { name: 'Chats' })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'All chats' }))
+  expect(useSettings.getState().section).toBe('chats')
+  expect(useAiChat.getState().activeChatId).toBe('b')
 })
 
 describe('proposed changes', () => {
@@ -416,7 +393,7 @@ describe('images', () => {
 
   test('drop an image on the panel', async () => {
     render(<AiPanel />)
-    fireEvent.drop(screen.getByRole('complementary', { name: 'Claude' }), { dataTransfer: { files: [png()], types: ['Files'] } })
+    fireEvent.drop(screen.getByRole('textbox', { name: 'Message Claude' }), { dataTransfer: { files: [png()], types: ['Files'] } })
     expect(await screen.findByRole('list', { name: 'Attached images' })).toBeInTheDocument()
   })
 

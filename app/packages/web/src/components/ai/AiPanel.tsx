@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, Clapperboard, ListChecks, ChevronDown, Clock, Eye, FileCode2, FilePlus2, FileSearch, MessageSquare, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, Trash2, X, Paperclip, Image as ImageIcon } from 'lucide-react'
+import { ArrowUp, Check, Clapperboard, ListChecks, Clock, Eye, FileCode2, FilePlus2, FileSearch, NotebookPen, Pencil, Play, Search, Sparkles, Square, SquarePen, TerminalSquare, X, Paperclip, Image as ImageIcon, MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { IMAGE_TYPES, MAX_IMAGES } from '@dsa/core/chatEvents'
 import { readImage, type Attachment } from '@/lib/images'
-import { activeChat, useAiChat, type Approval, type Chat, type ChatMessage, type ToolActivity } from '@/state/aiChat'
+import { activeChat, useAiChat, type Approval, type ChatMessage, type ToolActivity } from '@/state/aiChat'
 import { useSettings } from '@/state/settings'
 import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
 import { useWorkspace } from '@/state/workspace'
 import { activeProblem, useProblems } from '@/state/problems'
-import { ProblemTag } from '@/components/problems/ProblemTag'
 import { Markdown } from './Markdown'
 
 const SUGGESTIONS = [
@@ -294,92 +293,14 @@ function HeaderButton({ label, onClick, children }: { label: string; onClick(): 
   )
 }
 
-function timeAgo(at: number): string {
-  const minutes = Math.floor(Math.max(0, Date.now() - at) / 60_000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
-function ChatRow({ chat, active, onOpen }: { chat: Chat; active: boolean; onOpen(): void }) {
-  const [confirming, setConfirming] = useState(false)
-  return (
-    <li
-      className={cn(
-        'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
-        active ? 'bg-violet-500/10 ring-1 ring-violet-500/25 ring-inset' : 'hover:bg-muted',
-      )}
-      onMouseLeave={() => setConfirming(false)}
-    >
-      <button type="button" aria-label={chat.title} onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left">
-        <MessageSquare className={cn('size-3.5 shrink-0', active ? 'text-violet-500' : 'text-muted-foreground')} aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12.5px] text-foreground">{chat.title}</span>
-          <span className="block text-[11px] text-muted-foreground">
-            {timeAgo(chat.updatedAt)} · {chat.messages.filter((m) => m.role === 'user').length} asked
-          </span>
-          <ProblemTag slug={chat.problemSlug} />
-        </span>
-      </button>
-      {confirming ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          aria-label={`Confirm delete chat: ${chat.title}`}
-          onClick={() => useAiChat.getState().deleteChat(chat.id)}
-          className="h-6 px-2 text-[11px]"
-        >
-          <Check /> Delete
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Delete chat: ${chat.title}`}
-          onClick={() => setConfirming(true)}
-          className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500"
-        >
-          <Trash2 />
-        </Button>
-      )}
-    </li>
-  )
-}
-
-function ChatList({ onPicked }: { onPicked(): void }) {
-  const chats = useAiChat((s) => s.chats)
-  const activeId = useAiChat((s) => s.activeChatId)
-  if (!chats.length) {
-    return <p className="px-6 py-10 text-center text-[12.5px] text-muted-foreground">No chats yet</p>
-  }
-  return (
-    <ul aria-label="Chats" className="flex flex-col gap-0.5 p-2">
-      {chats.map((c) => (
-        <ChatRow
-          key={c.id}
-          chat={c}
-          active={c.id === activeId}
-          onOpen={() => {
-            useAiChat.getState().selectChat(c.id)
-            onPicked()
-          }}
-        />
-      ))}
-    </ul>
-  )
-}
-
-/** Chat with the user's local Claude Code, which works in the solutions folder and sees the open file. */
-/** `page`: filling a section instead of sitting on the right. */
-export function AiPanel({ page = false }: { page?: boolean }) {
-  const width = useSettings((s) => s.sidePanelWidth)
-  const { status, send, stop, newChat } = useAiChat()
+/** The open chat and the box to ask Claude: the same in the side panel and on the Chats page, so a reply keeps
+ * streaming wherever you look at it. Claude runs locally, works in the solutions folder and sees what's open. */
+export function Conversation() {
+  const { status, send, stop } = useAiChat()
+  const activeChatId = useAiChat((s) => s.activeChatId)
   const current = useAiChat(activeChat)
   const messages = current?.messages ?? []
   const replyingHere = useAiChat((s) => s.streamingChatId !== null && s.streamingChatId === s.activeChatId)
-  const [showList, setShowList] = useState(false)
   const fileName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
   // On the Problem screen Claude is told about the problem instead of the open file.
   const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
@@ -394,9 +315,10 @@ export function AiPanel({ page = false }: { page?: boolean }) {
   const endRef = useRef<HTMLDivElement>(null)
   const streaming = status === 'streaming'
 
+  // Ready to type in whichever chat is open.
   useEffect(() => {
     inputRef.current?.focus()
-  }, [])
+  }, [activeChatId])
   // Braces matter: newer Chrome's scrollIntoView returns a promise, which React would treat as a cleanup.
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
@@ -405,7 +327,6 @@ export function AiPanel({ page = false }: { page?: boolean }) {
   const submit = (text: string) => {
     if ((!text.trim() && !attachments.length) || streaming) return
     setDraft('')
-    setShowList(false)
     if (attachments.length) {
       void send(text, { attachments: attachments.map(({ image, thumb }) => ({ image, thumb })) })
       setAttachments([])
@@ -433,13 +354,8 @@ export function AiPanel({ page = false }: { page?: boolean }) {
   const canSend = Boolean(draft.trim() || attachments.length)
 
   return (
-    <aside
-      aria-label="Claude"
-      style={page ? undefined : { width }}
-      className={cn(
-        'relative flex flex-col bg-background/60',
-        page ? 'min-w-0 flex-1' : 'max-w-[70vw] shrink-0 border-l',
-      )}
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -460,42 +376,8 @@ export function AiPanel({ page = false }: { page?: boolean }) {
           Drop images to send to Claude
         </div>
       )}
-      {!page && <SidePanelResizer />}
-      <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
-        <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
-          <Sparkles className="size-3" aria-hidden />
-        </span>
-        <button
-          type="button"
-          aria-label="Chats"
-          aria-expanded={showList}
-          onClick={() => setShowList((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1.5 py-1 text-left text-[13px] font-medium hover:bg-muted"
-        >
-          <span className="truncate">{current?.title ?? 'New chat'}</span>
-          <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', showList && 'rotate-180')} aria-hidden />
-        </button>
-        <HeaderButton
-          label="New chat"
-          onClick={() => {
-            newChat()
-            setShowList(false)
-            inputRef.current?.focus()
-          }}
-        >
-          <SquarePen />
-        </HeaderButton>
-        {!page && (
-<HeaderButton label="Close Claude" onClick={() => useSettings.getState().setAiOpen(false)}>
-          <X />
-        </HeaderButton>
-)}
-      </div>
-
       <ScrollArea className="min-h-0 flex-1">
-        {showList ? (
-          <ChatList onPicked={() => setShowList(false)} />
-        ) : messages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="flex flex-col items-center gap-4 px-6 py-10 text-center">
             <span className="grid size-12 place-items-center rounded-2xl bg-violet-500/10 text-violet-500 ring-1 ring-violet-500/25">
               <Sparkles className="size-5" aria-hidden />
@@ -640,6 +522,37 @@ export function AiPanel({ page = false }: { page?: boolean }) {
           )}
         </div>
       </form>
+    </div>
+  )
+}
+
+/** Claude beside any section: the open chat and a box to ask. Every chat is listed in the Chats section. */
+export function AiPanel() {
+  const width = useSettings((s) => s.sidePanelWidth)
+  const title = useAiChat((s) => activeChat(s)?.title ?? 'New chat')
+  return (
+    <aside
+      aria-label="Claude"
+      style={{ width }}
+      className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+    >
+      <SidePanelResizer />
+      <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
+        <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
+          <Sparkles className="size-3" aria-hidden />
+        </span>
+        <h2 className="min-w-0 flex-1 truncate px-1.5 text-[13px] font-medium">{title}</h2>
+        <HeaderButton label="All chats" onClick={() => useSettings.getState().setSection('chats')}>
+          <MessagesSquare />
+        </HeaderButton>
+        <HeaderButton label="New chat" onClick={() => useAiChat.getState().newChat()}>
+          <SquarePen />
+        </HeaderButton>
+        <HeaderButton label="Close Claude" onClick={() => useSettings.getState().setAiOpen(false)}>
+          <X />
+        </HeaderButton>
+      </div>
+      <Conversation />
     </aside>
   )
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
+import { ChatsScreen } from '@/components/ai/ChatsScreen'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { FilesList } from '@/components/files/FilesList'
 import { NotesScreen } from '@/components/notes/NotesScreen'
@@ -64,7 +65,7 @@ export function AppShell({ editor, output, connection, cursor, onOpenCommand }: 
           )}
           {section === 'chats' && (
             <ErrorBoundary name="The Chats section">
-              <AiPanel page />
+              <ChatsScreen />
             </ErrorBoundary>
           )}
           {/* Kept mounted (just hidden) on other sections, so Monaco keeps its cursor, scroll and undo history. */}

@@ -103,7 +103,8 @@ test('on the Chats section the chat is the page, so Claude isn’t also on the r
   useSettings.setState({ aiOpen: true })
   renderShell()
   await userEvent.click(rail().getByRole('button', { name: 'Chats' }))
-  expect(screen.getAllByRole('complementary', { name: 'Claude' })).toHaveLength(1)
+  expect(screen.getByRole('main', { name: 'Chat' })).toBeInTheDocument()
+  expect(screen.queryByRole('complementary', { name: 'Claude' })).not.toBeInTheDocument()
 })
 
 test('search bar calls onOpenCommand', async () => {
