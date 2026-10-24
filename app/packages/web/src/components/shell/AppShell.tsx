@@ -32,7 +32,8 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
   const filesOpen = useFilesPanel((s) => s.open)
-  const vertical = narrow || useSettings((s) => s.outputPosition) === 'bottom'
+  const outputPosition = useSettings((s) => s.outputPosition)
+  const vertical = narrow || outputPosition === 'bottom'
   const outputOpen = useSettings((s) => s.outputOpen)
   const aiOpen = useSettings((s) => s.aiOpen)
   const notesOpen = useSettings((s) => s.notesOpen)

@@ -289,3 +289,20 @@ test('the Playground button switches the main area; the editor stays loaded behi
   expect(screen.getByText('EDITOR')).toBeVisible()
   expect(mounts).toHaveBeenCalledTimes(1)
 })
+
+test('making the window narrow while the editor is open keeps working', () => {
+  let narrow = false
+  const listeners = new Set<() => void>()
+  window.matchMedia = ((query: string) => ({
+    get matches() { return query === '(max-width: 899px)' && narrow },
+    media: query,
+    addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+  })) as unknown as typeof window.matchMedia
+  renderShell()
+  act(() => {
+    narrow = true
+    listeners.forEach((fn) => fn())
+  })
+  expect(screen.getByText('EDITOR')).toBeInTheDocument()
+})
