@@ -11,22 +11,34 @@ const MAX_RETRY_MS = 30_000
 
 const keyByName = new Map(Object.entries(STATE_KEYS).map(([key, name]) => [name as string, key as StateKey]))
 
+const BACKUP = (key: StateKey) => `dsa-editor:backup:${key}`
+/** Browsers drop a request that outlives the page if its body is bigger than 64 KB. */
+const KEEPALIVE_MAX = 60_000
+
 let deps = {
   fetchImpl: ((...args: Parameters<typeof fetch>) => fetch(...args)) as typeof fetch,
   delayMs: 500,
-  /** Called once when saving to disk starts failing (it keeps retrying). */
+  /** Called when saving to disk starts failing (it keeps retrying). */
   onProblem: () => {},
+  /** Called when saving works again after a problem. */
+  onRecovered: () => {},
 }
 
-/** The latest value of each key not yet confirmed by disk, and its timer. */
-let waiting = new Map<StateKey, { value: string; timer: ReturnType<typeof setTimeout>; failures: number }>()
-let warned = false
+/** The latest value of each key not yet confirmed by disk. Only one save per key is on its way at a time. */
+interface Entry {
+  value: string
+  timer: ReturnType<typeof setTimeout> | null
+  sending: boolean
+  failures: number
+}
+let waiting = new Map<StateKey, Entry>()
+let failing = false
 
 /** Test seam; also resets what's waiting. */
 export function configureStateSync(next: Partial<typeof deps>) {
-  for (const w of waiting.values()) clearTimeout(w.timer)
+  for (const w of waiting.values()) if (w.timer) clearTimeout(w.timer)
   waiting = new Map()
-  warned = false
+  failing = false
   deps = { ...deps, ...next }
 }
 
@@ -41,41 +53,60 @@ function remember(name: string, value: string) {
 const put = (key: StateKey, value: string, keepalive = false) =>
   deps.fetchImpl(`${API}/${key}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: value, keepalive })
 
+function schedule(key: StateKey, entry: Entry, ms: number) {
+  if (entry.timer) clearTimeout(entry.timer)
+  entry.timer = setTimeout(() => {
+    entry.timer = null
+    void send(key)
+  }, ms)
+}
+
 async function send(key: StateKey) {
   const entry = waiting.get(key)
-  if (!entry) return
+  if (!entry || entry.sending) return
+  entry.sending = true
   const { value } = entry
   const ok = await put(key, value).then(
     (res) => res.ok,
     () => false,
   )
-  const latest = waiting.get(key)
+  entry.sending = false
+  if (waiting.get(key) !== entry) return
   if (ok) {
-    // Settled, unless it changed again while this was on its way.
-    if (latest?.value === value) {
+    entry.failures = 0
+    if (failing) {
+      failing = false
+      deps.onRecovered()
+    }
+    // Settled, unless it changed while this was on its way: then the newer value goes next.
+    if (entry.value === value) {
       waiting.delete(key)
       localStorage.removeItem(UNSAVED(key))
-    }
+    } else schedule(key, entry, deps.delayMs)
     return
   }
-  if (!latest) return
-  latest.failures++
-  if (!warned) {
-    warned = true
+  entry.failures++
+  if (!failing) {
+    failing = true
     deps.onProblem()
   }
-  latest.timer = setTimeout(() => void send(key), Math.min(MAX_RETRY_MS, deps.delayMs * 2 ** latest.failures))
+  schedule(key, entry, Math.min(MAX_RETRY_MS, deps.delayMs * 2 ** entry.failures))
 }
 
 function save(key: StateKey, value: string) {
-  const previous = waiting.get(key)
-  if (previous) clearTimeout(previous.timer)
+  let entry = waiting.get(key)
+  if (!entry) {
+    entry = { value, timer: null, sending: false, failures: 0 }
+    waiting.set(key, entry)
+  }
+  entry.value = value
   try {
     localStorage.setItem(UNSAVED(key), '1')
   } catch {
     // Only matters if the page closes before disk confirms.
   }
-  waiting.set(key, { value, failures: previous?.failures ?? 0, timer: setTimeout(() => void send(key), deps.delayMs) })
+  // While a save is on its way, this one waits for it to finish; it's sent then.
+  if (!entry.sending) schedule(key, entry, deps.delayMs)
 }
 
 /**
@@ -96,7 +127,11 @@ export async function loadSavedState(): Promise<boolean> {
     const local = localStorage.getItem(name)
     const unsaved = localStorage.getItem(UNSAVED(key)) !== null
     if (local !== null && (unsaved || saved[key] === null)) save(key, local)
-    else if (saved[key] !== null) remember(name, saved[key])
+    else if (saved[key] !== null) {
+      // This browser's different copy is kept aside in case it held something disk's doesn't.
+      if (local !== null && local !== saved[key]) remember(BACKUP(key), local)
+      remember(name, saved[key])
+    }
   }
   return true
 }
@@ -115,7 +150,14 @@ export const stateStorage: StateStorage = {
 /** The page is closing: send what's still waiting now, in requests that outlive the page. */
 export function flushState() {
   for (const [key, entry] of waiting) {
-    clearTimeout(entry.timer)
-    void put(key, entry.value, true).catch(() => {})
+    if (entry.timer) clearTimeout(entry.timer)
+    entry.timer = null
+    // Too big to outlive the page: still sent, and if it doesn't make it, the unsaved marker covers it.
+    void put(key, entry.value, entry.value.length < KEEPALIVE_MAX).catch(() => {})
   }
+}
+
+/** The page is back (from the browser's back/forward cache): carry on saving what was still waiting. */
+export function resumeState() {
+  for (const [key, entry] of waiting) if (!entry.sending) schedule(key, entry, deps.delayMs)
 }
