@@ -198,3 +198,10 @@ test('a problem’s link is saved, and can be removed', async () => {
   expect(calls.at(-1)?.body).toEqual({ link: null })
   expect(useProblems.getState().entries[0].problem).not.toHaveProperty('link')
 })
+
+test('a problem opened from the Chats page brings the chat along in the Claude panel', async () => {
+  await useProblems.getState().load()
+  useSettings.setState({ section: 'chats', aiOpen: false })
+  await useProblems.getState().open('three-sum')
+  expect(useSettings.getState()).toMatchObject({ section: 'problems', aiOpen: true })
+})

@@ -89,5 +89,6 @@ function toSections(saved: Record<string, unknown>): Record<string, unknown> {
   if (problemListOpen === false) listOpen.problems = false
   if (playgroundListOpen === false) listOpen.dryruns = false
   const section = screen === 'editor' && notesOpen === true ? 'notes' : (OLD_SCREENS[String(screen)] ?? 'code')
-  return { ...rest, section, listOpen }
+  // Claude was open: start with the lists folded away, as opening it would.
+  return { ...rest, section, listOpen, foldedForClaude: rest.aiOpen === true }
 }

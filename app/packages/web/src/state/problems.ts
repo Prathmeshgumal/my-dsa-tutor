@@ -174,6 +174,8 @@ export const useProblems = create<ProblemsState>()(
         },
 
         async open(slug) {
+          // From the Chats page (say, Claude just made this problem), the chat comes along in the Claude panel.
+          if (useSettings.getState().section === 'chats') useSettings.getState().setAiOpen(true)
           useSettings.getState().setSection('problems')
           if (slug === get().activeSlug) return
           await get().flush()

@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { act } from 'react'
 import { useSettings } from './settings'
+import { mockMatchMedia } from '@/test/matchMedia'
 import { useListVisible } from './sections'
 
 const ALL_OPEN = { problems: true, code: true, notes: true, dryruns: true, chats: true }
@@ -12,6 +13,7 @@ async function loadSaved(state: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  mockMatchMedia(() => false)
   localStorage.clear()
   useSettings.setState({ section: 'code', listOpen: { ...ALL_OPEN }, aiOpen: false, foldedForClaude: false })
 })
@@ -80,5 +82,30 @@ describe('Claude and the list share the room', () => {
     act(() => useSettings.getState().pressSection('code'))
     act(() => useSettings.getState().setAiOpen(false))
     expect(result.current).toBe(false)
+  })
+})
+
+describe('review fixes', () => {
+  test('the Chats list shows even when Claude was open, since the chat is the page there', () => {
+    const { result } = renderHook(() => useListVisible('chats'))
+    act(() => useSettings.getState().setAiOpen(true))
+    act(() => useSettings.getState().setSection('chats'))
+    expect(result.current).toBe(true)
+  })
+
+  test('old settings with Claude open start with the lists folded', async () => {
+    const s = await loadSaved({ screen: 'editor', aiOpen: true })
+    expect(s.foldedForClaude).toBe(true)
+  })
+
+  test('on a narrow window the list never sits beside Claude, even when asked for', () => {
+    mockMatchMedia(() => true)
+    const { result } = renderHook(() => useListVisible('code'))
+    act(() => useSettings.getState().setAiOpen(true))
+    act(() => useSettings.getState().pressSection('code'))
+    expect(result.current).toBe(false)
+    act(() => useSettings.getState().setAiOpen(false))
+    expect(result.current).toBe(true)
+    mockMatchMedia(() => false)
   })
 })
