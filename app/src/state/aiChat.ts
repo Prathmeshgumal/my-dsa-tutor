@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { Change, ChangeEffect } from '@/lib/changes'
 import { EDIT_TOOLS, type ApprovalKind, type ChatRequest, type LastRun } from '@/lib/chatEvents'
 import { resumeChat, streamChat, type OnChatEvent } from '@/lib/claudeClient'
+import { stateStorage } from '@/lib/stateSync'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
 import type { Attachment } from '@/lib/images'
@@ -389,6 +390,8 @@ export const useAiChat = create<AiChatState>()(
     },
     {
       name: 'dsa-editor:ai',
+      // Kept on disk too (see lib/stateSync).
+      storage: createJSONStorage(() => stateStorage),
       version: 1,
       partialize: ({ chats, activeChatId }) => ({ chats, activeChatId }),
       // v0 held a single conversation: { sessionId, messages }.

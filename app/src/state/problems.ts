@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import {
   codeOf,
   nextVersionName,
@@ -11,6 +11,7 @@ import {
   type TestRun,
 } from '@/lib/problems'
 import type { CodeRunner } from '@/lib/runner/types'
+import { stateStorage } from '@/lib/stateSync'
 import { createRunner } from './run'
 import { useSettings } from './settings'
 
@@ -328,7 +329,12 @@ export const useProblems = create<ProblemsState>()(
         },
       }
     },
-    { name: 'dsa-editor:problems', partialize: (s) => ({ activeSlug: s.activeSlug }) },
+    {
+      name: 'dsa-editor:problems',
+      partialize: (s) => ({ activeSlug: s.activeSlug }),
+      // Kept on disk too (see lib/stateSync).
+      storage: createJSONStorage(() => stateStorage),
+    },
   ),
 )
 

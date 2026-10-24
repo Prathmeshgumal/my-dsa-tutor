@@ -26,7 +26,7 @@ test('debounces 500ms then saves and sets saved', () => {
   vi.advanceTimersByTime(499)
   expect(setItem).not.toHaveBeenCalled()
   vi.advanceTimersByTime(1)
-  expect(setItem).toHaveBeenCalledTimes(1)
+  expect(setItem.mock.calls.filter(([key]) => key === WORKSPACE_KEY)).toHaveLength(1)
   expect(JSON.parse(localStorage.getItem(WORKSPACE_KEY)!).files[0].content).toBe('ab')
   expect(ws().saveStatus).toBe('saved')
   expect(ws().lastSavedAt).not.toBeNull()

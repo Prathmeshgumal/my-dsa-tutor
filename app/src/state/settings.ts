@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { stateStorage } from '@/lib/stateSync'
 import { useFilesPanel } from './filesPanel'
 
 export type ThemePref = 'system' | 'light' | 'dark'
@@ -79,6 +80,8 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: 'dsa-editor:settings',
+      // Kept on disk too (see lib/stateSync).
+      storage: createJSONStorage(() => stateStorage),
       // v1 dropped Judge0: forget the runner choice and wipe any RapidAPI key saved in this browser.
       version: 1,
       migrate: (saved) => {

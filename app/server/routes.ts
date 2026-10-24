@@ -12,6 +12,7 @@ import { createLogger, createLogMiddleware, type Logger } from './log.ts'
 import { createProblemsMiddleware } from './problemsApi.ts'
 import { createSameSiteGuard } from './sameSite.ts'
 import { createNotesMiddleware, createPlaygroundMiddleware, createSolutionsMiddleware } from './solutionsApi.ts'
+import { createStateMiddleware } from './stateApi.ts'
 
 export type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -53,6 +54,8 @@ export function createRoutes(config: Config, { logger = createLogger(config.fold
     createNotesMiddleware(notes),
     createPlaygroundMiddleware(playground),
     createProblemsMiddleware(problems),
+    // Tabs, chats and settings.
+    createStateMiddleware(config.folders.state),
     // Claude runs in the solutions folder, so it sees the same files the editor shows.
     createClaudeChatMiddleware({
       cwd: solutions,

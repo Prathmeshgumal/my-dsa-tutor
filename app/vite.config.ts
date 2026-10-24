@@ -30,7 +30,7 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   // Forward /piston/* to Piston (local container, or `piston` inside Docker Compose) so the browser never makes a cross-origin call.
   server: {
-    // Fixed port: browser data (open tabs, theme, settings) is stored per origin, so the address must not change.
+    // From the config; if it's taken, say so instead of quietly using another port.
     port: config.port,
     strictPort: true,
     proxy: {

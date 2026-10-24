@@ -59,8 +59,10 @@ code. Change a file outside the editor (in VS Code, with git, anything) and the 
 shows the change straight away; the same goes for notes, problems and dry runs. Saving
 never leaves a half-written file behind, even if the power goes mid-save.
 
-The browser also keeps a backup copy, plus your open tabs, theme and settings,
-in localStorage for `http://localhost:5199`. The port is fixed for that reason.
+Your open tabs, chats, theme and settings are saved too, in **`state/`** (set `STATE_DIR` to
+use another folder), so clearing the browser, switching browsers or changing the port loses
+nothing. The browser keeps a copy for speed; the first time you open this version, whatever your
+browser already had is moved into `state/` for you.
 
 ## Giving your program input
 

@@ -40,6 +40,8 @@ test('the API routes read and write the configured folders', async () => {
   expect(await (await fetch(`${base}/api/notes`)).json()).toEqual([{ name: 'note-1.md', content: '# Hi' }])
   expect((await fetch(`${base}/api/problems`)).status).toBe(200)
   expect((await fetch(`${base}/api/health`)).status).toBe(200)
+  expect((await fetch(`${base}/api/state/settings`, { method: 'PUT', body: '{"state":{}}' })).status).toBe(204)
+  expect((await (await fetch(`${base}/api/state`)).json()).settings).toBe('{"state":{}}')
 })
 
 test('anything else is passed on', async () => {

@@ -1,6 +1,8 @@
 import { LANGUAGES } from './languages'
+import { STATE_KEYS } from './appState'
+import { stateStorage } from './stateSync'
 
-export const WORKSPACE_KEY = 'dsa-editor:workspace'
+export const WORKSPACE_KEY = STATE_KEYS.workspace
 
 export interface CodeFile {
   id: string
@@ -53,7 +55,8 @@ export function loadWorkspace(): WorkspaceData {
 
 export function saveWorkspace(d: WorkspaceData): boolean {
   try {
-    localStorage.setItem(WORKSPACE_KEY, JSON.stringify(d))
+    // Kept on disk too (see stateSync).
+    void stateStorage.setItem(WORKSPACE_KEY, JSON.stringify(d))
     return true
   } catch {
     return false
