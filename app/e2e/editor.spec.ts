@@ -6,6 +6,8 @@ import { SOLUTIONS, STATE } from './paths.ts'
 
 const tabs = (page: Page) => page.getByRole('tablist', { name: 'Open files' }).getByRole('tab')
 const editor = (page: Page) => page.locator('.monaco-editor').first()
+/** Monaco comes from a CDN (jsdelivr), which can take a while on a cold start. */
+const MONACO_LOAD = { timeout: 30_000 }
 
 async function openFile(page: Page, name: string) {
   await page.getByRole('button', { name: 'Files' }).click()
@@ -16,7 +18,7 @@ async function openFile(page: Page, name: string) {
 test('opens a file and saves what you type to the solutions folder', async ({ page }) => {
   await page.goto('/')
   await openFile(page, 'two_sum.cpp')
-  await expect(editor(page)).toContainText('std::cout << 3;')
+  await expect(editor(page)).toContainText('std::cout << 3;', MONACO_LOAD)
   await editor(page).click()
   await page.keyboard.press('ControlOrMeta+End')
   await page.keyboard.type('// checked by the browser tests')
@@ -35,9 +37,22 @@ test('everything the page asks for is there: scripts, styles, fonts', async ({ p
   expect(await page.evaluate(() => document.fonts.check('16px "Geist"'))).toBe(true)
 })
 
+test('runs a program and takes what you type as its input', async ({ page }) => {
+  await page.goto('/')
+  await openFile(page, 'two_sum.cpp')
+  await page.getByRole('button', { name: 'Run', exact: true }).first().click()
+  const input = page.getByRole('textbox', { name: 'Type input for the program' })
+  await expect(page.getByText('Name?')).toBeVisible()
+  await input.fill('prathmesh')
+  await input.press('Enter')
+  await expect(page.getByText('hi prathmesh')).toBeVisible()
+  await expect(page.getByText('Success', { exact: true })).toBeVisible()
+})
+
 test('a file changed outside the editor shows up straight away', async ({ page }) => {
   await page.goto('/')
   await openFile(page, 'hello.py')
+  await expect(editor(page)).toBeVisible(MONACO_LOAD)
   await writeFile(path.join(SOLUTIONS, 'hello.py'), 'print("changed in VS Code")\n')
   await expect(editor(page)).toContainText('changed in VS Code')
   await writeFile(path.join(SOLUTIONS, 'new_file.cpp'), 'int main() {}\n')
