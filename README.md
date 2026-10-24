@@ -9,7 +9,8 @@ A local, browser-based code editor for practising DSA in C++, Java and Python.
 ```
 
 (`./start.sh` is `docker compose up -d` plus waiting for the editor and printing its
-link; plain `docker compose up -d` works too.) That starts everything, and it all restarts by itself after a reboot:
+link. It also creates the data folders first, so they belong to you; after that, plain
+`docker compose up -d` works too.) That starts everything, and it all restarts by itself after a reboot:
 
 - **editor**: the editor itself, which also saves your files and talks to Claude
   Code. It runs the built app on a small Node server; after changing anything in `app/`,
@@ -35,11 +36,22 @@ of the log file (`logs/editor.log`), ready to paste into a bug report.
 Not using Docker for the editor? `docker compose up -d piston piston-setup`, then
 `cd app && npm install && npm run build && npm start`. Working on the editor itself?
 `npm run dev` instead serves the same thing with instant reloads as you change the code.
+`npm test` runs the unit tests and `npm run test:e2e` the browser tests (the first time:
+`npx playwright install chromium`). The code is in three parts under `app/packages`: `web` (the
+page), `server` (the API) and `core` (what both use).
+
+Updating from a version before the editor ran on its own server? Docker's old
+`project-me_editor-node-modules` volume isn't used any more; `docker volume rm
+project-me_editor-node-modules` frees its space.
 
 ### Settings
 
-The defaults need no setup. To change them, put a `dsa-tutor.json` in the data folder (the
-repo root unless you set `DATA_DIR`), for example:
+The defaults need no setup. **In Docker**, the only setting is the port on your computer:
+`EDITOR_PORT=5300 ./start.sh`. The rest is fixed by
+`docker-compose.yml`, and a `dsa-tutor.json` isn't read.
+
+**Without Docker**, put a `dsa-tutor.json` in the data folder (the repo root unless you set
+`DATA_DIR`), for example:
 
 ```json
 { "port": 5199, "pistonUrl": "http://127.0.0.1:2000", "folders": { "notes": "my-notes" } }
