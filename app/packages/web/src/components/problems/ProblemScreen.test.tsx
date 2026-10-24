@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ProblemEntry } from '@dsa/core/problems'
 import { useAiChat } from '@/state/aiChat'
 import { configureNotes, useNotes } from '@/state/notes'
@@ -77,21 +78,38 @@ beforeEach(() => {
   })
 })
 
-test('shows the problem with its own notes, dry runs and chats', async () => {
+test('two tabs: Description and Related', async () => {
   renderScreen()
   expect(await screen.findByRole('heading', { name: 'Two Sum' })).toBeInTheDocument()
+  expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(
+    expect.arrayContaining(['Description', 'Related']),
+  )
+  expect(screen.queryByRole('tab', { name: /^notes/i })).not.toBeInTheDocument()
+})
 
-  fireEvent.click(await screen.findByRole('tab', { name: /^notes\s*1$/i }))
-  expect(screen.getByText('Hash map trick')).toBeInTheDocument()
-  expect(screen.queryByText('Unrelated')).not.toBeInTheDocument()
+test('Related shows the problem’s own notes, dry runs, chats and submissions', async () => {
+  renderScreen()
+  fireEvent.click(await screen.findByRole('tab', { name: /^related\s*3$/i }))
+  const related = screen.getByRole('tabpanel', { name: /related/i })
+  await within(related).findByText('Hash map trick')
+  expect(within(related).getByRole('heading', { name: /^Notes\s*1$/ })).toBeInTheDocument()
+  expect(within(related).queryByText('Unrelated')).not.toBeInTheDocument()
+  expect(within(related).getByText('Dry run of two sum')).toBeInTheDocument()
+  expect(within(related).queryByText('Other dry run')).not.toBeInTheDocument()
+  expect(within(related).getByText('Hint for two sum')).toBeInTheDocument()
+  expect(within(related).queryByText('General chat')).not.toBeInTheDocument()
+  expect(within(related).getByRole('heading', { name: /^Submissions/ })).toBeInTheDocument()
+})
 
-  fireEvent.click(await screen.findByRole('tab', { name: /^dry runs\s*1$/i }))
-  expect(screen.getByText('Dry run of two sum')).toBeInTheDocument()
-  expect(screen.queryByText('Other dry run')).not.toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole('tab', { name: /^chats\s*1$/i }))
-  expect(screen.getByText('Hint for two sum')).toBeInTheDocument()
-  expect(screen.queryByText('General chat')).not.toBeInTheDocument()
+test('a dry run or chat in Related opens in its own section', async () => {
+  renderScreen()
+  fireEvent.click(await screen.findByRole('tab', { name: /^related/i }))
+  fireEvent.click(await screen.findByRole('button', { name: /^Dry run of two sum/ }))
+  expect(useSettings.getState().section).toBe('dryruns')
+  expect(usePlayground.getState().activeId).toBe('a')
+  fireEvent.click(screen.getByRole('button', { name: /^Hint for two sum/ }))
+  expect(useSettings.getState().section).toBe('chats')
+  expect(useAiChat.getState().activeChatId).toBe('c1')
 })
 
 test('switches between versions of the code', async () => {
@@ -102,15 +120,31 @@ test('switches between versions of the code', async () => {
   expect(await screen.findByDisplayValue('brute code')).toHaveAttribute('data-path', 'problem:two-sum/brute.cpp')
 })
 
-test('the problem list can be hidden, and the problem stays open', async () => {
+test('the problem list uses the shared list and can be hidden from the left bar', async () => {
+  useSettings.setState({ section: 'problems' })
   useSettings.getState().setListOpen('problems', true)
   renderScreen()
-  expect(await screen.findByRole('list', { name: 'Problems' })).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Hide problems' }))
-  expect(useSettings.getState().listOpen.problems).toBe(false)
+  const list = await screen.findByRole('list', { name: 'Problems' })
+  expect(within(list).getByRole('button', { name: /^Two Sum/ })).toHaveAttribute('aria-current', 'true')
+  expect(within(list).getByRole('button', { name: /^Two Sum/ })).toHaveTextContent('Easy')
+  act(() => useSettings.getState().pressSection('problems'))
   expect(screen.queryByRole('list', { name: 'Problems' })).not.toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Two Sum' })).toBeInTheDocument()
-  useSettings.getState().setListOpen('problems', true)
+  act(() => useSettings.getState().pressSection('problems'))
+})
+
+test('deleting a problem asks first', async () => {
+  const remove = vi.fn(async () => {})
+  renderScreen()
+  await screen.findByTestId('monaco')
+  useProblems.setState({ remove })
+  // From the keyboard: in jsdom every box is 0×0, so the resize handles' pointer listener claims any press.
+  act(() => screen.getByRole('button', { name: 'Actions for Two Sum' }).focus())
+  await userEvent.keyboard('{Enter}')
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  expect(remove).not.toHaveBeenCalled()
+  await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
+  expect(remove).toHaveBeenCalledWith('two-sum')
 })
 
 test('problems saved by a newer editor are named, with what to do', async () => {
@@ -183,9 +217,8 @@ test('Add link suggests the LeetCode address and saves what you confirm', async 
 test('a note linked to the problem opens in the Notes section', async () => {
   useSettings.setState({ section: 'problems' })
   renderScreen()
-  fireEvent.click(await screen.findByRole('tab', { name: /notes/i }))
-  fireEvent.click(await screen.findByRole('button', { name: /Hash map trick/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  fireEvent.click(await screen.findByRole('tab', { name: /^related/i }))
+  fireEvent.click(await screen.findByRole('button', { name: /^Hash map trick/ }))
   await vi.waitFor(() => expect(useNotes.getState().activeName).toBe('note-1.md'))
   expect(useSettings.getState().section).toBe('notes')
 })

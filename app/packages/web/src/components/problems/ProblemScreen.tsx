@@ -2,24 +2,31 @@ import { useEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import {
   AlertTriangle,
-  ArrowLeft,
-  Check,
   CheckCircle2,
   Circle,
   CloudUpload,
   ListChecks,
   Loader2,
-  PanelLeftClose,
   Play,
   Plus,
   RotateCcw,
   Sparkles,
-  Trash2,
   X,
 } from 'lucide-react'
 import { Markdown } from '@/components/ai/Markdown'
 import { registerGlowThemes } from '@/components/editor/monacoThemes'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
+import { ListPane, ListRow } from '@/components/shell/ListPane'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -31,7 +38,6 @@ import {
   linkLabel,
   SOLUTION_FILE,
   starterCode,
-  type Attempt,
   type Difficulty,
   type ProblemEntry,
 } from '@dsa/core/problems'
@@ -42,7 +48,7 @@ import { useSettings } from '@/state/settings'
 import { useAiChat } from '@/state/aiChat'
 import { useNotes } from '@/state/notes'
 import { usePlayground } from '@/state/playground'
-import { ProblemChats, ProblemDryRuns, ProblemNotes } from './ProblemLinks'
+import { Related } from './Related'
 import { TestPanel } from './TestPanel'
 
 const DIFFICULTY: Record<Difficulty, { label: string; className: string }> = {
@@ -58,183 +64,67 @@ function savedLayout(area: string) {
 }
 const saveLayout = (area: string) => (l: Record<string, number>) => useSettings.getState().setPlaygroundLayout(area, l)
 
-function ProblemRow({ entry, active }: { entry: ProblemEntry; active: boolean }) {
-  const [confirming, setConfirming] = useState(false)
-  const { title, difficulty } = entry.problem
-  return (
-    <li
-      className={cn(
-        'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
-        active ? 'bg-violet-500/10 ring-1 ring-violet-500/25 ring-inset' : 'hover:bg-muted',
-      )}
-      onMouseLeave={() => setConfirming(false)}
-    >
-      <button
-        type="button"
-        aria-label={title}
-        aria-current={active ? 'true' : undefined}
-        onClick={() => void useProblems.getState().open(entry.slug)}
-        className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
-      >
-        {entry.solved ? (
-          <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" aria-label="Solved" />
-        ) : (
-          <Circle className="size-3.5 shrink-0 text-muted-foreground/50" aria-label="Not solved yet" />
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12.5px] text-foreground">{title}</span>
-          <span className={cn('block text-[11px]', DIFFICULTY[difficulty].className)}>
-            {DIFFICULTY[difficulty].label}
-          </span>
-        </span>
-      </button>
-      {confirming ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          aria-label={`Confirm delete problem: ${title}`}
-          onClick={() => void useProblems.getState().remove(entry.slug)}
-          className="h-6 px-2 text-[11px]"
-        >
-          <Check /> Delete
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Delete problem: ${title}`}
-          onClick={() => setConfirming(true)}
-          className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-500"
-        >
-          <Trash2 />
-        </Button>
-      )}
-    </li>
-  )
-}
-
 function ProblemList() {
   const entries = useProblems((s) => s.entries)
   const newer = useProblems((s) => s.newer)
   const activeSlug = useProblems((s) => s.activeSlug)
-  const solved = entries.filter((e) => e.solved).length
+  const [deleting, setDeleting] = useState<ProblemEntry | null>(null)
   return (
-    <aside className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        <ListChecks className="size-4 text-violet-500" aria-hidden />
-        <span className="text-[13px] font-semibold">Problems</span>
-        {entries.length > 0 && (
-          <span className="ml-auto font-mono text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
-            {solved}/{entries.length} solved
-          </span>
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Hide problems"
-              onClick={() => useSettings.getState().setListOpen('problems', false)}
-              className={cn('text-muted-foreground', !entries.length && 'ml-auto')}
+    <>
+      <ListPane
+        title="Problems"
+        count={entries.length}
+        search
+        empty="No problems yet. Paste a question into the Claude panel and ask it to make a problem."
+        footer={
+          newer.length > 0 && (
+            <p className="px-4 pb-4 text-[12px] text-amber-600 dark:text-amber-400">
+              Not shown: {newer.join(', ')}. A newer version of the editor saved {newer.length === 1 ? 'it' : 'them'};
+              update the editor to open {newer.length === 1 ? 'it' : 'them'}.
+            </p>
+          )
+        }
+      >
+        {entries.map((e) => (
+          <ListRow
+            key={e.slug}
+            icon={e.solved ? <CheckCircle2 className="text-emerald-500" /> : <Circle className="text-muted-foreground/50" />}
+            title={e.problem.title}
+            meta={
+              <>
+                <span className={DIFFICULTY[e.problem.difficulty].className}>{DIFFICULTY[e.problem.difficulty].label}</span>
+                <span className="sr-only">{e.solved ? ', solved' : ', not solved yet'}</span>
+              </>
+            }
+            active={e.slug === activeSlug}
+            onOpen={() => void useProblems.getState().open(e.slug)}
+            actions={[{ label: 'Delete', destructive: true, onSelect: () => setDeleting(e) }]}
+          />
+        ))}
+      </ListPane>
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleting?.problem.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the problem, its code and its submissions from problems/. You can’t undo this.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleting) void useProblems.getState().remove(deleting.slug)
+                setDeleting(null)
+              }}
             >
-              <PanelLeftClose />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Hide the list (or click the Problems button on the left)</TooltipContent>
-        </Tooltip>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        {entries.length ? (
-          <ul aria-label="Problems" className="flex flex-col gap-0.5 p-2 pt-0">
-            {entries.map((e) => (
-              <ProblemRow key={e.slug} entry={e} active={e.slug === activeSlug} />
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-6 text-[12px] text-muted-foreground">No problems yet.</p>
-        )}
-        {newer.length > 0 && (
-          <p className="px-4 pb-4 text-[12px] text-amber-600 dark:text-amber-400">
-            Not shown: {newer.join(', ')}. A newer version of the editor saved {newer.length === 1 ? 'it' : 'them'}; update
-            the editor to open {newer.length === 1 ? 'it' : 'them'}.
-          </p>
-        )}
-      </ScrollArea>
-    </aside>
-  )
-}
-
-const timeAgo = (at: number) => new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-
-function AttemptView({ attempt, onBack }: { attempt: Attempt; onBack(): void }) {
-  const accepted = attempt.total > 0 && attempt.passed === attempt.total
-  return (
-    <div className="flex flex-col gap-3 p-4">
-      <Button variant="ghost" size="sm" onClick={onBack} className="self-start">
-        <ArrowLeft /> All submissions
-      </Button>
-      <div className="flex items-baseline gap-2">
-        <span
-          className={cn(
-            'text-[15px] font-semibold',
-            accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
-          )}
-        >
-          {attempt.statusText}
-        </span>
-        <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
-          {attempt.passed}/{attempt.total} cases
-        </span>
-      </div>
-      <span className="text-[12px] text-muted-foreground">
-        {[attempt.file ?? SOLUTION_FILE, timeAgo(attempt.at)].join(' · ')}
-      </span>
-      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-[12px] leading-relaxed">
-        {attempt.code}
-      </pre>
-    </div>
-  )
-}
-
-function Submissions() {
-  const attempts = useProblems((s) => s.attempts)
-  const [open, setOpen] = useState<Attempt | null>(null)
-  if (open) return <AttemptView attempt={open} onBack={() => setOpen(null)} />
-  if (!attempts.length) {
-    return (
-      <p className="p-4 text-[12.5px] text-muted-foreground">
-        No submissions yet. Submit runs every test case and saves your code here.
-      </p>
-    )
-  }
-  return (
-    <ul aria-label="Submissions" className="flex flex-col gap-0.5 p-2">
-      {attempts.map((a) => {
-        const accepted = a.total > 0 && a.passed === a.total
-        return (
-          <li key={a.at}>
-            <button
-              type="button"
-              onClick={() => setOpen(a)}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-muted"
-            >
-              <span
-                className={cn(
-                  'w-36 shrink-0 text-[12.5px] font-medium',
-                  accepted ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
-                )}
-              >
-                {a.statusText}
-              </span>
-              <span className="font-mono text-[11.5px] text-muted-foreground tabular-nums">
-                {a.passed}/{a.total}
-              </span>
-              <span className="ml-auto text-[11.5px] text-muted-foreground">{timeAgo(a.at)}</span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -302,7 +192,9 @@ function QuestionLink({ entry }: { entry: ProblemEntry }) {
   )
 }
 
-type Tab = 'description' | 'notes' | 'dry runs' | 'chats' | 'submissions'
+type Tab = 'description' | 'related'
+
+const TAB_LABEL: Record<Tab, string> = { description: 'Description', related: 'Related' }
 
 function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
   const [tab, setTab] = useState<Tab>('description')
@@ -310,16 +202,17 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
   // Selectors return numbers, not new arrays, so the panel doesn't re-render forever.
   const linkedNotes = entry.problem.notes ?? []
   const counts: Partial<Record<Tab, number>> = {
-    notes: useNotes((s) => s.notes.filter((n) => linkedNotes.includes(n.name)).length),
-    'dry runs': usePlayground((s) => s.runs.filter((r) => r.problem === entry.slug).length),
-    chats: useAiChat((s) => s.chats.filter((c) => c.problemSlug === entry.slug).length),
-    submissions: attempts,
+    related:
+      useNotes((s) => s.notes.filter((n) => linkedNotes.includes(n.name)).length) +
+      usePlayground((s) => s.runs.filter((r) => r.problem === entry.slug).length) +
+      useAiChat((s) => s.chats.filter((c) => c.problemSlug === entry.slug).length) +
+      attempts,
   }
   const { problem } = entry
   return (
     <section aria-label="Problem description" className="flex min-h-0 flex-1 flex-col">
       <div role="tablist" className="flex shrink-0 overflow-x-auto border-b px-1.5 pt-1.5 [scrollbar-width:none]">
-        {(['description', 'notes', 'dry runs', 'chats', 'submissions'] as const).map((t) => (
+        {(['description', 'related'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -327,18 +220,18 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
             aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={cn(
-              '-mb-px shrink-0 border-b-2 px-2 py-1.5 text-[12.5px] whitespace-nowrap capitalize transition-colors',
+              '-mb-px shrink-0 border-b-2 px-2 py-1.5 text-[12.5px] whitespace-nowrap transition-colors',
               tab === t
                 ? 'border-violet-500 text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            {t}
+            {TAB_LABEL[t]}
             {!!counts[t] && <span className="ml-1 text-muted-foreground tabular-nums">{counts[t]}</span>}
           </button>
         ))}
       </div>
-      <ScrollArea className="min-h-0 flex-1 [&>div>div]:!block">
+      <ScrollArea role="tabpanel" aria-label={TAB_LABEL[tab]} className="min-h-0 flex-1 [&>div>div]:!block">
         {tab === 'description' ? (
           <div className="flex flex-col gap-3 p-4">
             <h1 className="text-[18px] leading-tight font-semibold text-balance">{problem.title}</h1>
@@ -362,14 +255,8 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
               <Markdown>{problem.description}</Markdown>
             </div>
           </div>
-        ) : tab === 'notes' ? (
-          <ProblemNotes entry={entry} />
-        ) : tab === 'dry runs' ? (
-          <ProblemDryRuns entry={entry} />
-        ) : tab === 'chats' ? (
-          <ProblemChats entry={entry} />
         ) : (
-          <Submissions />
+          <Related entry={entry} />
         )}
       </ScrollArea>
     </section>
@@ -602,9 +489,7 @@ function Empty() {
 export function ProblemScreen() {
   const entry = useProblems(activeProblem)
   const status = useProblems((s) => s.status)
-  const listOpen = useListVisible('problems')
-  // Sizes are kept separately with and without the list, so hiding it doesn't squash the others.
-  const outer = listOpen ? 'problem-outer' : 'problem-outer-no-list'
+  const listShown = useListVisible('problems')
 
   useEffect(() => {
     void useProblems.getState().load()
@@ -619,30 +504,22 @@ export function ProblemScreen() {
   }, [])
 
   return (
-    <main aria-label="Problem" className="flex min-h-0 min-w-0 flex-1">
-      {/* Remounts when a problem appears or goes, or the list is hidden or shown, since the panels differ. */}
+    <>
+      {listShown && <ProblemList />}
+      <main aria-label="Problem" className="flex min-h-0 min-w-0 flex-1">
+      {/* Remounts when a problem appears or goes, since the panels differ. */}
       <ResizablePanelGroup
-        key={`${entry ? 'problem' : 'empty'}-${listOpen ? 'with-list' : 'no-list'}`}
+        key={entry ? 'problem' : 'empty'}
         orientation="horizontal"
         defaultLayout={
           entry
-            ? (savedLayout(outer) ??
-              (listOpen ? { list: 16, description: 38, work: 46 } : { description: 45, work: 55 }))
-            : listOpen
-              ? { list: 16, empty: 84 }
-              : { empty: 100 }
+            ? // Sizes saved before the list moved out of these panels are still used.
+              (savedLayout('problem-main') ?? savedLayout('problem-outer-no-list') ?? { description: 45, work: 55 })
+            : { empty: 100 }
         }
-        onLayoutChanged={(l) => entry && saveLayout(outer)(l)}
+        onLayoutChanged={(l) => entry && saveLayout('problem-main')(l)}
         className="min-h-0 min-w-0 flex-1"
       >
-        {listOpen && (
-          <>
-            <ResizablePanel id="list" minSize="10" maxSize="35" className="flex min-h-0 flex-col">
-              <ProblemList />
-            </ResizablePanel>
-            <ResizableHandle withHandle className={handle} />
-          </>
-        )}
         {entry ? (
           <>
             <ResizablePanel id="description" minSize="20" className="flex min-h-0 min-w-0 flex-col">
@@ -682,6 +559,7 @@ export function ProblemScreen() {
           </ResizablePanel>
         )}
       </ResizablePanelGroup>
-    </main>
+      </main>
+    </>
   )
 }

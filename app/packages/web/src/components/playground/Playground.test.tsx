@@ -81,13 +81,26 @@ test('the step where the bug shows up is flagged, and printed output is shown', 
   expect(screen.getByTestId('step-output')).toHaveTextContent('0 1')
 })
 
-test('the list of dry runs can delete one after a second click', async () => {
+test('the list of dry runs asks before deleting one', async () => {
+  render(<Playground />)
+  // From the keyboard: in jsdom every box is 0×0, so the resize handles' pointer listener claims any press.
+  act(() => screen.getByRole('button', { name: 'Actions for Dry run: twoSum on [2,7,11,15]' }).focus())
+  await userEvent.keyboard('{Enter}')
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  expect(remove).not.toHaveBeenCalled()
+  await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
+  expect(remove).toHaveBeenCalledWith('r1')
+})
+
+test('the shared list shows each dry run with its steps, and search finds one', async () => {
   render(<Playground />)
   const list = screen.getByRole('list', { name: 'Dry runs' })
-  await userEvent.click(within(list).getByRole('button', { name: 'Delete dry run: Dry run: twoSum on [2,7,11,15]' }))
-  expect(remove).not.toHaveBeenCalled()
-  await userEvent.click(within(list).getByRole('button', { name: 'Confirm delete dry run: Dry run: twoSum on [2,7,11,15]' }))
-  expect(remove).toHaveBeenCalledWith('r1')
+  const row = within(list).getByRole('button', { name: /^Dry run: twoSum on \[2,7,11,15\]/ })
+  expect(row).toHaveAttribute('aria-current', 'true')
+  expect(row).toHaveTextContent(/\d+ steps/)
+  act(() => screen.getByRole('searchbox', { name: 'Search dry runs' }).focus())
+  await userEvent.keyboard('zzz')
+  expect(within(screen.getByRole('list', { name: 'Dry runs' })).queryAllByRole('listitem')).toHaveLength(0)
 })
 
 test('with nothing yet, explains how to get one and offers the example', async () => {
@@ -98,9 +111,9 @@ test('with nothing yet, explains how to get one and offers the example', async (
   expect(usePlayground.getState().activeId).toBe('example-bubble-sort')
 })
 
-test('the list, the code and the drawing can be resized with drag handles', () => {
+test('the code and the drawing can be resized with a drag handle', () => {
   render(<Playground />)
-  expect(screen.getAllByRole('separator')).toHaveLength(2)
+  expect(screen.getAllByRole('separator')).toHaveLength(1)
 })
 
 test('variables are drawn as buckets: name on top, value inside', () => {
@@ -299,15 +312,6 @@ describe('fixing the code from a dry run', () => {
 
 describe('hiding the list of dry runs', () => {
   afterEach(() => useSettings.getState().setListOpen('dryruns', true))
-
-  test('the list has a hide button, and stays hidden', async () => {
-    render(<Playground />)
-    await userEvent.click(screen.getByRole('button', { name: 'Hide dry runs' }))
-    expect(screen.queryByRole('list', { name: 'Dry runs' })).not.toBeInTheDocument()
-    expect(useSettings.getState().listOpen.dryruns).toBe(false)
-    // The dry run itself is still showing.
-    expect(screen.getByRole('heading', { name: run.title })).toBeInTheDocument()
-  })
 
   test('pressing Dry runs again in the left bar hides and shows the list', async () => {
     useSettings.setState({ section: 'dryruns' })

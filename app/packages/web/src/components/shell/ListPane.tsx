@@ -25,10 +25,12 @@ interface ListPaneProps {
   empty: ReactNode
   /** ListRows. */
   children: ReactNode
+  /** A note under the rows. */
+  footer?: ReactNode
 }
 
 /** The list on the left of every section: title, count, New, search, and the same rows everywhere. */
-export function ListPane({ title, count, onNew, newLabel = 'New', search, empty, children }: ListPaneProps) {
+export function ListPane({ title, count, onNew, newLabel = 'New', search, empty, children, footer }: ListPaneProps) {
   const [query, setQuery] = useState('')
   const rows = Children.toArray(children)
   const titles = rows.flatMap((r) =>
@@ -73,6 +75,7 @@ export function ListPane({ title, count, onNew, newLabel = 'New', search, empty,
             {noMatch && <p className="px-4 py-4 text-center text-[12.5px] text-muted-foreground">Nothing matches “{query.trim()}”.</p>}
           </>
         )}
+        {footer}
       </ScrollArea>
     </section>
   )
@@ -106,7 +109,9 @@ export function ListRow({ icon, title, meta, active, onOpen, onDoubleClick, acti
         onDoubleClick={onDoubleClick}
         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left outline-none focus-visible:underline"
       >
-        <span className="flex shrink-0 [&_svg]:size-3.5">{icon}</span>
+        <span aria-hidden className="flex shrink-0 [&_svg]:size-3.5">
+          {icon}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[12.5px]">{title}</span>
           {meta && <span className="block truncate text-[11px] text-muted-foreground">{meta}</span>}

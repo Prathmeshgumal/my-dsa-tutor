@@ -7,7 +7,6 @@ import {
   Clapperboard,
   FileCode2,
   Loader2,
-  PanelLeftClose,
   Pause,
   Pencil,
   Play,
@@ -15,10 +14,20 @@ import {
   SkipBack,
   SkipForward,
   Sparkles,
-  Trash2,
 } from 'lucide-react'
 import { Kbd } from '@/components/Kbd'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ListPane, ListRow } from '@/components/shell/ListPane'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -48,49 +57,63 @@ function timeAgo(at: number): string {
   return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`
 }
 
-function RunRow({ run, active }: { run: DryRun; active: boolean }) {
-  const [confirming, setConfirming] = useState(false)
+function RunList() {
+  const runs = usePlayground((s) => s.runs)
+  const activeId = usePlayground((s) => s.activeId)
+  const [deleting, setDeleting] = useState<DryRun | null>(null)
   return (
-    <li
-      className={cn(
-        'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
-        active ? 'bg-violet-500/10 ring-1 ring-violet-500/25 ring-inset' : 'hover:bg-muted',
-      )}
-      onMouseLeave={() => setConfirming(false)}
-    >
-      <button
-        type="button"
-        onClick={() => usePlayground.getState().open(run.id)}
-        className="min-w-0 flex-1 px-2.5 py-2 text-left"
+    <>
+      <ListPane
+        title="Dry runs"
+        count={runs.length}
+        search
+        empty="No dry runs yet."
+        footer={
+          <p className="px-3 py-2 text-[11px] text-muted-foreground">
+            <Kbd>←</Kbd> <Kbd>→</Kbd> step · <Kbd>Space</Kbd> play
+          </p>
+        }
       >
-        <span className="block truncate text-[12.5px] text-foreground">{run.title}</span>
-        <span className="block truncate text-[11px] text-muted-foreground">
-          {[`${run.steps.length} steps`, run.file, timeAgo(run.createdAt)].filter(Boolean).join(' · ')}
-        </span>
-        <ProblemTag slug={run.problem} />
-      </button>
-      {confirming ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          aria-label={`Confirm delete dry run: ${run.title}`}
-          onClick={() => void usePlayground.getState().remove(run.id)}
-          className="h-6 px-2 text-[11px]"
-        >
-          <Check /> Delete
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Delete dry run: ${run.title}`}
-          onClick={() => setConfirming(true)}
-          className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-500 focus-visible:opacity-100"
-        >
-          <Trash2 />
-        </Button>
-      )}
-    </li>
+        {runs.map((r) => (
+          <ListRow
+            key={r.id}
+            icon={<Clapperboard className={r.id === activeId ? 'text-violet-500' : undefined} />}
+            title={r.title}
+            meta={
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate">
+                  {[`${r.steps.length} steps`, r.file, timeAgo(r.createdAt)].filter(Boolean).join(' · ')}
+                </span>
+                <ProblemTag slug={r.problem} />
+              </span>
+            }
+            active={r.id === activeId}
+            onOpen={() => usePlayground.getState().open(r.id)}
+            actions={[{ label: 'Delete', destructive: true, onSelect: () => setDeleting(r) }]}
+          />
+        ))}
+      </ListPane>
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleting?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>This removes the dry run from playground/. You can’t undo this.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleting) void usePlayground.getState().remove(deleting.id)
+                setDeleting(null)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -828,7 +851,6 @@ function Empty() {
 export function Playground() {
   const { runs, activeId } = usePlayground()
   const run = runs.find((r) => r.id === activeId) ?? null
-  const savedOuter = useSettings((s) => s.playgroundLayout['list-main'])
   const listOpen = useListVisible('dryruns')
 
   useEffect(() => {
@@ -853,63 +875,11 @@ export function Playground() {
   }, [])
 
   return (
-    <main aria-label="Playground" className="flex min-h-0 min-w-0 flex-1">
-      {/* Remounts when the list is hidden or shown, since the panels differ. */}
-      <ResizablePanelGroup
-        key={listOpen ? 'with-list' : 'no-list'}
-        orientation="horizontal"
-        defaultLayout={listOpen ? (savedOuter ?? { list: 18, main: 82 }) : { main: 100 }}
-        onLayoutChanged={(l) => listOpen && useSettings.getState().setPlaygroundLayout('list-main', l)}
-        className="min-h-0 min-w-0 flex-1"
-      >
-        {listOpen && (
-          <>
-            <ResizablePanel id="list" minSize="10" maxSize="40" className="flex min-h-0 flex-col">
-              <aside className="flex min-h-0 flex-1 flex-col">
-                <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-                  <Clapperboard className="size-4 text-violet-500" aria-hidden />
-                  <span className="text-[13px] font-semibold">Playground</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Hide dry runs"
-                        onClick={() => useSettings.getState().setListOpen('dryruns', false)}
-                        className="ml-auto text-muted-foreground"
-                      >
-                        <PanelLeftClose />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Hide the list (or click the Playground button on the left)</TooltipContent>
-                  </Tooltip>
-                </div>
-                <ScrollArea className="min-h-0 flex-1">
-                  {runs.length ? (
-                    <ul aria-label="Dry runs" className="flex flex-col gap-0.5 p-2 pt-0">
-                      {runs.map((r) => (
-                        <RunRow key={r.id} run={r} active={r.id === activeId} />
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="px-4 py-6 text-[12px] text-muted-foreground">No dry runs yet.</p>
-                  )}
-                </ScrollArea>
-                <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
-                  <Kbd>←</Kbd> <Kbd>→</Kbd> step · <Kbd>Space</Kbd> play
-                </p>
-              </aside>
-            </ResizablePanel>
-            <ResizableHandle
-              withHandle
-              className="transition-colors hover:bg-violet-500/50 data-[separator=active]:bg-violet-500"
-            />
-          </>
-        )}
-        <ResizablePanel id="main" minSize="40" className="flex min-h-0 min-w-0 flex-col">
-          {run ? <Viewer key={run.id} run={run} /> : <Empty />}
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </main>
+    <>
+      {listOpen && <RunList />}
+      <main aria-label="Playground" className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {run ? <Viewer key={run.id} run={run} /> : <Empty />}
+      </main>
+    </>
   )
 }
