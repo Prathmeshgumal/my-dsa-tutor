@@ -1,10 +1,10 @@
-"""Measures the editor's server the way the page uses it, so Node and Python can be compared like for like.
+"""Measures the editor's server the way the page uses it, against the Node server it replaced.
 
-    uv run python bench/bench.py node             # one server (median of 3 runs), saves bench/results-node.json
-    uv run python bench/bench.py python
-    uv run python bench/bench.py compare          # both saved results against the budget
+    uv run python bench/bench.py           # median of 3 runs, saves bench/results-python.json
+    uv run python bench/bench.py compare   # against bench/results-node.json, measured before Node was removed
 
-The budget: every timing within max(+10 %, +2 ms) of Node's; idle memory within +30 MB.
+The budget: every timing within max(+10 %, +2 ms) of Node's; idle memory within +30 MB. Timings depend on the
+computer, so compare numbers measured on the same one.
 """
 
 import json
@@ -52,12 +52,12 @@ def rss_mb(pid: int) -> float:
     raise RuntimeError("no VmRSS")
 
 
-def measure(kind: str) -> dict:
+def measure() -> dict:
     results: dict = {}
     with tempfile.TemporaryDirectory() as tmp:
         data = Path(tmp) / "data"
         t = time.perf_counter()
-        server = start(kind, data)
+        server = start(data)
         results["startup_ms"] = round((time.perf_counter() - t) * 1000)
         try:
             time.sleep(1)
@@ -85,14 +85,14 @@ def measure(kind: str) -> dict:
             results["file_event_latency"] = event_latency(server, data)
         finally:
             server.close()
-        results["chat_first_text"], results["chat_with_tool"] = chat_timings(kind, Path(tmp))
+        results["chat_first_text"], results["chat_with_tool"] = chat_timings(Path(tmp))
     return results
 
 
 CHATS = 10
 
 
-def chat_timings(kind: str, tmp: Path) -> tuple[dict, dict]:
+def chat_timings(tmp: Path) -> tuple[dict, dict]:
     """Claude chat with the real engine, against a stand-in for Anthropic's API that answers at once: what the
     server and engine add before Claude's first words arrive, and for a whole reply that uses one tool."""
     first_text, whole = [], []
@@ -103,7 +103,7 @@ def chat_timings(kind: str, tmp: Path) -> tuple[dict, dict]:
     api = subprocess.Popen([sys.executable, str(SUPPORT / "fake_anthropic.py"), str(port), str(log), str(replies)])
     wait_until_up(f"http://127.0.0.1:{port}/health", api)
     env = {"ANTHROPIC_BASE_URL": f"http://127.0.0.1:{port}", "ANTHROPIC_API_KEY": "sk-ant-fake-key", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
-    server = start(kind, tmp / "chat-data", extra_env=env)
+    server = start(tmp / "chat-data", extra_env=env)
     try:
         with httpx.Client(base_url=server.base, timeout=120) as c:
             for i in range(CHATS + 2):
@@ -202,9 +202,8 @@ def compare() -> int:
 
 
 if __name__ == "__main__":
-    which = sys.argv[1] if len(sys.argv) > 1 else "node"
-    if which == "compare":
+    if sys.argv[1:] == ["compare"]:
         sys.exit(compare())
-    out = median_of([measure(which) for _ in range(RUNS)])
-    (HERE / f"results-{which}.json").write_text(json.dumps(out, indent=2) + "\n")
+    out = median_of([measure() for _ in range(RUNS)])
+    (HERE / "results-python.json").write_text(json.dumps(out, indent=2) + "\n")
     print(json.dumps(out, indent=2))

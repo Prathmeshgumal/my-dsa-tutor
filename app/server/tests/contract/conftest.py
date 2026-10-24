@@ -1,11 +1,9 @@
 """The contract tests: what the page relies on from the server, checked over real HTTP, SSE and WebSockets.
 
-They run against either server, and must pass unchanged against both:
-    CONTRACT_SERVER=node   uv run pytest tests/contract    (today's server: the reference)
-    CONTRACT_SERVER=python uv run pytest tests/contract
+They were written against the Node server the editor used to have, and the Python server passed them unchanged
+before the Node one was removed: uv run pytest tests/contract
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -19,8 +17,7 @@ from support.servers import DIST, Running, start  # noqa: E402
 
 @pytest.fixture(scope="session")
 def server():
-    kind = os.environ.get("CONTRACT_SERVER", "node")
-    running = start(kind, Path(tempfile.mkdtemp(prefix="contract-")) / "data")
+    running = start(Path(tempfile.mkdtemp(prefix="contract-")) / "data")
     yield running
     running.close()
 

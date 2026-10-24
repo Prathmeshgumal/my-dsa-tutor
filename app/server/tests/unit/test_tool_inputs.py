@@ -1,22 +1,19 @@
-"""Checking Claude's tool input: the Python server must accept, clean up and reject exactly what the Node server's zod
+"""Checking Claude's tool input: the server must accept, clean up and reject exactly what the Node server's zod
 schemas did, with the same error text, since Claude reads that text to fix its call.
 
-The answers were recorded from the Node server's real tool definitions (support/node_tools_probe.ts):
-    RECORD_FIXTURES=1 uv run pytest tests/unit/test_tool_inputs.py   (re-record; needs the Node server)
+The answers were recorded from the Node server's real tool definitions before it was removed, so they can't be
+re-recorded. A deliberate change to a tool's input means editing the matching cases in the fixture.
 """
 
 import copy
 import json
-import os
 import random
-import subprocess
 from pathlib import Path
 
 from dsa_server.tool_inputs import INPUTS, check_input
 from dsa_server.web import dumps, loads
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "tool_inputs.json"
-PROBE = Path(__file__).resolve().parents[1] / "support" / "node_tools_probe.ts"
 
 STEP = {
     "line": 2,
@@ -116,12 +113,6 @@ def cases() -> list[tuple[str, object]]:
     return out
 
 
-def node_answers(inputs: list[tuple[str, object]]) -> list[str]:
-    lines = "".join(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": t, "arguments": a}}) + "\n" for i, (t, a) in enumerate(inputs))
-    out = subprocess.run(["node", str(PROBE)], input=lines, capture_output=True, text=True, check=True, cwd=PROBE.parent)
-    return [json.loads(line)["result"]["content"][0]["text"] for line in out.stdout.splitlines()]
-
-
 def python_answer(tool: str, args) -> str:
     value, error = check_input(tool, args)
     return error if error is not None else dumps(value)
@@ -134,8 +125,6 @@ def test_tool_list_matches_the_checks():
 
 def test_inputs_are_checked_like_node():
     inputs = cases()
-    if os.environ.get("RECORD_FIXTURES"):
-        FIXTURE.write_text(json.dumps([[t, a, answer] for (t, a), answer in zip(inputs, node_answers(inputs))], ensure_ascii=False) + "\n")
     # Read the way the engine's messages are read: numbers as JavaScript has them.
     recorded = loads(FIXTURE.read_text())
     assert len(recorded) == len(inputs)

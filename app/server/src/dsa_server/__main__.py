@@ -52,7 +52,10 @@ def main() -> None:
         print(f"Port {config.port} is already in use. Set PORT to use another one." if e.errno == 98 else str(e), file=sys.stderr)
         sys.exit(1)
     print(f"Editor ready at http://localhost:{config.port} (data in {config.data_dir})", flush=True)
-    server.run(sockets=[sock])
+    try:
+        server.run(sockets=[sock])
+    except KeyboardInterrupt:
+        pass  # Ctrl+C: the server has already shut down
     os._exit(0)
 
 

@@ -6,7 +6,6 @@ import time
 import uuid
 
 import httpx
-import pytest
 
 from .helpers import check
 
@@ -94,11 +93,9 @@ def test_own_saves_are_not_announced(server, data, client):
         listener.close()
 
 
-def test_a_renamed_away_name_is_watched_again_after_2s(server, data, client, request):
-    if server.kind == "node":
-        # Node 24's recursive fs.watch on Linux stops reporting a name after a quick save, rename and delete
-        # (reproduced with fs.watch alone). The Python server's watcher doesn't; this is the one intended change.
-        request.applymarker(pytest.mark.xfail(strict=True, reason="Node fs.watch loses the name"))
+def test_a_renamed_away_name_is_watched_again_after_2s(server, data, client):
+    # The Node server failed this one: Node 24's recursive fs.watch on Linux stops reporting a name after a quick
+    # save, rename and delete.
     listener = Listener(server.base)
     try:
         listener.events(0.2)

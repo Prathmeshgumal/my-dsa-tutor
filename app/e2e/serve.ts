@@ -1,14 +1,11 @@
 // Starts the editor for the browser tests (playwright.config.ts runs this): a fresh data folder with a few
-// files, a pretend Piston, and the real server from packages/server/src/app.ts (or the Python server in server/
-// with E2E_SERVER=python). Nothing touches your own data or Docker.
+// files, a pretend Piston, and the real server (server/). Nothing touches your own data or Docker.
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { Duplex } from 'node:stream'
 import path from 'node:path'
-import { createAppServer } from '../packages/server/src/app.ts'
-import { loadConfig } from '../packages/server/src/config.ts'
 import { DATA_DIR, E2E_PORT, PROBLEMS, SOLUTIONS } from './paths.ts'
 
 rmSync(DATA_DIR, { recursive: true, force: true })
@@ -85,17 +82,11 @@ piston.on('upgrade', (req, socket: Duplex) => {
 piston.listen(0, '127.0.0.1', () => {
   const { port } = piston.address() as { port: number }
   const env = { DATA_DIR, PORT: String(E2E_PORT), PISTON_URL: `http://127.0.0.1:${port}` }
-  if (process.env.E2E_SERVER === 'python') {
-    const server = spawn('uv', ['run', '--project', 'server', 'python', '-m', 'dsa_server'], {
-      cwd: path.resolve(import.meta.dirname, '..'),
-      env: { ...process.env, ...env, HOST: '127.0.0.1' },
-      stdio: 'inherit',
-    })
-    server.on('exit', (code) => process.exit(code ?? 1))
-    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => server.kill(signal))
-    return
-  }
-  const config = loadConfig({ env, defaultDataDir: DATA_DIR })
-  const app = createAppServer(config, { distDir: path.resolve(import.meta.dirname, '../packages/web/dist') })
-  app.listen(config.port, '127.0.0.1', () => console.log(`Browser-test editor at http://localhost:${config.port}`))
+  const server = spawn('uv', ['run', '--project', 'server', 'python', '-m', 'dsa_server'], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    env: { ...process.env, ...env, HOST: '127.0.0.1' },
+    stdio: 'inherit',
+  })
+  server.on('exit', (code) => process.exit(code ?? 1))
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => server.kill(signal))
 })

@@ -176,6 +176,8 @@ Startup 599 ms, idle memory 130.7 MB.
 - **Checked:** browser tests 7/7 on both servers; the Python image answers health, files, runs and a full Claude
   reply from the real engine inside the container; on a copy of your real data folders, `/api/state`, files, notes,
   problems and playground are byte-identical from both servers (your 26 chats included).
-- **Left for when you're happy:** delete `app/packages/server`, `app/Dockerfile`, the Node CI job and the `--node`
+- **Done after you'd used it (2026-10-24):** the Node server is removed. Dev, `npm start`, Docker and CI run Python
+  only; the engine comes from `@anthropic-ai/claude-agent-sdk@0.3.302` in `app/package.json`. The Node recordings
+  (Claude fixtures, tool-input answers, benchmark baseline) stay as the reference. Originally planned as: delete `app/packages/server`, `app/Dockerfile`, the Node CI job and the `--node`
   switch; move `@anthropic-ai/claude-agent-sdk@0.3.302` to `app/package.json` so the engine stays installed; keep
   `tests/support/node_tools_probe.ts` and the recorded fixtures (re-recording needs the Node server, so do it first).

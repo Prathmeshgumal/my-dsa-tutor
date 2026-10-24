@@ -1,23 +1,34 @@
-# The editor as a real app: the built page and its API on one small Node server (packages/server/src/main.ts).
+# The editor as a real app: the built page and its API on one small Python server (server/).
 # Code changes need a rebuild: ./start.sh --build
-FROM node:24-bookworm-slim
 
+# The page is built with Node. npm also installs the Claude engine (Claude Code 2.1.302), copied below.
+FROM node:24-bookworm-slim AS page
+WORKDIR /workspace/app
+COPY package.json package-lock.json ./
+COPY packages/core/package.json packages/core/
+COPY packages/web/package.json packages/web/
+RUN npm ci --no-audit --no-fund
+COPY . .
+RUN npm run build
+
+FROM python:3.14.7-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:0.12.19 /uv /usr/local/bin/uv
+# The same user and home folder the Node image had, so the claude-home volume and your files keep their owner.
+RUN useradd --uid 1000 --create-home --home-dir /home/node node && mkdir -p /home/node/.claude && chown node:node /home/node/.claude
 WORKDIR /workspace/app
 RUN chown node:node /workspace/app
 USER node
-# Made here so the claude-home volume mounted on it belongs to node, not root.
-RUN mkdir -p /home/node/.claude
 
-# Every package's package.json first, so npm ci installs them all and the install is reused until they change.
-COPY --chown=node:node package.json package-lock.json ./
-COPY --chown=node:node packages/core/package.json packages/core/
-COPY --chown=node:node packages/server/package.json packages/server/
-COPY --chown=node:node packages/web/package.json packages/web/
-RUN npm ci --no-audit --no-fund
+ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_NO_CACHE=1
+COPY --chown=node:node server/pyproject.toml server/uv.lock server/
+RUN uv sync --project server --frozen --no-dev --no-install-project
+COPY --chown=node:node server/src server/src
+RUN uv sync --project server --frozen --no-dev
 
-COPY --chown=node:node . .
-RUN npm run build
+COPY --from=page --chown=node:node /workspace/app/packages/web/dist packages/web/dist
+# The Claude engine where the server looks for it (engine.py: BUNDLED_ENGINE).
+COPY --from=page --chown=node:node /workspace/app/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude
 
 # Inside the container it must listen on every address; docker-compose.yml only publishes it to this computer.
 ENV HOST=0.0.0.0
-CMD ["node", "packages/server/src/main.ts"]
+CMD ["/workspace/app/server/.venv/bin/python", "-m", "dsa_server"]

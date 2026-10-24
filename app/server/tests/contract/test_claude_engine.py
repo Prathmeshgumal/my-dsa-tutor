@@ -1,11 +1,12 @@
-"""What reaches the Claude engine, and what the page gets back, checked against a record taken from the Node server.
+"""What reaches the Claude engine, and what the page gets back, checked against a record taken from the Node server
+the editor used to have.
 
 The server is pointed at a stand-in engine (support/fake_claude.py) that writes down everything the server's Agent
 SDK sends it: the command line, settings, system prompt, the 20 editor tools as the engine sees them, the prompt,
 and every tool result. It then plays back a scripted reply. Together with the events the page receives and what
 was sent to Piston, that is everything that decides the quality of Claude's answers, so it must match exactly.
 
-    RECORD_FIXTURES=1 CONTRACT_SERVER=node uv run pytest tests/contract/test_claude_engine.py   (re-record from Node)
+    RECORD_FIXTURES=1 uv run pytest tests/contract/test_claude_engine.py   (re-record, only for a deliberate change)
 """
 
 import json
@@ -183,7 +184,6 @@ def engine(server):
     tmp = Path(tempfile.mkdtemp(prefix="engine-"))
     log, script, piston_log = tmp / "engine.log", tmp / "script.json", tmp / "piston.log"
     running = start(
-        server.kind,
         tmp / "data",
         extra_env={"DSA_CLAUDE_CLI": str(SUPPORT / "fake_claude.py"), "FAKE_CLAUDE_LOG": str(log), "FAKE_CLAUDE_SCRIPT": str(script)},
         piston_log=piston_log,
@@ -261,7 +261,6 @@ def test_engine_sees_and_page_gets_the_same(engine, name):
 
     fixture = FIXTURES / f"{name}.json"
     if os.environ.get("RECORD_FIXTURES"):
-        assert running.kind == "node", "fixtures are recorded from the Node server"
         fixture.parent.mkdir(parents=True, exist_ok=True)
         fixture.write_text(json.dumps(got, indent=1, ensure_ascii=False) + "\n")
     expected = json.loads(fixture.read_text())

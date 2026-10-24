@@ -2,11 +2,11 @@
 
 The server runs its usual engine (the same `claude` program the Node server used), pointed at a stand-in for
 Anthropic's API (support/fake_anthropic.py) that writes down every request and answers with scripted replies. So
-this compares the actual requests Claude would get, Node against Python: system prompt, tools, every message and
-tool result, and the settings that shape the answer. Two turns: tools and an approval, then a follow-up with an
-image that resumes the same conversation.
+this compares the actual requests Claude gets with a record taken from the Node server the editor used to have:
+system prompt, tools, every message and tool result, and the settings that shape the answer. Two turns: tools and
+an approval, then a follow-up with an image that resumes the same conversation.
 
-    RECORD_FIXTURES=1 CONTRACT_SERVER=node uv run pytest tests/contract/test_claude_real_engine.py   (re-record)
+    RECORD_FIXTURES=1 uv run pytest tests/contract/test_claude_real_engine.py   (re-record, only for a deliberate change)
 """
 
 import json
@@ -54,7 +54,7 @@ def engine_and_api(server):
     api = subprocess.Popen([sys.executable, str(SUPPORT / "fake_anthropic.py"), str(port), str(log), str(replies)])
     wait_until_up(f"http://127.0.0.1:{port}/health", api)
     env = {"ANTHROPIC_BASE_URL": f"http://127.0.0.1:{port}", "ANTHROPIC_API_KEY": "sk-ant-fake-key", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
-    running = start(server.kind, tmp / "data", extra_env=env, piston_log=tmp / "piston.log")
+    running = start(tmp / "data", extra_env=env, piston_log=tmp / "piston.log")
     yield running, log
     running.close()
     stop(api)
@@ -99,7 +99,6 @@ def test_claude_gets_the_same_requests(engine_and_api):
     if os.environ.get("DUMP_TO"):
         Path(os.environ["DUMP_TO"]).write_text(json.dumps(got, indent=1, ensure_ascii=False))
     if os.environ.get("RECORD_FIXTURES"):
-        assert running.kind == "node", "fixtures are recorded from the Node server"
         FIXTURE.write_text(json.dumps(got, indent=1, ensure_ascii=False) + "\n")
     expected = json.loads(FIXTURE.read_text())
     assert got["events"] == expected["events"]

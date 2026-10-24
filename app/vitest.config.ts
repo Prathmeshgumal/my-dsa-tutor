@@ -5,7 +5,6 @@ export default defineConfig({
   test: {
     projects: [
       { test: { name: 'core', root: 'packages/core', environment: 'node', globals: true } },
-      { test: { name: 'server', root: 'packages/server', environment: 'node', globals: true } },
       'packages/web',
     ],
   },

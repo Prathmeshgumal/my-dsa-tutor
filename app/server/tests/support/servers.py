@@ -1,6 +1,6 @@
-"""Starts the editor's server (Node or Python) and the pretend Piston, each as its own process.
+"""Starts the editor's server and the pretend Piston, each as its own process.
 
-Shared by the contract tests and the benchmark, so both measure the same thing for either server.
+Shared by the contract tests and the benchmark, so both measure the same thing.
 """
 
 import os
@@ -51,7 +51,6 @@ def stop(process: subprocess.Popen) -> None:
 
 @dataclass
 class Running:
-    kind: str
     base: str
     port: int
     piston: str
@@ -70,21 +69,13 @@ class Running:
         self.piston_process = start_piston(int(self.piston.rsplit(":", 1)[1]), self.piston_log)
 
 
-def server_command(kind: str) -> list[str]:
-    if kind == "node":
-        return ["node", "packages/server/src/main.ts"]
-    if kind == "python":
-        return [sys.executable, "-m", "dsa_server"]
-    raise ValueError(f"Unknown server {kind!r}: use node or python")
-
-
 def start_piston(port: int, log: Path | None = None) -> subprocess.Popen:
     process = subprocess.Popen([sys.executable, str(SUPPORT / "fake_piston.py"), str(port), *([str(log)] if log else [])])
     wait_until_up(f"http://127.0.0.1:{port}/api/v2/runtimes", process)
     return process
 
 
-def start(kind: str, data: Path, *, extra_env: dict[str, str] | None = None, piston_log: Path | None = None) -> Running:
+def start(data: Path, *, extra_env: dict[str, str] | None = None, piston_log: Path | None = None) -> Running:
     """Starts the pretend Piston and the editor on a fresh data folder `data`."""
     if not (DIST / "index.html").exists():
         raise RuntimeError("Build the page first: cd app && npm run build")
@@ -100,7 +91,7 @@ def start(kind: str, data: Path, *, extra_env: dict[str, str] | None = None, pis
     env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ANTHROPIC"))}
     env.update({"DATA_DIR": str(data), "PORT": str(port), "PISTON_URL": piston, "HOME": str(data / "home")})
     env.update(extra_env or {})
-    process = subprocess.Popen(server_command(kind), cwd=APP, env=env, stdout=subprocess.DEVNULL)
+    process = subprocess.Popen([sys.executable, "-m", "dsa_server"], cwd=APP, env=env, stdout=subprocess.DEVNULL)
     base = f"http://127.0.0.1:{port}"
     try:
         wait_until_up(f"{base}/api/health", process)
@@ -108,4 +99,4 @@ def start(kind: str, data: Path, *, extra_env: dict[str, str] | None = None, pis
         stop(piston_process)
         stop(process)
         raise
-    return Running(kind, base, port, piston, data, process, piston_process, piston_log)
+    return Running(base, port, piston, data, process, piston_process, piston_log)

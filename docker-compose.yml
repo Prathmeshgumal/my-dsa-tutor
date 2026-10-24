@@ -32,12 +32,9 @@ services:
     entrypoint: ["sh", "/piston-install.sh"]
     restart: "no"
 
-  # The editor itself: the page, its file-saving and Claude chat endpoints, on one small server.
-  # Node (app/Dockerfile) unless ./start.sh --python switched it to Python (app/Dockerfile.python).
+  # The editor itself: the page, its file-saving and Claude chat endpoints, on one small Python server.
   editor:
-    build:
-      context: ./app
-      dockerfile: ${EDITOR_DOCKERFILE:-Dockerfile}
+    build: ./app
     container_name: dsa-editor
     restart: unless-stopped
     depends_on: [piston]

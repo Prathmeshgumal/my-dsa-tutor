@@ -1,4 +1,4 @@
-// Shared between the server (packages/server/src/healthApi.ts) and the browser: GET /api/health.
+// Shared between the server (server/src/dsa_server/health.py) and the browser: GET /api/health.
 
 /** What the setup check found. Each part says whether it works and, if not, how to fix it. */
 export interface Health {

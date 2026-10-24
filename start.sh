@@ -1,29 +1,7 @@
 #!/usr/bin/env sh
 # Starts everything (docker compose up -d) and prints where to open the editor.
-#   ./start.sh --python   rebuild and run the editor on the Python server (remembered in .env)
-#   ./start.sh --node     rebuild and run it on the Node server again
-# Your files, chats and settings are the same either way.
 set -e
 cd "$(dirname "$0")"
-
-# Which server the editor runs on: EDITOR_DOCKERFILE in .env, which docker compose reads.
-choose_server() {
-  touch .env && chmod 600 .env
-  (umask 077 && grep -v '^EDITOR_DOCKERFILE=' .env > .env.tmp) || true
-  printf 'EDITOR_DOCKERFILE=%s\n' "$1" >> .env.tmp
-  cat .env.tmp > .env && rm .env.tmp
-  echo "The editor now runs on the $2 server."
-}
-args=""
-for arg in "$@"; do
-  case "$arg" in
-    --python) choose_server Dockerfile.python Python; args="$args --build" ;;
-    --node) choose_server Dockerfile Node; args="$args --build" ;;
-    *) args="$args $arg" ;;
-  esac
-done
-# shellcheck disable=SC2086
-set -- $args
 PORT="${EDITOR_PORT:-5199}"
 URL="http://localhost:$PORT"
 

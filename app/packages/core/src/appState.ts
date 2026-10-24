@@ -1,5 +1,5 @@
 // What the editor remembers between visits (tabs, chats, settings), kept on disk by the server in
-// <data folder>/state/<key>.json (see packages/server/src/stateApi.ts). The browser holds a copy for speed.
+// <data folder>/state/<key>.json (see server/src/dsa_server/state_api.py). The browser holds a copy for speed.
 
 /** Each kind of state, with the browser storage name it has always used. */
 export const STATE_KEYS = {

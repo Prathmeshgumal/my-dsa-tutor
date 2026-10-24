@@ -13,7 +13,7 @@ link. It also creates the data folders first, so they belong to you; after that,
 `docker compose up -d` works too.) That starts everything, and it all restarts by itself after a reboot:
 
 - **editor**: the editor itself, which also saves your files and talks to Claude
-  Code. It runs the built app on a small Node server; after changing anything in `app/`,
+  Code. It runs the built app on a small Python server; after changing anything in `app/`,
   rebuild it with `./start.sh --build`.
 - **piston**: runs your code ([Piston](https://github.com/engineer-man/piston), free,
   no API key). It's pinned to one version, with a small patch (`piston/api-v2.js`) so
@@ -34,28 +34,12 @@ and warns you if something needs attention. **Copy diagnostics** copies the chec
 of the log file (`logs/editor.log`), ready to paste into a bug report.
 
 Not using Docker for the editor? `docker compose up -d piston piston-setup`, then
-`cd app && npm install && npm run build && npm start`. Working on the editor itself?
-`npm run dev` instead serves the same thing with instant reloads as you change the code.
-`npm test` runs the unit tests and `npm run test:e2e` the browser tests (the first time:
-`npx playwright install chromium`). The code is in three parts under `app/packages`: `web` (the
-page), `server` (the API) and `core` (what both use).
-
-### Trying the Python server
-
-The editor's server is being moved from Node to Python (`app/server`). Both are kept for now,
-and they behave the same: same files, chats, settings and port, and Claude gets exactly the same
-requests (it uses the same Claude Code engine). To switch:
-
-```sh
-./start.sh --python   # rebuild and run the editor on the Python server (remembered in .env)
-./start.sh --node     # back to the Node server
-```
-
-Without Docker: `npm run start:python` (needs [uv](https://docs.astral.sh/uv/)), or
-`npm run dev:python` for working on it, which reloads the page and the Python server as you
-change the code. `npm run test:e2e:python` runs the browser tests against it, and
-`cd server && CONTRACT_SERVER=python uv run pytest` its own tests (`CONTRACT_SERVER=node` runs
-the same contract tests against the Node server).
+`cd app && npm install && npm run build && npm start` (needs [uv](https://docs.astral.sh/uv/)).
+Working on the editor itself? `npm run dev` instead serves the same thing with instant reloads as
+you change the code, page or server. `npm test` runs the unit tests, `npm run test:e2e` the browser
+tests (the first time: `npx playwright install chromium`) and `cd server && uv run pytest` the
+server's tests. The code is in three parts under `app/`: `packages/web` (the page),
+`packages/core` (shared by the page and Claude's tools) and `server` (the API, in Python).
 
 Updating from a version before the editor ran on its own server? Docker's old
 `project-me_editor-node-modules` volume isn't used any more; `docker volume rm
@@ -237,6 +221,7 @@ them so you can switch back or delete one.
 
 ```sh
 cd app
-npm test        # unit tests
-npm run build   # type-check and production build
+npm test                       # unit tests (page and core)
+npm run build                  # type-check and production build
+cd server && uv run pytest     # the server's tests
 ```
