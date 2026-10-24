@@ -66,8 +66,7 @@ test('double-click opens rename for that file', async () => {
 test('row menu opens the delete dialog', async () => {
   render(<FilesList />)
   const main = ws().files.find((f) => f.name === 'main.cpp')!
-  await userEvent.click(screen.getByRole('button', { name: 'Actions for main.cpp' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
+  await userEvent.click(screen.getByRole('button', { name: 'Delete main.cpp' }))
   expect(useFileDialogs.getState()).toEqual({ kind: 'delete', fileId: main.id })
 })
 

@@ -1,12 +1,6 @@
 import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react'
-import { MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/state/settings'
@@ -74,7 +68,7 @@ export function ListPane({ title, count, onNew, newLabel = 'New', search, empty,
           <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">{empty}</div>
         ) : (
           <>
-            <ul aria-label={title} className="grid gap-px p-1.5">
+            <ul aria-label={title} className="grid grid-cols-1 gap-px p-1.5">
               <Query.Provider value={query}>{children}</Query.Provider>
             </ul>
             {noMatch && <p className="px-4 py-4 text-center text-[12.5px] text-muted-foreground">Nothing matches “{query.trim()}”.</p>}
@@ -93,6 +87,13 @@ export function ListPane({ title, count, onNew, newLabel = 'New', search, empty,
   )
 }
 
+interface RowAction {
+  label: string
+  icon: ReactNode
+  onSelect(): void
+  destructive?: boolean
+}
+
 interface ListRowProps {
   icon: ReactNode
   title: string
@@ -101,7 +102,8 @@ interface ListRowProps {
   active?: boolean
   onOpen(): void
   onDoubleClick?(): void
-  actions?: { label: string; onSelect(): void; destructive?: boolean }[]
+  /** Small icon buttons at the end of the row (a bin for Delete), shown on hover or keyboard focus. */
+  actions?: RowAction[]
 }
 
 export function ListRow({ icon, title, meta, active, onOpen, onDoubleClick, actions }: ListRowProps) {
@@ -109,8 +111,9 @@ export function ListRow({ icon, title, meta, active, onOpen, onDoubleClick, acti
   if (query && !matches(title, query)) return null
   return (
     <li
+      // min-w-0 lets the row shrink to the list's width, so a long title ends in "…" instead of pushing past the edge.
       className={cn(
-        'group/row flex items-center rounded-md transition-colors',
+        'group/row flex min-w-0 items-center rounded-md pr-1 transition-colors',
         active ? 'bg-violet-500/12 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
       )}
     >
@@ -129,27 +132,22 @@ export function ListRow({ icon, title, meta, active, onOpen, onDoubleClick, acti
           {meta && <span className="block truncate text-[11px] text-muted-foreground">{meta}</span>}
         </span>
       </button>
-      {actions && actions.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Actions for ${title}`}
-              className="mr-1 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right">
-            {actions.map((a) => (
-              <DropdownMenuItem key={a.label} variant={a.destructive ? 'destructive' : 'default'} onSelect={a.onSelect}>
-                {a.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      {actions?.map((a) => (
+        <Button
+          key={a.label}
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`${a.label} ${title}`}
+          title={a.label}
+          onClick={a.onSelect}
+          className={cn(
+            'shrink-0 text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100',
+            a.destructive ? 'hover:text-red-600 dark:hover:text-red-400' : 'hover:text-foreground',
+          )}
+        >
+          {a.icon}
+        </Button>
+      ))}
     </li>
   )
 }

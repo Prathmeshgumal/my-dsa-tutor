@@ -14,6 +14,7 @@ import {
   SkipBack,
   SkipForward,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import { Kbd } from '@/components/Kbd'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
@@ -89,7 +90,7 @@ function RunList() {
             }
             active={r.id === activeId}
             onOpen={() => usePlayground.getState().open(r.id)}
-            actions={[{ label: 'Delete', destructive: true, onSelect: () => setDeleting(r) }]}
+            actions={[{ label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => setDeleting(r) }]}
           />
         ))}
       </ListPane>

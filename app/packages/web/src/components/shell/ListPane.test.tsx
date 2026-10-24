@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Trash2 } from 'lucide-react'
 import { useSettings } from '@/state/settings'
 import { LIST_PANE, ListPane, ListRow } from './ListPane'
 
@@ -17,7 +18,7 @@ function Fruits({ names }: { names: string[] }) {
           meta={n === 'Apple' ? 'red' : undefined}
           active={n === 'Cherry'}
           onOpen={() => opened.push(n)}
-          actions={[{ label: 'Delete', destructive: true, onSelect: () => deleted.push(n) }]}
+          actions={[{ label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => deleted.push(n) }]}
         />
       ))}
     </ListPane>
@@ -67,12 +68,21 @@ test('an empty list says so, and New is there', async () => {
   expect(opened).toEqual(['new'])
 })
 
-test('a row’s actions are in its menu', async () => {
+test('a row’s actions are icon buttons on the row itself: Delete is a bin, no menu', async () => {
   render(<Fruits names={['Apple', 'Banana']} />)
-  await userEvent.click(screen.getByRole('button', { name: 'Actions for Banana' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  expect(screen.queryByRole('button', { name: /^Actions for/ })).not.toBeInTheDocument()
+  const bin = screen.getByRole('button', { name: 'Delete Banana' })
+  expect(bin.querySelector('svg.lucide-trash2, svg.lucide-trash-2')).not.toBeNull()
+  await userEvent.click(bin)
   expect(deleted).toEqual(['Banana'])
   expect(opened).toEqual([])
+})
+
+test('rows keep to the list’s width, so long titles are shortened and the buttons stay in view', () => {
+  render(<Fruits names={['Apple']} />)
+  const row = rows()[0]
+  expect(row).toHaveClass('min-w-0')
+  expect(screen.getByRole('list', { name: 'Fruits' })).toHaveClass('grid-cols-1')
 })
 
 describe('the list can be made wider or narrower', () => {

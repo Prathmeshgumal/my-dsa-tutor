@@ -1,5 +1,5 @@
 // The main things you do in the editor, clicked through in a real browser against the real server.
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { PROBLEMS, SOLUTIONS, STATE } from './paths.ts'
@@ -138,7 +138,7 @@ test('every section opens from the left bar with its list, and Claude folds the 
   await expect(page.getByRole('region', { name: 'Files' })).toBeVisible()
 })
 
-test('a row’s menu opens with the mouse, next to the resizable problem panels', async ({ page }) => {
+test('a row’s bin asks before deleting, next to the resizable problem panels', async ({ page }) => {
   await page.goto('/')
   // Settings come from disk, where an earlier test may have left Claude open (which folds the list away).
   const claude = rail(page).getByRole('button', { name: 'Claude' })
@@ -147,8 +147,50 @@ test('a row’s menu opens with the mouse, next to the resizable problem panels'
   if ((await problems.getAttribute('aria-current')) !== 'page') await problems.click()
   const list = page.getByRole('region', { name: 'Problems' })
   await list.getByRole('button', { name: /^Pair Sum/ }).hover()
-  await list.getByRole('button', { name: 'Actions for Pair Sum' }).click()
-  await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeHidden()
+  await list.getByRole('button', { name: 'Delete Pair Sum' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(list.getByRole('button', { name: /^Pair Sum/ })).toBeVisible()
+})
+
+test('at its narrowest, every list keeps its rows and their buttons inside the edge', async ({ page }) => {
+  const long = 'a_very_long_file_name_that_never_fits_in_a_narrow_list.cpp'
+  await writeFile(path.join(SOLUTIONS, long), 'int main() {}\n')
+  await page.goto('/')
+  const claude = rail(page).getByRole('button', { name: 'Claude' })
+  if ((await claude.getAttribute('aria-pressed')) === 'true') await claude.click()
+  const sections = [
+    ['Problems', 'Problems'],
+    ['Code', 'Files'],
+    ['Notes', 'Notes'],
+    ['Dry runs', 'Dry runs'],
+    ['Chats', 'Chats'],
+  ] as const
+  const chats = rail(page).getByRole('button', { name: 'Chats' })
+  if ((await chats.getAttribute('aria-current')) !== 'page') await chats.click()
+  for (const [button, name] of sections) {
+    await rail(page).getByRole('button', { name: button }).click()
+    const list = page.getByRole('region', { name })
+    await expect(list).toBeVisible()
+    if (button === 'Problems') {
+      // The width is shared by every list: make it as narrow as it goes.
+      const edge = list.getByRole('separator', { name: 'Resize list' })
+      for (let i = 0; i < 20; i++) await edge.press('ArrowLeft')
+      await expect(edge).toHaveAttribute('aria-valuenow', '180')
+    }
+    if (button === 'Code') await expect(list.getByRole('button', { name: long, exact: true })).toBeVisible()
+    const box = (await list.boundingBox())!
+    for (const row of await list.getByRole('listitem').all()) {
+      const r = (await row.boundingBox())!
+      expect(r.x + r.width, `${name}: a row runs past the edge`).toBeLessThanOrEqual(box.x + box.width)
+      for (const b of await row.getByRole('button').all()) {
+        const bb = (await b.boundingBox())!
+        expect(bb.x + bb.width, `${name}: ${await b.getAttribute('aria-label')} is past the edge`).toBeLessThanOrEqual(box.x + box.width)
+      }
+    }
+  }
+  await page.getByRole('region', { name: 'Chats' }).getByRole('separator', { name: 'Resize list' }).dblclick()
+  await rm(path.join(SOLUTIONS, long))
 })

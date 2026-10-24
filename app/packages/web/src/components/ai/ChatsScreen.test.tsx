@@ -62,8 +62,7 @@ test('clicking a chat opens it; New chat starts one', async () => {
 
 test('deleting a chat asks first', async () => {
   render(<ChatsScreen />)
-  await userEvent.click(screen.getByRole('button', { name: 'Actions for BFS question' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Delete BFS question' }))
   expect(deleteChat).not.toHaveBeenCalled()
   const dialog = await screen.findByRole('alertdialog')
   await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))

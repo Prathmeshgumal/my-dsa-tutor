@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Trash2 } from 'lucide-react'
 import { ProblemTag } from '@/components/problems/ProblemTag'
 import { ListPane, ListRow } from '@/components/shell/ListPane'
 import {
@@ -57,7 +57,7 @@ export function ChatsScreen() {
               }
               active={c.id === activeId}
               onOpen={() => useAiChat.getState().selectChat(c.id)}
-              actions={[{ label: 'Delete', destructive: true, onSelect: () => setDeleting(c) }]}
+              actions={[{ label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => setDeleting(c) }]}
             />
           ))}
         </ListPane>

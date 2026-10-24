@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, FilePlus2, Loader2, NotebookPen, StickyNote } from 'lucide-react'
+import { AlertTriangle, Check, FilePlus2, Loader2, NotebookPen, StickyNote, Trash2 } from 'lucide-react'
 import { Markdown } from '@/components/ai/Markdown'
 import { ProblemTag } from '@/components/problems/ProblemTag'
 import { ListPane, ListRow } from '@/components/shell/ListPane'
@@ -37,7 +37,7 @@ function NoteRow({ note, title, active, onDelete }: { note: Note; title: string;
       meta={problem ? <ProblemTag slug={problem} /> : note.name}
       active={active}
       onOpen={() => void useNotes.getState().select(note.name)}
-      actions={[{ label: 'Delete', destructive: true, onSelect: onDelete }]}
+      actions={[{ label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: onDelete }]}
     />
   )
 }

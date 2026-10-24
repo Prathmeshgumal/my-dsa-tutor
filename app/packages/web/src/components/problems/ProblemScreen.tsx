@@ -12,6 +12,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react'
 import { Markdown } from '@/components/ai/Markdown'
@@ -98,7 +99,7 @@ function ProblemList() {
             }
             active={e.slug === activeSlug}
             onOpen={() => void useProblems.getState().open(e.slug)}
-            actions={[{ label: 'Delete', destructive: true, onSelect: () => setDeleting(e) }]}
+            actions={[{ label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => setDeleting(e) }]}
           />
         ))}
       </ListPane>

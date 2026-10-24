@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, CheckCircle2, Clapperboard, FilePlus2, MessageSquare, NotebookPen, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Clapperboard, FilePlus2, MessageSquare, NotebookPen, Unlink, XCircle } from 'lucide-react'
 import { ListRow } from '@/components/shell/ListPane'
 import { Button } from '@/components/ui/button'
 import { SOLUTION_FILE, type Attempt, type ProblemEntry } from '@dsa/core/problems'
@@ -120,7 +120,7 @@ export function Related({ entry }: { entry: ProblemEntry }) {
             icon={<NotebookPen />}
             title={noteTitle(n.content)}
             onOpen={() => openNote(n.name)}
-            actions={[{ label: 'Unlink from problem', onSelect: () => void useProblems.getState().unlinkNote(n.name) }]}
+            actions={[{ label: 'Unlink from problem', icon: <Unlink />, onSelect: () => void useProblems.getState().unlinkNote(n.name) }]}
           />
         ))}
       </Group>

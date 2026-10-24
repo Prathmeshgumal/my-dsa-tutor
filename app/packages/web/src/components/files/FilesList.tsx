@@ -1,3 +1,4 @@
+import { Pencil, Trash2 } from 'lucide-react'
 import { focusEditor } from '@/components/editor/editorFocus'
 import { openDeleteDialog, openNewFileDialog, openRenameDialog } from '@/components/editor/FileDialogs'
 import { LanguageIcon } from '@/components/LanguageIcon'
@@ -33,8 +34,8 @@ export function FilesList() {
           onOpen={() => pick(file.id)}
           onDoubleClick={() => openRenameDialog(file.id)}
           actions={[
-            { label: 'Rename', onSelect: () => openRenameDialog(file.id) },
-            { label: 'Delete', destructive: true, onSelect: () => openDeleteDialog(file.id) },
+            { label: 'Rename', icon: <Pencil />, onSelect: () => openRenameDialog(file.id) },
+            { label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => openDeleteDialog(file.id) },
           ]}
         />
       ))}

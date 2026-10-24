@@ -85,8 +85,7 @@ test('new note button creates one', async () => {
 
 test('deleting a note asks first', async () => {
   render(<NotesScreen />)
-  await userEvent.click(screen.getByRole('button', { name: 'Actions for DP' }))
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Delete DP' }))
   expect(remove).not.toHaveBeenCalled()
   const dialog = await screen.findByRole('alertdialog')
   expect(dialog).toHaveTextContent('DP')

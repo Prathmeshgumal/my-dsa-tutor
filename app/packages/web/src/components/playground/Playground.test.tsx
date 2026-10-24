@@ -84,9 +84,8 @@ test('the step where the bug shows up is flagged, and printed output is shown', 
 test('the list of dry runs asks before deleting one', async () => {
   render(<Playground />)
   // From the keyboard: in jsdom every box is 0×0, so the resize handles' pointer listener claims any press.
-  act(() => screen.getByRole('button', { name: 'Actions for Dry run: twoSum on [2,7,11,15]' }).focus())
+  act(() => screen.getByRole('button', { name: 'Delete Dry run: twoSum on [2,7,11,15]' }).focus())
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
   expect(remove).not.toHaveBeenCalled()
   await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
   expect(remove).toHaveBeenCalledWith('r1')

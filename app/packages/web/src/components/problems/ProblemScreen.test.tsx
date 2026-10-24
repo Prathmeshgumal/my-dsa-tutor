@@ -139,9 +139,8 @@ test('deleting a problem asks first', async () => {
   await screen.findByTestId('monaco')
   useProblems.setState({ remove })
   // From the keyboard: in jsdom every box is 0×0, so the resize handles' pointer listener claims any press.
-  act(() => screen.getByRole('button', { name: 'Actions for Two Sum' }).focus())
+  act(() => screen.getByRole('button', { name: 'Delete Two Sum' }).focus())
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
   expect(remove).not.toHaveBeenCalled()
   await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
   expect(remove).toHaveBeenCalledWith('two-sum')
