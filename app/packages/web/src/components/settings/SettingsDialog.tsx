@@ -43,7 +43,10 @@ function Row({ label, tone, detail, children }: { label: string; tone: Tone; det
   )
 }
 
-function Checks({ health }: { health: Health }) {
+const STATE_NOT_SAVED =
+  'Your open tabs, chats and settings couldn’t be saved to disk just now. They’re kept in this browser, and saving keeps retrying.'
+
+function Checks({ health, stateSaveFailing }: { health: Health; stateSaveFailing: boolean }) {
   const { piston, claude, folders } = health
   const langs = [
     ['C++', piston.languages.cpp],
@@ -87,8 +90,12 @@ function Checks({ health }: { health: Health }) {
       />
       <Row
         label="Saving your work"
-        tone={badFolders.length ? 'problem' : 'ok'}
-        detail={badFolders.length ? badFolders.map((f) => f.problem).join(' ') : `${folders.map((f) => f.name).join(', ')}: all writable.`}
+        tone={badFolders.length || stateSaveFailing ? 'problem' : 'ok'}
+        detail={
+          badFolders.length || stateSaveFailing
+            ? [...badFolders.map((f) => f.problem), stateSaveFailing ? STATE_NOT_SAVED : ''].filter(Boolean).join(' ')
+            : `${folders.map((f) => f.name).join(', ')}: all writable.`
+        }
       />
     </ul>
   )
@@ -97,6 +104,7 @@ function Checks({ health }: { health: Health }) {
 function SetupPanel() {
   const health = useHealth((s) => s.health)
   const status = useHealth((s) => s.status)
+  const stateSaveFailing = useHealth((s) => s.stateSaveFailing)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -115,7 +123,7 @@ function SetupPanel() {
           Couldn’t reach the editor server. Start it with ./start.sh.
         </p>
       ) : health ? (
-        <Checks health={health} />
+        <Checks health={health} stateSaveFailing={stateSaveFailing} />
       ) : (
         <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden /> Checking…

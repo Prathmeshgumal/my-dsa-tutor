@@ -7,4 +7,4 @@ dist
 # The editor's log file
 logs/
 # What you had open, your chats and settings (kept by the editor)
-state/
+/state/

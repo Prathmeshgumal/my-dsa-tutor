@@ -69,7 +69,7 @@ test('Setup says what is missing and how to fix it', async ({ page }) => {
   const checks = page.getByRole('list', { name: 'Setup checks' })
   await expect(checks.getByText('Java missing')).toBeVisible()
   await expect(checks.getByText(/Java isn’t installed/)).toBeVisible()
-  await expect(checks.getByText('solutions, notes, playground, problems: all writable.')).toBeVisible()
+  await expect(checks.getByText('solutions, notes, playground, problems, state, logs: all writable.')).toBeVisible()
 })
 
 test('other websites can’t use the editor’s API', async ({ request }) => {

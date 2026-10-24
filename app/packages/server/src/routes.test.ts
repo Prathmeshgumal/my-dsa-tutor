@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, rm, utimes, writeFile, mkdir } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -61,4 +61,19 @@ test('a fresh data folder gets all its folders, so nothing has to be set up by h
   createRoutes(config)
   for (const folder of Object.values(config.folders)) expect(existsSync(folder)).toBe(true)
   await rm(fresh, { recursive: true, force: true })
+})
+
+test('Setup checks every folder the editor writes to, tabs and logs included', async () => {
+  const health = (await (await fetch(`${base}/api/health`)).json()) as { folders: { name: string }[] }
+  expect(health.folders.map((f) => f.name)).toEqual(['solutions', 'notes', 'playground', 'problems', 'state', 'logs'])
+})
+
+test('a half-finished save of tabs or chats left by a crash is cleared at start', async () => {
+  const config = loadConfig({ env: {}, defaultDataDir: dir })
+  const leftover = path.join(config.folders.state, '.ai.json.1234abcd.saving')
+  await writeFile(leftover, '{"half":')
+  const old = new Date(Date.now() - 60 * 60_000)
+  await utimes(leftover, old, old)
+  createRoutes(config)
+  await vi.waitFor(() => expect(existsSync(leftover)).toBe(false))
 })

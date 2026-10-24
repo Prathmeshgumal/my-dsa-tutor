@@ -38,24 +38,24 @@ export function createRoutes(config: Config, { logger = createLogger(config.fold
   handle: Middleware
   logger: Logger
 } {
-  const { solutions, notes, playground, problems } = config.folders
+  const { solutions, notes, playground, problems, state, logs } = config.folders
   // A fresh data folder (first start, or a new DATA_DIR) gets everything it needs.
   for (const folder of Object.values(config.folders)) mkdirSync(folder, { recursive: true })
-  void removeLeftoverTempFiles([solutions, notes, playground, problems]).catch((e) =>
+  void removeLeftoverTempFiles([solutions, notes, playground, problems, state]).catch((e) =>
     logger.log('warn', 'Couldn’t clear temporary files left by an interrupted save', e),
   )
   const handle = chain([
     // First: other websites open in your browser may not use any of the routes below.
     createSameSiteGuard(),
     createLogMiddleware(logger),
-    createHealthMiddleware({ pistonUrl: config.pistonUrl, folders: { solutions, notes, playground, problems } }),
+    createHealthMiddleware({ pistonUrl: config.pistonUrl, folders: { solutions, notes, playground, problems, state, logs } }),
     createFolderEventsMiddleware({ folders: { files: solutions, notes, playground, problems } }),
     createSolutionsMiddleware(solutions),
     createNotesMiddleware(notes),
     createPlaygroundMiddleware(playground),
     createProblemsMiddleware(problems),
     // Tabs, chats and settings.
-    createStateMiddleware(config.folders.state),
+    createStateMiddleware(state),
     // Claude runs in the solutions folder, so it sees the same files the editor shows.
     createClaudeChatMiddleware({
       cwd: solutions,

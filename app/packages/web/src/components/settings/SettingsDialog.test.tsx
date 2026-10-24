@@ -25,7 +25,7 @@ function serve(health: Health | 'down') {
 
 beforeEach(() => {
   useSettingsDialog.setState({ open: false })
-  useHealth.setState({ health: null, status: 'idle' })
+  useHealth.setState({ health: null, status: 'idle', stateSaveFailing: false })
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -72,4 +72,14 @@ test('Check again re-runs the check; closing returns focus to the editor', async
   await userEvent.click(screen.getByRole('button', { name: 'Close' }))
   expect(useSettingsDialog.getState().open).toBe(false)
   expect(focusEditor).toHaveBeenCalled()
+})
+
+test('tabs, chats and settings failing to reach disk shows up here, not just in a toast', async () => {
+  serve(allGood)
+  useHealth.setState({ stateSaveFailing: true })
+  render(<SettingsDialog />)
+  useSettingsDialog.getState().show()
+  const checks = await screen.findByRole('list', { name: 'Setup checks' })
+  expect(await within(checks).findByText(/Your open tabs, chats and settings couldn’t be saved to disk/)).toBeInTheDocument()
+  expect(within(checks).queryByText(/all writable/)).not.toBeInTheDocument()
 })

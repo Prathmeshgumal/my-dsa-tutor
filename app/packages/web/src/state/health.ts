@@ -5,12 +5,15 @@ import type { Health } from '@dsa/core/health'
 interface HealthState {
   health: Health | null
   status: 'idle' | 'checking' | 'done' | 'error'
+  /** Saving open tabs, chats and settings to disk is failing right now (lib/stateSync.ts keeps retrying). */
+  stateSaveFailing: boolean
   check(fetchImpl?: typeof fetch): Promise<Health | null>
 }
 
 export const useHealth = create<HealthState>()((set) => ({
   health: null,
   status: 'idle',
+  stateSaveFailing: false,
   async check(fetchImpl = fetch) {
     set({ status: 'checking' })
     try {
