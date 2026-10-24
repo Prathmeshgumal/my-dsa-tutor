@@ -35,6 +35,8 @@ export interface Problem {
   createdAt: number
   /** Notes (in notes/) that belong to this problem */
   notes?: string[]
+  /** The code it started with (Reset brings it back). Problems made before this was kept don't have it. */
+  starter?: string
 }
 
 /** A C++ file in the problem's folder: solution.cpp, or another version such as brute-force.cpp. */
@@ -122,6 +124,43 @@ export const SOLUTION_FILE = 'solution.cpp'
 
 /** A code file name in a problem folder: brute-force.cpp, solution-2.cpp. Not the hidden driver. */
 export const isCodeName = (name: string) => /^[a-z0-9][\w-]{0,59}\.cpp$/i.test(name) && name !== 'driver.cpp'
+
+/** The code Reset puts back: the starting code if it was kept, otherwise rebuilt from the student's code as
+ * LeetCode shows it (class Solution with the method the tests call, emptied). Null if neither works. */
+export function starterCode(
+  entry: Pick<ProblemEntry, 'problem' | 'solution' | 'versions' | 'driver'>,
+  file: string,
+): string | null {
+  if (entry.problem.starter !== undefined) return entry.problem.starter
+  const method = /Solution\(\)\s*\.\s*(\w+)\s*\(/.exec(entry.driver)?.[1]
+  if (!method) return null
+  const codes = [codeOf(entry, file), entry.solution, ...entry.versions.map((v) => v.content)]
+  for (const code of codes) {
+    const signature = code === null ? null : signatureOf(code, method)
+    if (signature) return `class Solution {\npublic:\n    ${signature} {\n        \n    }\n};`
+  }
+  return null
+}
+
+/** `vector<int> twoSum(vector<int>& nums, int target)` from the line declaring `method` with a body, on one line. */
+function signatureOf(code: string, method: string): string | null {
+  const name = new RegExp(`\\b${method}\\s*\\(`, 'g')
+  for (let m = name.exec(code); m; m = name.exec(code)) {
+    let depth = 0
+    let end = m.index + m[0].length - 1
+    for (; end < code.length; end++) {
+      if (code[end] === '(') depth++
+      else if (code[end] === ')' && --depth === 0) break
+    }
+    const after = /^[\s\w&]*?(?=\{)/.exec(code.slice(end + 1))
+    if (!after) continue
+    const lineStart = code.lastIndexOf('\n', m.index) + 1
+    const returnType = code.slice(lineStart, m.index).replace(/^\s*(public:|private:|protected:)?/, '').trim()
+    if (!returnType || /[;{}=]/.test(returnType)) continue
+    return `${returnType} ${code.slice(m.index, end + 1)}${after[0]}`.replace(/\s+/g, ' ').trim()
+  }
+  return null
+}
 
 /** The code of one of a problem's files. */
 export function codeOf(entry: Pick<ProblemEntry, 'solution' | 'versions'>, name: string): string | null {

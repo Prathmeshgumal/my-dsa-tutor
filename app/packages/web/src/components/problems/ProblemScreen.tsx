@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   Play,
   Plus,
+  RotateCcw,
   Sparkles,
   Trash2,
   X,
@@ -23,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { codeOf, SOLUTION_FILE, type Attempt, type Difficulty, type ProblemEntry } from '@dsa/core/problems'
+import { codeOf, SOLUTION_FILE, starterCode, type Attempt, type Difficulty, type ProblemEntry } from '@dsa/core/problems'
 import { cn } from '@/lib/utils'
 import { activeProblem, flushProblemsOnUnload, useProblems } from '@/state/problems'
 import { useSettings } from '@/state/settings'
@@ -372,6 +373,54 @@ function FileTabs({ entry }: { entry: ProblemEntry }) {
   )
 }
 
+/** LeetCode's reset: the open file goes back to the code the problem started with, after a second click. */
+function ResetCode({ entry }: { entry: ProblemEntry }) {
+  const activeFile = useProblems((s) => s.activeFile)
+  const [confirming, setConfirming] = useState(false)
+  const canReset = starterCode(entry, activeFile) !== null
+  if (confirming) {
+    return (
+      <Button
+        size="sm"
+        variant="destructive"
+        aria-label="Confirm reset code"
+        onMouseLeave={() => setConfirming(false)}
+        onBlur={() => setConfirming(false)}
+        onClick={() => {
+          setConfirming(false)
+          void useProblems.getState().resetCode()
+        }}
+      >
+        <RotateCcw /> Reset {activeFile}?
+      </Button>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* The span keeps the tooltip working while the button is disabled. */}
+        <span tabIndex={canReset ? undefined : 0}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Reset code"
+            disabled={!canReset}
+            onClick={() => setConfirming(true)}
+            className="text-muted-foreground"
+          >
+            <RotateCcw />
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {canReset
+          ? 'Reset to the starting code (Ctrl+Z in the editor undoes it)'
+          : 'Can’t work out the starting code: the method the tests call isn’t in your code'}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function SolutionEditor({ entry }: { entry: ProblemEntry }) {
   const theme = useResolvedTheme()
   const activeFile = useProblems((s) => s.activeFile)
@@ -398,7 +447,8 @@ function SolutionEditor({ entry }: { entry: ProblemEntry }) {
           {saveStatus === 'error' && <AlertTriangle className="size-3" aria-hidden />}
           {SAVE_TEXT[saveStatus]}
         </span>
-        <div className="ml-auto flex shrink-0 gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ResetCode key={`${entry.slug}/${activeFile}`} entry={entry} />
           <Button
             size="sm"
             variant="outline"

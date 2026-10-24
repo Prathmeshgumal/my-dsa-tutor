@@ -170,3 +170,21 @@ test('notes can be linked to and unlinked from the open problem', async () => {
   await useProblems.getState().unlinkNote('note-1.md')
   expect(useProblems.getState().entries[0].problem.notes).toEqual([])
 })
+
+test('Reset puts the open file back to the starting code and saves it', async () => {
+  const problem = { ...entry('two-sum').problem, starter: 'class Solution {\npublic:\n};' }
+  server = [entry('two-sum', { problem, solution: 'my attempt', versions: [{ name: 'brute.cpp', content: 'brute code' }] })]
+  await useProblems.getState().load()
+  await useProblems.getState().selectFile('brute.cpp')
+  await useProblems.getState().resetCode()
+  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/files/brute.cpp', method: 'PUT', body: { content: 'class Solution {\npublic:\n};' } })
+  expect(useProblems.getState().entries[0]).toMatchObject({ solution: 'my attempt', versions: [{ name: 'brute.cpp', content: 'class Solution {\npublic:\n};' }] })
+  expect(useProblems.getState().saveStatus).toBe('saved')
+})
+
+test('Reset does nothing when the starting code can’t be worked out', async () => {
+  await useProblems.getState().load()
+  await useProblems.getState().resetCode()
+  expect(calls.some((c) => c.method === 'PUT')).toBe(false)
+  expect(useProblems.getState().entries[0].solution).toBe('class Solution {};')
+})

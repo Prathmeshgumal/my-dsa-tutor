@@ -9,12 +9,30 @@ import type { Duplex } from 'node:stream'
 import path from 'node:path'
 import { createAppServer } from '../packages/server/src/app.ts'
 import { loadConfig } from '../packages/server/src/config.ts'
-import { DATA_DIR, E2E_PORT, SOLUTIONS } from './paths.ts'
+import { DATA_DIR, E2E_PORT, PROBLEMS, SOLUTIONS } from './paths.ts'
 
 rmSync(DATA_DIR, { recursive: true, force: true })
 mkdirSync(SOLUTIONS, { recursive: true })
 writeFileSync(path.join(SOLUTIONS, 'two_sum.cpp'), '#include <iostream>\nint main() {\n  std::cout << 3;\n}\n')
 writeFileSync(path.join(SOLUTIONS, 'hello.py'), 'print("hello")\n')
+// A problem from before the starting code was kept, already worked on.
+const pairSum = path.join(PROBLEMS, 'pair-sum')
+mkdirSync(path.join(pairSum, 'attempts'), { recursive: true })
+writeFileSync(
+  path.join(pairSum, 'problem.json'),
+  JSON.stringify({
+    title: 'Pair Sum',
+    difficulty: 'easy',
+    description: 'Return the indices of two numbers that add up to `target`.',
+    params: [{ name: 'nums', type: 'vector<int>&' }, { name: 'target', type: 'int' }],
+    compare: 'exact',
+    tests: [{ input: ['[1,2]', '3'], expected: '[0,1]', example: true, addedBy: 'problem' }],
+    createdAt: 1,
+    formatVersion: 1,
+  }),
+)
+writeFileSync(path.join(pairSum, 'driver.cpp'), 'int main() {\n    judge::run([] {\n        auto nums = judge::read<vector<int>>();\n        auto target = judge::read<int>();\n        return Solution().pairSum(nums, target);\n    });\n}\n')
+writeFileSync(path.join(pairSum, 'solution.cpp'), 'class Solution {\npublic:\n    vector<int> pairSum(vector<int>& nums, int target) {\n        return {0, 1}; // my answer\n    }\n};\n')
 
 // Piston with C++ and Python installed but not Java, so the Setup check has something to report.
 const piston = createServer((req, res) => {

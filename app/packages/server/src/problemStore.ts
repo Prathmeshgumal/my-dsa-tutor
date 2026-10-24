@@ -111,7 +111,9 @@ export async function createProblem(
   const base = folder(dir, slug)
   noteOwnChange(base)
   await mkdir(path.join(base, 'attempts'), { recursive: true })
-  await writeFileAtomic(path.join(base, 'problem.json'), JSON.stringify(stamp('problem', problem), null, 2))
+  // The starting code is kept for Reset.
+  const saved: Problem = { ...problem, starter: solution }
+  await writeFileAtomic(path.join(base, 'problem.json'), JSON.stringify(stamp('problem', saved), null, 2))
   await writeFileAtomic(path.join(base, 'driver.cpp'), driver)
   await writeFileAtomic(path.join(base, 'solution.cpp'), solution)
   return slug

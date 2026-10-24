@@ -123,3 +123,22 @@ test('problems saved by a newer editor are named, with what to do', async () => 
   )
 })
 
+
+test('Reset asks first, then puts the open code back to how the problem started', async () => {
+  const starter = 'class Solution {\npublic:\n    int f() {\n        \n    }\n};'
+  configureProblems({
+    fetchImpl: ((url: string) => json(url === '/api/problems' ? [{ ...entry, problem: { ...entry.problem, starter } }] : [])) as typeof fetch,
+  })
+  renderScreen()
+  expect(await screen.findByTestId('monaco')).toHaveValue('optimal code')
+  fireEvent.click(screen.getByRole('button', { name: 'Reset code' }))
+  expect(screen.getByTestId('monaco')).toHaveValue('optimal code')
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm reset code' }))
+  expect(await screen.findByTestId('monaco')).toHaveValue(starter)
+})
+
+test('Reset is off when the starting code can’t be worked out', async () => {
+  renderScreen()
+  await screen.findByTestId('monaco')
+  expect(screen.getByRole('button', { name: 'Reset code' })).toBeDisabled()
+})

@@ -36,10 +36,20 @@ def test_create_writes_the_folder_exactly(client, data):
     title = f"Two Sum {uuid.uuid4().hex[:6]}"
     slug = create(client, title, created=1234)
     base = data / "problems" / slug
-    assert (base / "problem.json").read_text() == json.dumps({**problem(title, 1234), "formatVersion": 1}, indent=2, ensure_ascii=False)
+    # The starting code is kept too, for Reset.
+    assert (base / "problem.json").read_text() == json.dumps({**problem(title, 1234), "starter": "class Solution {};", "formatVersion": 1}, indent=2, ensure_ascii=False)
     assert (base / "solution.cpp").read_text() == "class Solution {};"
     assert (base / "driver.cpp").read_text() == "int main(){}"
     assert (base / "attempts").is_dir()
+
+
+def test_starting_code_stays_after_editing(client):
+    slug = create(client, starter="class Solution {\npublic:\n};")
+    check(client.put(f"/api/problems/{slug}/solution", json={"content": "solved"}), 204)
+    check(client.put(f"/api/problems/{slug}/tests", json={"tests": [{"input": ["[1]", "1"], "expected": "1", "example": True, "addedBy": "problem"}]}), 204)
+    check(client.put(f"/api/problems/{slug}/notes", json={"notes": ["n.md"]}), 204)
+    entry = next(e for e in client.get("/api/problems").json() if e["slug"] == slug)
+    assert entry["solution"] == "solved" and entry["problem"]["starter"] == "class Solution {\npublic:\n};"
 
 
 def test_slugs_are_unique(client):

@@ -142,6 +142,10 @@ themselves. You never write `main()` or compare output by eye.
 - Each case shows its input, the expected answer, your output, and anything your code printed
   with `cout`. Compiler errors point at your own line numbers.
 - **+ Add** adds a case of your own. Claude can also add one when it spots an edge case you miss.
+- **Reset** (the ↺ next to Run) starts over: the open file goes back to the code the problem
+  started with, after a second click to confirm. Changed your mind? Ctrl+Z in the editor brings
+  your code back. Problems made before Reset existed didn't keep their starting code, so for those
+  it's rebuilt from yours: `class Solution` with the same function, emptied.
 - When this screen is showing, Claude knows which problem you're on. Ask it to explain the
   question, give a hint, or check your solution.
 

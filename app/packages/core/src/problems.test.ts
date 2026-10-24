@@ -9,6 +9,7 @@ import {
   runTests,
   sameAnswer,
   slugify,
+  starterCode,
   uniqueSlug,
   type Problem,
   type TestCase,
@@ -156,5 +157,51 @@ describe('problemProblems', () => {
   it('catches input that does not match the parameters', () => {
     const bad = { params: problem.params, tests: [tc(['[1]'], '', { example: true })] }
     expect(problemProblems(bad)).toEqual(['Test 1 has 1 input lines but there are 2 params.', 'Test 1 has no expected answer.'])
+  })
+})
+
+describe('starting code (Reset)', () => {
+  const driver = 'int main() {\n    judge::run([] {\n        auto nums = judge::read<vector<int>>();\n        return Solution().searchRange(nums, 3);\n    });\n}'
+  const solved = `#include <algorithm>
+// my notes
+class Solution {
+    int helper(int x) { return x; }
+public:
+    vector<int> searchRange(vector<int>& nums,
+                            int target) {
+        int start = 0;
+        if (nums.empty()) { return {-1, -1}; }
+        return {start, helper(target)};
+    }
+};
+`
+  const fresh = 'class Solution {\npublic:\n    vector<int> searchRange(vector<int>& nums, int target) {\n        \n    }\n};'
+
+  it('is the code the problem started with, when it was kept', () => {
+    const entry = { problem: { ...problem, starter: 'class Solution {};' }, solution: solved, versions: [], driver }
+    expect(starterCode(entry, 'solution.cpp')).toBe('class Solution {};')
+  })
+
+  it('otherwise is rebuilt from your code: class Solution with the method the tests call, emptied', () => {
+    const entry = { problem, solution: solved, versions: [], driver }
+    expect(starterCode(entry, 'solution.cpp')).toBe(fresh)
+  })
+
+  it('keeps the exact signature: const, std::, nested templates', () => {
+    const code = 'class Solution {\npublic:\n    std::vector<std::vector<int>> f(const std::vector<int>& a) const {\n        return {};\n    }\n};'
+    const entry = { problem, solution: code, versions: [], driver: 'return Solution().f(a);' }
+    expect(starterCode(entry, 'solution.cpp')).toBe(
+      'class Solution {\npublic:\n    std::vector<std::vector<int>> f(const std::vector<int>& a) const {\n        \n    }\n};',
+    )
+  })
+
+  it('uses another file when the open one lost the method', () => {
+    const entry = { problem, solution: '// wiped', versions: [{ name: 'brute.cpp', content: solved }], driver }
+    expect(starterCode(entry, 'solution.cpp')).toBe(fresh)
+  })
+
+  it('is null when it can’t be worked out', () => {
+    expect(starterCode({ problem, solution: '// wiped', versions: [], driver }, 'solution.cpp')).toBeNull()
+    expect(starterCode({ problem, solution: solved, versions: [], driver: 'int main() {}' }, 'solution.cpp')).toBeNull()
   })
 })

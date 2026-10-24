@@ -2,7 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { SOLUTIONS, STATE } from './paths.ts'
+import { PROBLEMS, SOLUTIONS, STATE } from './paths.ts'
 
 const tabs = (page: Page) => page.getByRole('tablist', { name: 'Open files' }).getByRole('tab')
 const editor = (page: Page) => page.locator('.monaco-editor').first()
@@ -90,4 +90,23 @@ test('Setup says what is missing and how to fix it', async ({ page }) => {
 test('other websites can’t use the editor’s API', async ({ request }) => {
   const res = await request.get('/api/files', { headers: { 'Sec-Fetch-Site': 'cross-site', Origin: 'https://evil.example' } })
   expect(res.status()).toBe(403)
+})
+
+test('Reset puts a problem back to its starting code, and Ctrl+Z brings yours back', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Problems', exact: true }).click()
+  await page.getByRole('button', { name: 'Pair Sum', exact: true }).click()
+  const code = page.locator('.monaco-editor').first()
+  await expect(code).toContainText('// my answer', MONACO_LOAD)
+
+  await page.getByRole('button', { name: 'Reset code' }).click()
+  await page.getByRole('button', { name: 'Confirm reset code' }).click()
+  const starter = 'class Solution {\npublic:\n    vector<int> pairSum(vector<int>& nums, int target) {\n        \n    }\n};'
+  await expect.poll(() => readFile(path.join(PROBLEMS, 'pair-sum', 'solution.cpp'), 'utf8')).toBe(starter)
+  await expect(code).not.toContainText('// my answer')
+
+  await code.click()
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(code).toContainText('// my answer')
+  await expect.poll(() => readFile(path.join(PROBLEMS, 'pair-sum', 'solution.cpp'), 'utf8')).toContain('// my answer')
 })

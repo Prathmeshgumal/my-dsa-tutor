@@ -5,6 +5,7 @@ import {
   nextVersionName,
   runTests,
   SOLUTION_FILE,
+  starterCode,
   type Attempt,
   type ProblemEntry,
   type TestCase,
@@ -48,6 +49,8 @@ interface ProblemsState {
   newVersion(): Promise<void>
   /** Deletes a version (never solution.cpp). */
   deleteVersion(name: string): Promise<void>
+  /** Puts the open file back to the code the problem started with, and saves it. */
+  resetCode(): Promise<void>
   test(kind: TestRun['kind'], runner?: CodeRunner): Promise<void>
   addCase(test: Pick<TestCase, 'input' | 'expected'>): Promise<void>
   /** Only the student's own cases can be removed. */
@@ -222,6 +225,14 @@ export const useProblems = create<ProblemsState>()(
           await send(fileUrl(entry.slug, name), 'PUT', { content: code })
           patchEntry(entry.slug, (e) => withCode(e, name, code))
           set({ activeFile: name, testRun: null, testError: null })
+        },
+
+        async resetCode() {
+          const entry = active()
+          const starter = entry && starterCode(entry, get().activeFile)
+          if (!entry || starter === null) return
+          get().editCode(entry.slug, get().activeFile, starter)
+          await get().flush()
         },
 
         async deleteVersion(name) {

@@ -122,7 +122,9 @@ def create_problem(base: str, problem: dict, solution: str, driver: str) -> str:
     where = folder(base, slug)
     note_own_change(where)
     os.makedirs(os.path.join(where, "attempts"), exist_ok=True)
-    write_file_atomic(os.path.join(where, "problem.json"), dumps(stamp("problem", problem), indent=2))
+    # The starting code is kept for Reset.
+    saved = {**problem, "starter": solution}
+    write_file_atomic(os.path.join(where, "problem.json"), dumps(stamp("problem", saved), indent=2))
     write_file_atomic(os.path.join(where, "driver.cpp"), driver)
     write_file_atomic(os.path.join(where, "solution.cpp"), solution)
     return slug
