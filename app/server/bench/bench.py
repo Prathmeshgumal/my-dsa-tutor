@@ -9,6 +9,7 @@ The budget: every timing within max(+10 %, +2 ms) of Node's; idle memory within 
 
 import json
 import statistics
+import subprocess
 import sys
 import tempfile
 import threading
@@ -19,7 +20,7 @@ import httpx
 from websockets.sync.client import connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tests.support.servers import DIST, start  # noqa: E402
+from tests.support.servers import DIST, SUPPORT, free_port, start, stop, wait_until_up  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 ROUNDS = 300
@@ -84,7 +85,42 @@ def measure(kind: str) -> dict:
             results["file_event_latency"] = event_latency(server, data)
         finally:
             server.close()
+        results["chat_first_text"], results["chat_with_tool"] = chat_timings(kind, Path(tmp))
     return results
+
+
+CHATS = 10
+
+
+def chat_timings(kind: str, tmp: Path) -> tuple[dict, dict]:
+    """Claude chat with the real engine, against a stand-in for Anthropic's API that answers at once: what the
+    server and engine add before Claude's first words arrive, and for a whole reply that uses one tool."""
+    first_text, whole = [], []
+    replies, log = tmp / "replies.json", tmp / "api.log"
+    look = [{"type": "text", "text": "Let me look."}, {"type": "tool_use", "id": "toolu_01", "name": "mcp__editor__list_files", "input": {}}]
+    replies.write_text(json.dumps([look, [{"type": "text", "text": "Done."}]] * (CHATS + 2)))
+    port = free_port()
+    api = subprocess.Popen([sys.executable, str(SUPPORT / "fake_anthropic.py"), str(port), str(log), str(replies)])
+    wait_until_up(f"http://127.0.0.1:{port}/health", api)
+    env = {"ANTHROPIC_BASE_URL": f"http://127.0.0.1:{port}", "ANTHROPIC_API_KEY": "sk-ant-fake-key", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+    server = start(kind, tmp / "chat-data", extra_env=env)
+    try:
+        with httpx.Client(base_url=server.base, timeout=120) as c:
+            for i in range(CHATS + 2):
+                t = time.perf_counter()
+                text_at = None
+                with c.stream("POST", "/api/claude/chat", json={"message": "hello"}) as r:
+                    for line in r.iter_lines():
+                        if line.startswith("data: ") and json.loads(line[6:])["type"] == "text" and text_at is None:
+                            text_at = time.perf_counter()
+                done = time.perf_counter()
+                if i >= 2:
+                    first_text.append(text_at - t)
+                    whole.append(done - t)
+    finally:
+        server.close()
+        stop(api)
+    return percentiles(first_text), percentiles(whole)
 
 
 def websocket_timings(server) -> tuple[dict, dict]:

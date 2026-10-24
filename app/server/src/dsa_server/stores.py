@@ -42,7 +42,7 @@ async def read_json(req: Request, too_large: str) -> dict:
 
 
 def read_text(file: str) -> str:
-    with open(file, encoding="utf-8", errors="replace") as f:
+    with open(file, encoding="utf-8", errors="replace", newline="") as f:
         return f.read()
 
 

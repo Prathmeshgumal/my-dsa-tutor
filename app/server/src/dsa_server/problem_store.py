@@ -37,14 +37,14 @@ def slugs(base: str) -> list[str]:
 
 def read_text(file: str) -> str:
     try:
-        with open(file, encoding="utf-8", errors="replace") as f:
+        with open(file, encoding="utf-8", errors="replace", newline="") as f:
             return f.read()
     except OSError:
         return ""
 
 
 def _read(file: str) -> str:
-    with open(file, encoding="utf-8", errors="replace") as f:
+    with open(file, encoding="utf-8", errors="replace", newline="") as f:
         return f.read()
 
 

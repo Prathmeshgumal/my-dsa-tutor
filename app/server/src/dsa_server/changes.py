@@ -42,7 +42,7 @@ def check_note_name(name: str) -> None:
 
 def _read_or(file: str, missing: str) -> str:
     try:
-        with open(file, encoding="utf-8", errors="replace") as f:
+        with open(file, encoding="utf-8", errors="replace", newline="") as f:
             return f.read()
     except OSError:
         raise ToolError(missing, f"{os.path.basename(file)} doesn't exist any more.") from None

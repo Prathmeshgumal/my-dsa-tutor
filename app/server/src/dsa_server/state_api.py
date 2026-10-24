@@ -30,7 +30,7 @@ def state_routes(folder: str, max_bytes: int = MAX_BYTES):
 
     def read(key: str) -> str | None:
         try:
-            with open(file(key), encoding="utf-8", errors="replace") as f:
+            with open(file(key), encoding="utf-8", errors="replace", newline="") as f:
                 return f.read()
         except OSError:
             return None

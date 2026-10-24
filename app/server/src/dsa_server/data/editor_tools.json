@@ -1,0 +1,1143 @@
+{
+ "tools": [
+  {
+   "name": "get_editor_state",
+   "description": "Which file is open in the editor (and its language) and which tabs are open.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "list_files",
+   "description": "List the user's solution files with their length in lines.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "read_file",
+   "description": "Read a solution file with line numbers. Reads the saved file, which matches what the editor shows.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "File name, e.g. two_sum.cpp"
+     },
+     "start_line": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+     },
+     "end_line": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+     }
+    },
+    "required": [
+     "name"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "get_last_run",
+   "description": "What the editor's output panel shows: the last run's result, stdout, stderr or compiler errors, time and memory.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "run_code",
+   "description": "Compile and run a solution file (defaults to the open file) with optional stdin, e.g. to test a case. The result also appears in the user's output panel. Runs the saved file.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "description": "File to run; defaults to the open file",
+      "type": "string"
+     },
+     "stdin": {
+      "description": "Input for the program",
+      "type": "string"
+     }
+    }
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "edit_file",
+   "description": "Propose replacing one exact, unique piece of a file. The user sees the change and must approve it before it is applied. Keep each edit small and focused.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "old_text": {
+      "type": "string",
+      "description": "Exact text to replace, copied from read_file (without line numbers); must appear exactly once"
+     },
+     "new_text": {
+      "type": "string",
+      "description": "Replacement text"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "name",
+     "old_text",
+     "new_text",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "create_file",
+   "description": "Propose a new solution file (.cpp, .java or .py). The user must approve it. Never overwrites.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "content": {
+      "type": "string"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "name",
+     "content",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "list_notes",
+   "description": "List the user's Markdown notes (file name and title). Notes are separate from code files.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "read_note",
+   "description": "Read one of the user's Markdown notes.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "e.g. note-1.md"
+     }
+    },
+    "required": [
+     "name"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "create_note",
+   "description": "Propose a new Markdown note in the Notes panel. Start it with a \"# Title\" line. The user must approve it.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "content": {
+      "type": "string",
+      "description": "The whole note in Markdown, starting with a # title"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "content",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "edit_note",
+   "description": "Propose replacing one exact, unique piece of a note (e.g. to add to it). The user must approve it.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "old_text": {
+      "type": "string",
+      "description": "Exact text to replace, copied from read_note; must appear exactly once"
+     },
+     "new_text": {
+      "type": "string"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "name",
+     "old_text",
+     "new_text",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "create_visualization",
+   "description": "Show a step-by-step dry run in the Playground: the code with the current line, a note per step, variables, and data structures drawn visually (arrays with pointers, DP grids, maps, stacks/queues, linked lists, binary trees, graphs). Use it to dry run the student's code or to explain a bug or an idea. Pass \"file\" to show that file's code; \"line\" in each step refers to it. Each step is a full snapshot (repeat structures and vars every step). One step per meaningful line; at most 200 steps. Mark the step where things go wrong with mistake: true.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string",
+      "description": "e.g. \"Dry run: twoSum on [2,7,11,15], target 9\""
+     },
+     "file": {
+      "description": "File the steps walk through: a solutions file, or with \"problem\" one of its code files (default solution.cpp)",
+      "type": "string"
+     },
+     "problem": {
+      "description": "Slug of a practice problem: trace the student's code for it (solution.cpp unless file says otherwise)",
+      "type": "string"
+     },
+     "input": {
+      "description": "The input used",
+      "type": "string"
+     },
+     "expected": {
+      "description": "The correct output for this input, printed the way the code prints it; the last step's output is checked against it",
+      "type": "string"
+     },
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "line": {
+         "description": "1-based line of the file that runs in this step",
+         "type": "integer",
+         "minimum": -9007199254740991,
+         "maximum": 9007199254740991
+        },
+        "note": {
+         "type": "string",
+         "description": "What happens in this step, in plain words (one or two short sentences)"
+        },
+        "vars": {
+         "description": "Variable values after this step",
+         "type": "object",
+         "propertyNames": {
+          "type": "string"
+         },
+         "additionalProperties": {
+          "type": [
+           "number",
+           "string",
+           "boolean",
+           "null"
+          ]
+         }
+        },
+        "structures": {
+         "description": "Data structures after this step (repeat them every step)",
+         "type": "array",
+         "items": {
+          "oneOf": [
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "array"
+             },
+             "name": {
+              "type": "string"
+             },
+             "values": {
+              "type": "array",
+              "items": {
+               "type": [
+                "number",
+                "string",
+                "boolean",
+                "null"
+               ]
+              }
+             },
+             "pointers": {
+              "description": "Named indices drawn as arrows, e.g. {\"i\":0,\"j\":3}",
+              "type": "object",
+              "propertyNames": {
+               "type": "string"
+              },
+              "additionalProperties": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "highlight": {
+              "description": "Indices being compared/read",
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "swapped": {
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "done": {
+              "description": "Indices already final",
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "capacity": {
+              "description": "For a vector: allocated slots; extra ones are drawn as empty spare slots",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "values"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "grid"
+             },
+             "name": {
+              "type": "string"
+             },
+             "rows": {
+              "type": "array",
+              "items": {
+               "type": "array",
+               "items": {
+                "type": [
+                 "number",
+                 "string",
+                 "boolean",
+                 "null"
+                ]
+               }
+              },
+              "description": "A DP table or matrix"
+             },
+             "rowLabels": {
+              "type": "array",
+              "items": {
+               "type": "string"
+              }
+             },
+             "colLabels": {
+              "type": "array",
+              "items": {
+               "type": "string"
+              }
+             },
+             "current": {
+              "description": "[row, col] being filled",
+              "type": "array",
+              "items": [
+               {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+               }
+              ],
+              "additionalItems": false,
+              "minItems": 2,
+              "maxItems": 2
+             },
+             "highlight": {
+              "description": "[row, col] cells it reads",
+              "type": "array",
+              "items": {
+               "type": "array",
+               "items": [
+                {
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                }
+               ],
+               "additionalItems": false,
+               "minItems": 2,
+               "maxItems": 2
+              }
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "rows"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "map"
+             },
+             "name": {
+              "type": "string"
+             },
+             "entries": {
+              "type": "array",
+              "items": {
+               "type": "array",
+               "items": [
+                {
+                 "type": [
+                  "number",
+                  "string",
+                  "boolean",
+                  "null"
+                 ]
+                },
+                {
+                 "type": [
+                  "number",
+                  "string",
+                  "boolean",
+                  "null"
+                 ]
+                }
+               ],
+               "additionalItems": false,
+               "minItems": 2,
+               "maxItems": 2
+              }
+             },
+             "highlight": {
+              "description": "Keys just added or read",
+              "type": "array",
+              "items": {
+               "type": [
+                "number",
+                "string",
+                "boolean",
+                "null"
+               ]
+              }
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "entries"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "enum": [
+               "stack",
+               "queue"
+              ]
+             },
+             "name": {
+              "type": "string"
+             },
+             "values": {
+              "type": "array",
+              "items": {
+               "type": [
+                "number",
+                "string",
+                "boolean",
+                "null"
+               ]
+              },
+              "description": "Stack: bottom→top. Queue: front→back."
+             },
+             "highlight": {
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "values"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "linked_list"
+             },
+             "name": {
+              "type": "string"
+             },
+             "nodes": {
+              "type": "array",
+              "items": {
+               "type": [
+                "number",
+                "string",
+                "boolean",
+                "null"
+               ]
+              }
+             },
+             "pointers": {
+              "description": "e.g. {\"slow\":1,\"fast\":3,\"prev\":null}",
+              "type": "object",
+              "propertyNames": {
+               "type": "string"
+              },
+              "additionalProperties": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              }
+             },
+             "highlight": {
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "cycleTo": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "nodes"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "tree"
+             },
+             "name": {
+              "type": "string"
+             },
+             "nodes": {
+              "type": "array",
+              "items": {
+               "type": [
+                "number",
+                "string",
+                "boolean",
+                "null"
+               ]
+              },
+              "description": "Binary tree in level order with nulls, LeetCode style"
+             },
+             "highlight": {
+              "description": "Level-order indices being visited",
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "done": {
+              "type": "array",
+              "items": {
+               "type": "integer",
+               "minimum": -9007199254740991,
+               "maximum": 9007199254740991
+              }
+             },
+             "pointers": {
+              "type": "object",
+              "propertyNames": {
+               "type": "string"
+              },
+              "additionalProperties": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": -9007199254740991,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              }
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "nodes"
+            ]
+           },
+           {
+            "type": "object",
+            "properties": {
+             "kind": {
+              "type": "string",
+              "const": "graph"
+             },
+             "name": {
+              "type": "string"
+             },
+             "nodes": {
+              "type": "array",
+              "items": {
+               "type": "string"
+              }
+             },
+             "edges": {
+              "type": "array",
+              "items": {
+               "anyOf": [
+                {
+                 "type": "array",
+                 "items": [
+                  {
+                   "type": "string"
+                  },
+                  {
+                   "type": "string"
+                  }
+                 ],
+                 "additionalItems": false,
+                 "minItems": 2,
+                 "maxItems": 2
+                },
+                {
+                 "type": "array",
+                 "items": [
+                  {
+                   "type": "string"
+                  },
+                  {
+                   "type": "string"
+                  },
+                  {
+                   "type": [
+                    "number",
+                    "string",
+                    "boolean",
+                    "null"
+                   ]
+                  }
+                 ],
+                 "additionalItems": false,
+                 "minItems": 3,
+                 "maxItems": 3
+                }
+               ]
+              }
+             },
+             "directed": {
+              "type": "boolean"
+             },
+             "current": {
+              "type": "string"
+             },
+             "visited": {
+              "type": "array",
+              "items": {
+               "type": "string"
+              }
+             },
+             "activeEdges": {
+              "type": "array",
+              "items": {
+               "type": "array",
+               "items": [
+                {
+                 "type": "string"
+                },
+                {
+                 "type": "string"
+                }
+               ],
+               "additionalItems": false,
+               "minItems": 2,
+               "maxItems": 2
+              }
+             }
+            },
+            "required": [
+             "kind",
+             "name",
+             "nodes",
+             "edges"
+            ]
+           }
+          ]
+         }
+        },
+        "output": {
+         "description": "Everything printed so far",
+         "type": "string"
+        },
+        "mistake": {
+         "description": "true on the step where the bug shows up",
+         "type": "boolean"
+        },
+        "moves": {
+         "description": "Arrows for what moved where in this step. Name boxes like \"arr[3]\", \"seen[7]\" (map key), \"dp[1][2]\", \"st[0]\", or a variable name. Both ends must be drawn in this step.",
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "from": {
+            "type": "string"
+           },
+           "to": {
+            "type": "string"
+           },
+           "label": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "from",
+           "to"
+          ]
+         }
+        },
+        "check": {
+         "description": "The condition this step evaluates, with real values: {\"expr\":\"arr[j] > arr[j+1] → 5 > 1\",\"result\":true}",
+         "type": "object",
+         "properties": {
+          "expr": {
+           "type": "string"
+          },
+          "result": {
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "expr",
+          "result"
+         ]
+        },
+        "calc": {
+         "description": "The calculation on this line with real values, e.g. \"sum = 2 + 7 = 9\"",
+         "type": "string"
+        },
+        "loop": {
+         "description": "Where we are in the loops, e.g. \"pass 2 of 3 · j = 1\"",
+         "type": "string"
+        },
+        "callStack": {
+         "description": "For recursion: calls in progress, outermost first, e.g. [\"main()\", \"fib(4)\", \"fib(3)\"]",
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "phase": {
+         "description": "The part of the algorithm this step starts, e.g. \"Transpose\" or \"Reverse each row\"; set it on the first step of each part only",
+         "type": "string"
+        }
+       },
+       "required": [
+        "note"
+       ]
+      }
+     }
+    },
+    "required": [
+     "title",
+     "steps"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "list_problems",
+   "description": "List the practice problems (slug, title, difficulty, solved, number of submissions).",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "get_problem",
+   "description": "Read a practice problem: description, parameters, every test case, the student's solution.cpp with line numbers, and the hidden driver. Defaults to the problem on screen.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     }
+    }
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "create_problem",
+   "description": "Turn a question the student shares (pasted text, a screenshot, LeetCode/codehelp/anywhere) into a practice problem with LeetCode-style layout: description on the left, only class Solution in the editor, test cases checked automatically. The student approves it, then it opens on the Problem screen.\n\nHow tests run: the program is HARNESS + starter/solution + driver. The harness already includes <bits/stdc++.h>, \"using namespace std\", ListNode and TreeNode (LeetCode definitions), and:\n- judge::read<T>() reads one input line as T: int, long long, double, bool, char (\"a\"), string (\"abc\"), vector<...> of those (nested too, e.g. [[1,2],[3]]), ListNode* ([1,2,3]) and TreeNode* (level order with null).\n- judge::run(f) runs every case: f reads one case's input with judge::read and returns the answer, which is printed in LeetCode format and compared with \"expected\".\nSo a driver is usually just:\nint main() {\n    judge::run([] {\n        auto nums = judge::read<vector<int>>();\n        auto target = judge::read<int>();\n        return Solution().twoSum(nums, target);\n    });\n}\nFor in-place problems (void), call the method and return the modified argument. Don't define ListNode/TreeNode or main elsewhere.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string",
+      "description": "e.g. \"Two Sum\""
+     },
+     "difficulty": {
+      "type": "string",
+      "enum": [
+       "easy",
+       "medium",
+       "hard"
+      ]
+     },
+     "description": {
+      "type": "string",
+      "description": "The problem statement in Markdown, with its examples (Input/Output/Explanation) and constraints, faithful to the source"
+     },
+     "params": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "type": {
+         "type": "string",
+         "description": "C++ type, e.g. vector<int>"
+        }
+       },
+       "required": [
+        "name",
+        "type"
+       ]
+      },
+      "description": "The function parameters, in order"
+     },
+     "compare": {
+      "description": "any_order when the answer list can be in any order; any_order_nested when inner lists can also be (e.g. 3Sum triplets)",
+      "type": "string",
+      "enum": [
+       "exact",
+       "any_order",
+       "any_order_nested"
+      ]
+     },
+     "tests": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "input": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "description": "One value per parameter, LeetCode format: \"[2,7,11,15]\", \"9\", \"\\\"abc\\\"\""
+        },
+        "expected": {
+         "type": "string",
+         "description": "The answer in LeetCode format, e.g. \"[0,1]\", \"true\", \"\\\"bab\\\"\", \"2.50000\" for doubles"
+        },
+        "example": {
+         "type": "boolean",
+         "description": "true for the examples given in the problem"
+        }
+       },
+       "required": [
+        "input",
+        "expected",
+        "example"
+       ]
+      },
+      "description": "The problem's examples, plus a few more cases covering edge cases (empty, single element, duplicates, negatives, large values)"
+     },
+     "starter": {
+      "type": "string",
+      "description": "The class Solution { public: ... }; skeleton the student fills in (empty function body), like LeetCode"
+     },
+     "driver": {
+      "type": "string",
+      "description": "The hidden main() using judge::run and judge::read"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "title",
+     "difficulty",
+     "description",
+     "params",
+     "tests",
+     "starter",
+     "driver",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "add_test_case",
+   "description": "Propose an extra test case for a problem (e.g. an edge case the student's code misses). The student approves it. Defaults to the problem on screen.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     },
+     "input": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "One value per parameter, LeetCode format"
+     },
+     "expected": {
+      "type": "string",
+      "description": "The correct answer, LeetCode format"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "input",
+     "expected",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "edit_solution",
+   "description": "Propose replacing one exact, unique piece of a problem's solution.cpp. The student must approve it. Only when they ask for a change.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     },
+     "file": {
+      "description": "Which code file: solution.cpp (default: the one open on screen) or another version",
+      "type": "string"
+     },
+     "old_text": {
+      "type": "string",
+      "description": "Exact text to replace, copied from get_problem (without line numbers); must appear exactly once"
+     },
+     "new_text": {
+      "type": "string"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "old_text",
+     "new_text",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "run_tests",
+   "description": "Run a problem's test cases against the saved solution.cpp and see each case's result and anything it printed. By default the examples and the student's own cases; all: true runs every case. Doesn't record a submission.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     },
+     "file": {
+      "description": "Which code file to test (default: the one open on screen, else solution.cpp)",
+      "type": "string"
+     },
+     "all": {
+      "type": "boolean"
+     }
+    }
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "save_code_version",
+   "description": "Save another version of the code for a problem next to solution.cpp, e.g. brute-force.cpp to compare with the optimal one. The student approves it.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string",
+      "description": "e.g. brute-force.cpp"
+     },
+     "content": {
+      "type": "string",
+      "description": "The whole file: a class Solution like solution.cpp"
+     },
+     "explanation": {
+      "type": "string",
+      "description": "One short sentence the user sees: why this change."
+     }
+    },
+    "required": [
+     "name",
+     "content",
+     "explanation"
+    ]
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  },
+  {
+   "name": "list_attempts",
+   "description": "The student's past submissions for a problem: time, result and the code they submitted.",
+   "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+     "slug": {
+      "type": "string"
+     }
+    }
+   },
+   "execution": {
+    "taskSupport": "forbidden"
+   }
+  }
+ ]
+}

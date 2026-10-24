@@ -1,6 +1,7 @@
 """/api/problems, and /api/claude/apply (the only way a problem is made outside a Claude reply)."""
 
 import json
+import time
 import uuid
 
 import pytest
@@ -85,6 +86,7 @@ def test_tests_notes_and_attempts(client, data):
 
     attempt = {"code": "x", "passed": 2, "total": 2, "results": [], "file": "solution.cpp"}
     check(client.post(f"/api/problems/{slug}/attempts", json={"attempt": attempt}), 204)
+    time.sleep(0.005)  # attempts are named by the millisecond
     check(client.post(f"/api/problems/{slug}/attempts", json={"attempt": {**attempt, "passed": 1, "statusText": "Wrong Answer"}}), 204)
     r = client.get(f"/api/problems/{slug}/attempts")
     check(r, 200, ctype=JSON)

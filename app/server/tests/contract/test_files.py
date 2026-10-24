@@ -32,6 +32,13 @@ def test_save_list_rename_delete(client, data, route, folder, ext):
     check(client.delete(f"{route}/{renamed}"), 204)
 
 
+@pytest.mark.parametrize(("route", "folder", "ext"), STORES[:2])
+def test_line_endings_are_kept_exactly(client, data, route, folder, ext):
+    name = unique(ext)
+    (data / folder / name).write_bytes(b"a\r\nb\rc\n")
+    assert {"name": name, "content": "a\r\nb\rc\n"} in client.get(route).json()
+
+
 @pytest.mark.parametrize(("route", "folder", "ext"), STORES)
 @pytest.mark.parametrize("url_suffix", ["", "/", "?x=1"])
 def test_list_forms(client, route, folder, ext, url_suffix):

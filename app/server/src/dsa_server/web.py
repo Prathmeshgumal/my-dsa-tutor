@@ -2,6 +2,7 @@
 JavaScript writes it (so saved files and answers don't change by a byte when the server moved to Python)."""
 
 import json
+from decimal import Decimal
 import math
 import re
 from collections.abc import Awaitable, Callable
@@ -111,21 +112,53 @@ def _reject_constant(name: str):
     raise ValueError(f"{name} isn't JSON")
 
 
+MAX_SAFE_INTEGER = 2**53 - 1
+
+
+def _parse_int(text: str) -> int | float:
+    # JavaScript numbers are doubles: a whole number past 2^53 loses its last digits.
+    value = int(text)
+    return value if -MAX_SAFE_INTEGER <= value <= MAX_SAFE_INTEGER else float(text)
+
+
+_INDEX_KEY = re.compile(r"0|[1-9][0-9]*")
+
+
+def js_key_order(keys) -> list[str]:
+    """The order JavaScript keeps an object's keys in: array-index-like keys first, ascending, then the rest as added."""
+    keys = list(keys)
+    index = sorted((k for k in keys if _INDEX_KEY.fullmatch(k) and int(k) < 2**32 - 1), key=int)
+    taken = set(index)
+    return index + [k for k in keys if k not in taken]
+
+
+def _js_object(pairs: list[tuple[str, Any]]) -> dict:
+    value = dict(pairs)
+    for key in value:
+        if key[:1].isdigit() and _INDEX_KEY.fullmatch(key):
+            return {k: value[k] for k in js_key_order(value)}
+    return value
+
+
 def loads(text: str) -> Any:
-    """JSON.parse: no NaN or Infinity."""
-    return json.loads(text, parse_constant=_reject_constant)
+    """JSON.parse: no NaN or Infinity, numbers are doubles, and keys like "2" come first as JavaScript keeps them."""
+    return json.loads(text, parse_constant=_reject_constant, parse_int=_parse_int, object_pairs_hook=_js_object)
 
 
 def js_number(value: float) -> int | float:
-    """How JSON.stringify writes a number: 1.0 is 1."""
+    """How JSON.stringify writes a number: 1.0 is 1, and 2.0**60 is 1152921504606847000 (its shortest digits)."""
+    if isinstance(value, int) and not -MAX_SAFE_INTEGER <= value <= MAX_SAFE_INTEGER:
+        value = float(value)
     if isinstance(value, float) and value.is_integer() and abs(value) < 1e21:
-        return int(value)
+        return int(value) if abs(value) <= MAX_SAFE_INTEGER else int(Decimal(repr(value)))
     return value
 
 
 def _plain(value: Any) -> Any:
     if isinstance(value, float):
         return js_number(value) if math.isfinite(value) else None
+    if isinstance(value, int) and not isinstance(value, bool) and not -MAX_SAFE_INTEGER <= value <= MAX_SAFE_INTEGER:
+        return js_number(value)
     if isinstance(value, dict):
         return {k: _plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

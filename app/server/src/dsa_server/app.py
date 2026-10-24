@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 from .atomic_write import remove_leftover_temp_files
-from .claude_routes import claude_routes
+from .claude_routes import Turns, claude_routes
 from .config import Config
 from .folder_events import FolderEvents
 from .health import health_routes
@@ -112,6 +112,7 @@ class App:
         # No time limit: a run takes as long as Piston lets it.
         self.client = httpx.AsyncClient(timeout=None)
         self.open_runs: set = set()
+        self.turns = Turns()
         folders = config.folders
         # A fresh data folder (first start, or a new DATA_DIR) gets everything it needs.
         for folder in folders.values():
@@ -133,7 +134,7 @@ class App:
             problems_routes(folders["problems"]),
             # Tabs, chats and settings.
             state_routes(folders["state"]),
-            claude_routes(folders),
+            claude_routes(folders, config.piston_url, self.client, logger, self.turns),
         ]
 
     async def __call__(self, scope: dict, receive: Receive, send: Send) -> None:
@@ -151,6 +152,7 @@ class App:
                 await send({"type": "lifespan.startup.complete"})
             elif message["type"] == "lifespan.shutdown":
                 self.events.close()
+                self.turns.close()
                 for run in list(self.open_runs):
                     run.cancel()
                 await self.client.aclose()

@@ -55,12 +55,11 @@ worse is fixed or brought back to you before the switch.
    `bench/`. It's managed with `uv` and has a lockfile. It isn't an npm package, so it sits next to
    `packages/` instead of inside it.
 2. **Libraries:**
-   - `fastapi` and `uvicorn`
-   - `pydantic` for checking input
+   - `uvicorn` (a plain ASGI app; FastAPI and pydantic turned out not to be needed, see Task 4 notes)
    - `httpx` and `websockets` for Piston
    - `watchfiles` for outside edits
-   - `claude-agent-sdk`
-   - for tests: `pytest`, `pytest-asyncio`
+   - `pyuca` for sorting names the way the page does
+   - for tests: `pytest`, `pytest-asyncio`, `fastapi` (only the stand-in Piston and Anthropic API)
 3. **No shared code generator.** The Python server keeps its own copy of the shapes the page relies on.
    Drift is caught by the contract tests and the recorded fixtures, not by tooling.
 4. **Same behaviour first, Python idioms second.** Each module mirrors its Node file (`routes`, `app`,
@@ -68,8 +67,8 @@ worse is fixed or brought back to you before the switch.
    "improvements" ride along.
 5. **Dev:** `npm run dev` starts uvicorn (with reload) and Vite together. Vite forwards `/api` and
    `/piston` to it. `npm start` runs the Python server on the built page.
-6. **Docker:** the page is built in a Node stage. The image runs Python 3.14 slim with uvicorn, plus Claude
-   Code 2.1.302.
+6. **Docker:** the page is built in a Node stage. The image runs Python 3.14 slim with uvicorn, plus the Claude
+   Code 2.1.302 engine copied from that stage (see Task 4 notes).
 7. **Data, config and ports don't change:** the same `dsa-tutor.json`, the same environment variables and
    the same folders. Your files, chats and settings are read as they are.
 
@@ -95,7 +94,8 @@ Editor tools, approvals, turns that survive reconnects, chat, apply.
 
 ### 5. Switch over
 - Dev setup, browser tests, Docker, README, CI.
-- Benchmark against Node, then delete the Node server.
+- Benchmark against Node.
+- The Node server stays until you've tried the Python one and say it can go.
 
 ## Done means
 - Every contract test, every ported unit test, the browser tests and the web tests pass against the Python
@@ -142,3 +142,25 @@ Startup 599 ms, idle memory 130.7 MB.
 - **Ruling: the test server gets no `CLAUDE*`/`ANTHROPIC*` variables** from whoever runs the tests (a Claude
   Code session leaks `CLAUDE_EFFORT` and others). The SDK's own are recorded: `CLAUDE_AGENT_SDK_VERSION`,
   `CLAUDE_CODE_ENTRYPOINT` (`sdk-ts`) and `CLAUDE_CODE_SDK_READS_SESSION_STATE`.
+
+## Task 4 notes (Claude)
+- **Ruling: the engine stays Claude Code 2.1.302, taken from the npm package** `@anthropic-ai/claude-agent-sdk@0.3.302`
+  (its bundled `claude` program), not from the Python `claude-agent-sdk`. Every Python SDK release bundles a
+  different engine version (0.2.168 → 2.1.301, 0.2.169 → 2.1.305, 0.2.174 → 2.1.310), and a different engine can
+  answer differently. The Python server talks to the engine itself (`engine.py`), the same way the TS SDK does:
+  same command line, environment, initialize request, tool calls and shutdown. Cost if wrong: none to answers;
+  upgrading the engine later means bumping that one npm package.
+- **Ruling: tool inputs are checked by a small copy of zod** (`tool_inputs.py`) instead of pydantic, because Claude
+  sees the error text when its input is wrong, and that text must be zod's word for word. Checked against Node on
+  3,020 random inputs (`tests/fixtures/tool_inputs.json`).
+- **Ruling: JSON is read and written the JS way** (`web.loads`/`dumps`): numbers past 2^53 become doubles, big
+  whole numbers print like JS, and object keys come back in JS order. About 2x the cost of plain `json.loads`, which
+  is fine because request bodies are small and `/api/state` is stored as raw text.
+- **Ruling: small differences in server log lines are allowed** (Python stack traces look different from Node's).
+  Nothing the page or Claude sees depends on them.
+- **Bug fixed in the earlier tasks:** files were read with Python's newline translation, so `\r\n` became `\n`.
+  Every read now keeps line endings exactly; `test_line_endings_are_kept_exactly` covers it on both servers.
+- **Check:** `tests/contract/test_claude_real_engine.py` runs the real engine against a stand-in Anthropic API and
+  compares every request Claude receives over two turns (tools, a bad input, a run, an approved edit, a resumed turn
+  with an image) with a recording from Node. They are identical. The benchmark now also times chat with the real
+  engine: first words and a whole reply with one tool call are the same on both servers (~265 ms and ~330 ms).
