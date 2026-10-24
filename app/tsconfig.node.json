@@ -1,9 +1,9 @@
-// The browser tests and the configs at this level.
+// The browser tests and the configs at this level. DOM: some test code runs inside the page.
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "es2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "types": ["node"],
     "skipLibCheck": true,
     "module": "nodenext",

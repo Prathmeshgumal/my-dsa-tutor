@@ -24,6 +24,17 @@ test('opens a file and saves what you type to the solutions folder', async ({ pa
   await expect(page.getByText('Saved', { exact: false }).first()).toBeVisible()
 })
 
+test('everything the page asks for is there: scripts, styles, fonts', async ({ page }) => {
+  const missing: string[] = []
+  page.on('response', (res) => {
+    if (res.status() >= 400) missing.push(`${res.status()} ${res.url()}`)
+  })
+  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.evaluate(() => document.fonts.ready)
+  expect(missing).toEqual([])
+  expect(await page.evaluate(() => document.fonts.check('16px "Geist"'))).toBe(true)
+})
+
 test('a file changed outside the editor shows up straight away', async ({ page }) => {
   await page.goto('/')
   await openFile(page, 'hello.py')

@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
@@ -27,7 +28,14 @@ function api(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), api()],
-  resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, './src'),
+      // The geist package doesn't export its font files, so index.css reaches them through its real folder,
+      // wherever npm put it.
+      '@geist-fonts': path.join(path.dirname(fileURLToPath(import.meta.resolve('geist/font'))), 'fonts'),
+    },
+  },
   // Forward /piston/* to Piston (local container, or `piston` inside Docker Compose) so the browser never makes a cross-origin call.
   server: {
     // From the config; if it's taken, say so instead of quietly using another port.
