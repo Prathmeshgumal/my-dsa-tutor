@@ -1,0 +1,14 @@
+{
+  "name": "@dsa/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@dsa/core": "*",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.302",
+    "zod": "^4.6.7"
+  }
+}

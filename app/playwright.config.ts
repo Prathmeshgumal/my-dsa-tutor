@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: { baseURL: `http://localhost:${E2E_PORT}`, trace: 'retain-on-failure' },
   webServer: {
-    command: 'npx vite build --logLevel warn && node e2e/serve.ts',
+    command: 'npm run build -w @dsa/web -- --logLevel warn && node e2e/serve.ts',
     url: `http://localhost:${E2E_PORT}/api/health`,
     reuseExistingServer: false,
     timeout: 120_000,

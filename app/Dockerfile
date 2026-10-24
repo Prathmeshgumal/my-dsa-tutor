@@ -1,4 +1,4 @@
-# The editor as a real app: the built page and its API on one small Node server (server/main.ts).
+# The editor as a real app: the built page and its API on one small Node server (packages/server/src/main.ts).
 # Code changes need a rebuild: ./start.sh --build
 FROM node:24-bookworm-slim
 
@@ -16,4 +16,4 @@ RUN npm run build
 
 # Inside the container it must listen on every address; docker-compose.yml only publishes it to this computer.
 ENV HOST=0.0.0.0
-CMD ["node", "server/main.ts"]
+CMD ["node", "packages/server/src/main.ts"]
