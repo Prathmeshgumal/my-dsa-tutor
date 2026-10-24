@@ -5,8 +5,8 @@ import { createServer, request, type Server } from 'node:http'
 import type { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { createAppServer, stopAppServer } from './app'
-import { loadConfig } from './config'
+import { createAppServer, stopAppServer } from './app.ts'
+import { loadConfig } from './config.ts'
 
 let dir: string
 let app: Server
@@ -174,7 +174,7 @@ test('if Piston is down, runs get a clear 502', async () => {
   await new Promise((r) => piston.close(r))
   const res = await fetch(`${base}/piston/runtimes`)
   expect(res.status).toBe(502)
-  expect((await res.json()).error).toMatch(/Piston/)
+  expect(((await res.json()) as { error: string }).error).toMatch(/Piston/)
   piston.listen(0) // so afterEach can close it
 })
 

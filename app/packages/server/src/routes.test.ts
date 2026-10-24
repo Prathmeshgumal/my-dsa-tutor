@@ -4,8 +4,8 @@ import { mkdtemp, rm, utimes, writeFile, mkdir } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { loadConfig } from './config'
-import { createRoutes } from './routes'
+import { loadConfig } from './config.ts'
+import { createRoutes } from './routes.ts'
 
 let dir: string
 let server: Server
@@ -41,7 +41,7 @@ test('the API routes read and write the configured folders', async () => {
   expect((await fetch(`${base}/api/problems`)).status).toBe(200)
   expect((await fetch(`${base}/api/health`)).status).toBe(200)
   expect((await fetch(`${base}/api/state/settings`, { method: 'PUT', body: '{"state":{}}' })).status).toBe(204)
-  expect((await (await fetch(`${base}/api/state`)).json()).settings).toBe('{"state":{}}')
+  expect(((await (await fetch(`${base}/api/state`)).json()) as { settings: string }).settings).toBe('{"state":{}}')
 })
 
 test('anything else is passed on', async () => {

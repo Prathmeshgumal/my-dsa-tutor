@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
 import type { ServerResponse } from 'node:http'
-import { createTurns } from './turns'
+import { createTurns } from './turns.ts'
 
 /** Just enough of a response to watch a turn. */
 function fakeRes() {

@@ -1,5 +1,5 @@
-// Dev-server setup check, shown in the Setup dialog and on start-up when something is wrong.
-//   GET /api/health → Health (see ../src/lib/health.ts)
+// The setup check, shown in the Setup dialog and on start-up when something is wrong.
+//   GET /api/health → Health (see @dsa/core's health.ts)
 import { access, rm, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'

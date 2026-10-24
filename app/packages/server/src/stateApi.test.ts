@@ -3,7 +3,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { createStateMiddleware } from './stateApi'
+import { createStateMiddleware } from './stateApi.ts'
 
 let dir: string
 let server: Server
@@ -48,7 +48,7 @@ test('refuses unknown kinds, broken JSON and anything too big, and keeps what wa
   expect((await put('passwords', '{}')).status).toBe(404)
   expect((await put('settings', '{nope')).status).toBe(400)
   expect((await put('settings', JSON.stringify({ big: 'x'.repeat(2000) }))).status).toBe(413)
-  expect((await (await fetch(base)).json()).settings).toBe('{"ok":true}')
+  expect(((await (await fetch(base)).json()) as { settings: string }).settings).toBe('{"ok":true}')
 })
 
 test('leaves other routes alone', async () => {

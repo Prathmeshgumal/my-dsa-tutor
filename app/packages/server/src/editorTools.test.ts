@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { CodeRunner, RunResult } from '@dsa/core/runner/types'
-import { createEditorTools, toSdkTools, type ApprovalRequest, type EditorToolDeps } from './editorTools'
+import { createEditorTools, toSdkTools, type ApprovalRequest, type EditorToolDeps } from './editorTools.ts'
 import { CASE_MARK, RESULT_MARK } from '@dsa/core/cppHarness'
 import { readEntry } from './problemStore.ts'
 
@@ -101,6 +101,8 @@ describe('reading', () => {
       context: {
         activeFile: null,
         openFiles: [],
+        openNote: null,
+        openProblem: null,
         lastRun: { file: 'sort.cpp', result: { ...ok, status: 'compile_error', statusText: 'Compilation Error', compileOutput: "error: expected ';'" } },
       },
     })
@@ -380,7 +382,7 @@ describe('problems', () => {
     expect((await readEntry(problemsDir, 'two-sum')).versions).toEqual([{ name: 'brute-force.cpp', content: 'class Solution { int y; };' }])
     const run = await tools.run_tests({ slug: 'two-sum', file: 'brute-force.cpp' })
     expect(run.text).toMatch(/^brute-force\.cpp: Accepted/)
-    expect(runner.run.mock.calls.at(-1)![0].source).toContain('int y;')
+    expect((runner.run.mock.calls.at(-1) as unknown as [{ source: string }])[0].source).toContain('int y;')
     expect((await tools.run_tests({ slug: 'two-sum', file: 'nope.cpp' })).text).toContain('its code files are solution.cpp, brute-force.cpp')
   })
 })

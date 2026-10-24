@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { isTempFile, removeLeftoverTempFiles, writeFileAtomic } from './atomicWrite'
+import { isTempFile, removeLeftoverTempFiles, writeFileAtomic } from './atomicWrite.ts'
 
 let dir: string
 

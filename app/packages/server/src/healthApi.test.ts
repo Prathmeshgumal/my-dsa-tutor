@@ -3,7 +3,7 @@ import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { healthy } from '@dsa/core/health'
-import { checkHealth } from './healthApi'
+import { checkHealth } from './healthApi.ts'
 
 let dir: string
 

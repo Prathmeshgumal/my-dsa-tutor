@@ -1,4 +1,4 @@
-// Shared between the dev server (server/claudeChat.ts) and the browser.
+// Shared between the server (packages/server/src/claudeChat.ts) and the browser.
 import type { Change } from './changes.ts'
 import type { DryRun } from './dryRun.ts'
 import type { RunResult } from './runner/types.ts'

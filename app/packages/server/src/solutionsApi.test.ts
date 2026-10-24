@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { createSolutionsMiddleware } from './solutionsApi'
+import { createSolutionsMiddleware } from './solutionsApi.ts'
 
 let dir: string
 let server: Server

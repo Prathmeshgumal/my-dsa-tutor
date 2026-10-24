@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createSameSiteGuard, fromAnotherSite } from './sameSite'
+import { createSameSiteGuard, fromAnotherSite } from './sameSite.ts'
 
 const req = (url: string, headers: Record<string, string> = {}) =>
   ({ url, headers: { host: 'localhost:5199', ...headers } }) as unknown as IncomingMessage

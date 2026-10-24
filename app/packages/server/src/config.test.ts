@@ -2,7 +2,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { ConfigError, loadConfig } from './config'
+import { ConfigError, loadConfig } from './config.ts'
 
 let dir: string
 

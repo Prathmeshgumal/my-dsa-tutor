@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http'
 import type { Options, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { buildPrompt, createApprovals, createClaudeChatMiddleware, type Approvals, type ChatEvent, type QueryFn } from './claudeChat'
+import { buildPrompt, createApprovals, createClaudeChatMiddleware, type Approvals, type ChatEvent, type QueryFn } from './claudeChat.ts'
+import type { EditorContext } from '@dsa/core/chatEvents'
+import type { ApprovalRequest } from './editorTools.ts'
 
 let server: Server
 let base: string
@@ -213,7 +215,7 @@ test('anything that would need a permission prompt is denied', async () => {
     suggestions: [],
     toolUseID: 't1',
   } as never)
-  expect(decision.behavior).toBe('deny')
+  expect(decision!.behavior).toBe('deny')
 })
 
 test('error results and thrown errors become error events', async () => {
@@ -288,8 +290,11 @@ test('other URLs fall through', async () => {
 })
 
 describe('buildPrompt', () => {
+  const noContext: EditorContext = { activeFile: null, openFiles: [], lastRun: null, openNote: null, openProblem: null }
+
   test('includes the open file with its code, other open files, then the question', () => {
     const p = buildPrompt('Explain this', {
+      ...noContext,
       activeFile: { name: 'a.py', content: 'print(1)' },
       openFiles: ['a.py', 'b.cpp'],
     })
@@ -300,18 +305,25 @@ describe('buildPrompt', () => {
   })
 
   test('mentions the note open in the Notes panel', () => {
-    expect(buildPrompt('Hi', { activeFile: null, openFiles: [], lastRun: null, openNote: { name: 'note-1.md', title: 'Two pointers' } })).toContain(
+    expect(buildPrompt('Hi', { ...noContext, openNote: { name: 'note-1.md', title: 'Two pointers' } })).toContain(
       'note-1.md (Two pointers)',
     )
   })
 
   test('no active file → just says so', () => {
-    expect(buildPrompt('Hi', { activeFile: null, openFiles: [] })).toContain('No file is open')
+    expect(buildPrompt('Hi', noContext)).toContain('No file is open')
   })
 })
 
 describe('approvals', () => {
-  const change = { kind: 'edit' as const, file: 'a.cpp', before: 'x', after: 'y', explanation: 'why' }
+  const change: ApprovalRequest = {
+    kind: 'edit',
+    file: 'a.cpp',
+    before: 'x',
+    after: 'y',
+    explanation: 'why',
+    change: { type: 'edit_file', name: 'a.cpp', oldText: 'x', newText: 'y' },
+  }
 
   test('a change waits for the user: the browser gets an approval event, then POSTs the decision', async () => {
     const approvals = createApprovals()

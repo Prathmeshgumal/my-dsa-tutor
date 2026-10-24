@@ -1,4 +1,4 @@
-// Applies a change Claude proposed and the user approved (see ../src/lib/changes.ts). Used by the editor
+// Applies a change Claude proposed and the user approved (see @dsa/core's changes.ts). Used by the editor
 // tools while Claude waits for the answer, and by POST /api/claude/apply for a proposal approved later.
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'

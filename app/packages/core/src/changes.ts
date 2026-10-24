@@ -1,4 +1,4 @@
-// A change Claude proposed, as data: shared between the dev server (server/changes.ts applies it) and the
+// A change Claude proposed, as data: shared between the server (packages/server/src/changes.ts applies it) and the
 // browser, which keeps it with the chat. Because it is data, a proposal can still be applied after Claude
 // stopped waiting for the answer (the reply was stopped, the page reloaded, or the server restarted).
 import type { Problem, TestCase } from './problems.ts'

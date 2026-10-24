@@ -3,9 +3,9 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import type { Problem } from '@dsa/core/problems'
-import { createProblemsMiddleware } from './problemsApi'
-import { createProblem } from './problemStore'
+import type { Problem, ProblemEntry } from '@dsa/core/problems'
+import { createProblemsMiddleware } from './problemsApi.ts'
+import { createProblem } from './problemStore.ts'
 
 let dir: string
 let server: Server
@@ -45,7 +45,7 @@ const send = (url: string, method: string, body: unknown) =>
 test('lists problems newest first with their code and driver', async () => {
   await createProblem(dir, { problem: problem('Two Sum', 1), solution: 'class Solution {};', driver: 'int main(){}' })
   await createProblem(dir, { problem: problem('Two Sum', 2), solution: '', driver: '' })
-  const entries = await (await fetch(base)).json()
+  const entries = (await (await fetch(base)).json()) as ProblemEntry[]
   expect(entries.map((e: { slug: string }) => e.slug)).toEqual(['two-sum-2', 'two-sum'])
   expect(entries[1]).toMatchObject({ solution: 'class Solution {};', driver: 'int main(){}', solved: false, attempts: 0 })
 })
@@ -71,9 +71,9 @@ test('a fully passing attempt marks the problem solved, and stays solved', async
   await send(`${base}/${slug}/attempts`, 'POST', { attempt: attempt(2) })
   await new Promise((r) => setTimeout(r, 5))
   await send(`${base}/${slug}/attempts`, 'POST', { attempt: attempt(1) })
-  const attempts = await (await fetch(`${base}/${slug}/attempts`)).json()
+  const attempts = (await (await fetch(`${base}/${slug}/attempts`)).json()) as { passed: number }[]
   expect(attempts.map((a: { passed: number }) => a.passed)).toEqual([1, 2])
-  const [entry] = await (await fetch(base)).json()
+  const [entry] = (await (await fetch(base)).json()) as ProblemEntry[]
   expect(entry).toMatchObject({ solved: true, attempts: 2 })
 })
 
@@ -96,20 +96,20 @@ test('leaves other routes alone', async () => {
 test('saves and deletes other versions of the code, but never solution.cpp', async () => {
   const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: 'main', driver: '' })
   expect((await send(`${base}/${slug}/files/brute-force.cpp`, 'PUT', { content: 'brute' })).status).toBe(204)
-  const [entry] = await (await fetch(base)).json()
+  const [entry] = (await (await fetch(base)).json()) as ProblemEntry[]
   expect(entry.versions).toEqual([{ name: 'brute-force.cpp', content: 'brute' }])
   expect(entry.solution).toBe('main')
   expect((await fetch(`${base}/${slug}/files/solution.cpp`, { method: 'DELETE' })).status).toBe(400)
   expect((await fetch(`${base}/${slug}/files/driver.cpp`, { method: 'DELETE' })).status).toBe(400)
   expect((await send(`${base}/${slug}/files/..%2Fx.cpp`, 'PUT', { content: '' })).status).toBe(400)
   expect((await fetch(`${base}/${slug}/files/brute-force.cpp`, { method: 'DELETE' })).status).toBe(204)
-  expect((await (await fetch(base)).json())[0].versions).toEqual([])
+  expect(((await (await fetch(base)).json()) as ProblemEntry[])[0].versions).toEqual([])
 })
 
 test('stores which notes belong to a problem', async () => {
   const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: '', driver: '' })
   expect((await send(`${base}/${slug}/notes`, 'PUT', { notes: ['note-1.md', 'note-1.md', 'note-3.md'] })).status).toBe(204)
-  const [entry] = await (await fetch(base)).json()
+  const [entry] = (await (await fetch(base)).json()) as ProblemEntry[]
   expect(entry.problem.notes).toEqual(['note-1.md', 'note-3.md'])
 })
 
@@ -120,7 +120,7 @@ test('a problem saved by a newer editor is never overwritten, and says why', asy
   await writeFile(file, future)
   const res = await send(`${base}/${slug}/tests`, 'PUT', { tests: [] })
   expect(res.status).toBe(404)
-  expect((await res.json()).error).toBe('"two-sum" was saved by a newer version of the editor. Update the editor to open it.')
+  expect(((await res.json()) as { error: string }).error).toBe('"two-sum" was saved by a newer version of the editor. Update the editor to open it.')
   expect(await readFile(file, 'utf8')).toBe(future)
 })
 
@@ -129,6 +129,6 @@ test('lists the problems a newer editor saved, which the list leaves out', async
   await createProblem(dir, { problem: problem('Three Sum'), solution: '', driver: '' })
   const file = path.join(dir, slug, 'problem.json')
   await writeFile(file, JSON.stringify({ ...JSON.parse(await readFile(file, 'utf8')), formatVersion: 99 }))
-  expect((await (await fetch(base)).json()).map((e: { slug: string }) => e.slug)).toEqual(['three-sum'])
+  expect(((await (await fetch(base)).json()) as ProblemEntry[]).map((e: { slug: string }) => e.slug)).toEqual(['three-sum'])
   expect(await (await fetch(`${base}/_newer`)).json()).toEqual(['two-sum'])
 })
