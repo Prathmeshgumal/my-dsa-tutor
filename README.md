@@ -92,29 +92,32 @@ that's stuck waiting or looping; a run can last up to 2 minutes.
 | ⌘/Ctrl + K | Search files and commands |
 | ⌘/Ctrl + J | Show or hide the output |
 
-The **Files** button in the left bar opens a drawer listing every file; it closes
-when you click outside it, press Escape, or pick a file. The output sits **below the
+## How the editor is laid out
+
+The left bar has five sections: **Problems**, **Code**, **Notes**, **Dry runs** and **Chats**.
+Every section looks the same: a list on the left (with a count, search, and **+** to make a new
+one; each row's **⋯** menu has rename or delete) and the thing you picked beside it. Pressing the
+button of the section you're on hides or shows its list. Below them, **✦ Claude** opens Claude on
+the right from any section; opening it folds the list away to make room, and closing it brings
+the list back. The top bar says where you are (`Problems › Two Sum`), with search and the theme.
+
+On **Code**, the list is every file in `solutions/`, and the language picker and **Run** sit at
+the end of the open-files row, next to the code. The output sits **below the
 editor by default**. The small switch at the bottom-right of the status bar puts it
 at the bottom, on the right, or hides it (⌘/Ctrl + J also shows or hides it).
 Running code always reopens it. These choices are remembered.
 
-Every button in the left bar opens and closes. Pressing the button of the screen you're already on
-hides or shows its list: the files on **Editor**, the problem list on **Problems**, the dry runs on
-**Playground**. **Files**, **Notes** and **Claude** open and close their panels.
-
 ## Notes
 
-Click the notebook button in the left bar (or ⌘/Ctrl + K → "Open notes") to keep
-Markdown notes next to your code: patterns, tricks, mistakes to avoid. Make as many
-as you like (the title is the first line), switch between them from the title at
-the top, and flip between Edit and Preview. Notes save themselves a moment after you
-stop typing, as real `.md` files in **`notes/`** at the repo root (set `NOTES_DIR`
-to use another folder). Notes and the Claude panel share the right side, so opening
-one closes the other.
+The **Notes** section (or ⌘/Ctrl + K → "Open notes") keeps Markdown notes: patterns, tricks,
+mistakes to avoid. Make as many as you like (the title is the first line), pick one from the
+list, and flip between Edit and Preview. Notes save themselves a moment after you stop typing
+(and when you switch section), as real `.md` files in **`notes/`** at the repo root (set
+`NOTES_DIR` to use another folder). Open Claude beside a note to ask about it.
 
 ## Problems (LeetCode style)
 
-The checklist button in the left bar switches to **Problems**. Give Claude a question from
+The **Problems** section lists your problems (solved ones ticked). Give Claude a question from
 anywhere (paste the text from LeetCode or codehelp, or send a screenshot) and it sets it up
 here: the description on the left, a `class Solution` to fill in, and test cases that check
 themselves. You never write `main()` or compare output by eye.
@@ -130,14 +133,18 @@ themselves. You never write `main()` or compare output by eye.
   started with, after a second click to confirm. Changed your mind? Ctrl+Z in the editor brings
   your code back. Problems made before Reset existed didn't keep their starting code, so for those
   it's rebuilt from yours: `class Solution` with the same function, emptied.
-- When this screen is showing, Claude knows which problem you're on. Ask it to explain the
+- **LeetCode ↗** next to the difficulty opens the question on LeetCode in a new tab (other sites
+  show their own name). Claude fills the link in when it makes a problem from a question it knows
+  the source of. No link yet? **Add link** suggests `https://leetcode.com/problems/<title>/` for
+  you to check and save; only `https://` and `http://` addresses are accepted.
+- When this section is showing, Claude knows which problem you're on. Ask it to explain the
   question, give a hint, or check your solution.
 
 **Everything about a problem stays with it.** Notes, dry runs and chats you or Claude make while a
-problem is open are linked to it automatically. They show up on its **Notes**, **Dry runs** and
-**Chats** tabs, and are tagged with the problem's name in the Notes panel, the Playground and the
-chat list. Opening a problem switches the Claude panel to that problem's latest chat (or a fresh
-one); you can still pick any chat from the list. The **+** next to `solution.cpp` saves another
+problem is open are linked to it automatically. They show up on its **Related** tab (with its
+submissions), and are tagged with the problem's name in the Notes, Dry runs and Chats lists.
+Clicking one there opens it in its own section. Opening a problem switches Claude to that
+problem's latest chat (or a fresh one); every chat is in the **Chats** section. The **+** next to `solution.cpp` saves another
 version of your code (say, brute force next to the optimal one). Run and Submit test whichever
 version is open, and each submission remembers which one it was.
 
@@ -149,14 +156,13 @@ Notes stay in `notes/` and dry runs in `playground/`.
 
 ## Playground (dry runs)
 
-The film-clapper button in the left bar switches to the **Playground**: step-by-step
-dry runs of your code. Ask Claude things like "dry run my code with input [3, 1, 2]" or
-"show me where my loop goes wrong". It reads your file, runs it to check the real result,
-and builds a dry run that plays here: your code with the current line highlighted, a note
+The **Dry runs** section (the Playground) plays step-by-step dry runs of your code. Ask Claude
+things like "dry run my code with input [3, 1, 2]" or "show me where my loop goes wrong". It
+reads your file, runs it to check the real result, and builds a dry run that plays here: your code with the current line highlighted, a note
 for each step, the variables, and the data structures drawn out (arrays with pointers,
 DP tables, hash maps, stacks, queues, linked lists, binary trees, graphs). The step where
 a bug shows up is marked in red. Use ← → to step, Space to play, and 0.5× / 1× / 2× for
-speed. Drag the dividers to resize the list, the code and the drawing (sizes are remembered).
+speed. Drag the divider to resize the code and the drawing (sizes are remembered).
 Variables are drawn as buckets (name on top, value inside; changed ones light up) and
 arrays/vectors as one long strip of boxes, with a vector's spare capacity as empty slots.
 To make each step easy to follow, Claude can add arrows for what moved where (swaps,
@@ -177,8 +183,10 @@ as JSON files in **`playground/`**; the code editor stays as you left it while y
 
 ## Ask Claude
 
-Click the ✦ button in the left bar (or ⌘/Ctrl + K → "Ask Claude") to chat with a Claude
-agent built for this editor. It runs on this machine with your Claude subscription
+Click **✦ Claude** in the left bar (or ⌘/Ctrl + K → "Ask Claude") to chat with a Claude
+agent built for this editor. The panel shows the open chat; **All chats** opens the **Chats**
+section, where every conversation is listed and can be continued full width. A reply keeps
+going while you switch between the two. It runs on this machine with your Claude subscription
 (no API key), and every message includes the file you have open with its latest code.
 
 Claude's reply runs on the server, not in the page. If the connection drops, or you reload

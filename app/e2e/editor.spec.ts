@@ -9,9 +9,10 @@ const editor = (page: Page) => page.locator('.monaco-editor').first()
 /** Monaco comes from a CDN (jsdelivr), which can take a while on a cold start. */
 const MONACO_LOAD = { timeout: 30_000 }
 
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Sidebar' })
+
 async function openFile(page: Page, name: string) {
-  await page.getByRole('button', { name: 'Files' }).click()
-  await page.getByText(name, { exact: true }).first().click()
+  await page.getByRole('region', { name: 'Files' }).getByRole('button', { name, exact: true }).click()
   await expect(tabs(page).filter({ hasText: name })).toHaveAttribute('aria-selected', 'true')
 }
 
@@ -56,8 +57,7 @@ test('a file changed outside the editor shows up straight away', async ({ page }
   await writeFile(path.join(SOLUTIONS, 'hello.py'), 'print("changed in VS Code")\n')
   await expect(editor(page)).toContainText('changed in VS Code')
   await writeFile(path.join(SOLUTIONS, 'new_file.cpp'), 'int main() {}\n')
-  await page.getByRole('button', { name: 'Files' }).click()
-  await expect(page.getByText('new_file.cpp', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Files' }).getByText('new_file.cpp', { exact: true })).toBeVisible()
 })
 
 test('open tabs and the theme come back from disk after the browser forgets everything', async ({ page }) => {
@@ -94,8 +94,8 @@ test('other websites can’t use the editor’s API', async ({ request }) => {
 
 test('Reset puts a problem back to its starting code, and Ctrl+Z brings yours back', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Problems', exact: true }).click()
-  await page.getByRole('button', { name: 'Pair Sum', exact: true }).click()
+  await rail(page).getByRole('button', { name: 'Problems' }).click()
+  await page.getByRole('region', { name: 'Problems' }).getByRole('button', { name: /^Pair Sum/ }).click()
   const code = page.locator('.monaco-editor').first()
   await expect(code).toContainText('// my answer', MONACO_LOAD)
 
@@ -109,4 +109,46 @@ test('Reset puts a problem back to its starting code, and Ctrl+Z brings yours ba
   await page.keyboard.press('ControlOrMeta+z')
   await expect(code).toContainText('// my answer')
   await expect.poll(() => readFile(path.join(PROBLEMS, 'pair-sum', 'solution.cpp'), 'utf8')).toContain('// my answer')
+})
+
+test('every section opens from the left bar with its list, and Claude folds the list away', async ({ page }) => {
+  await page.goto('/')
+  const sections = [
+    ['Problems', 'Problems'],
+    ['Code', 'Files'],
+    ['Notes', 'Notes'],
+    ['Dry runs', 'Dry runs'],
+    ['Chats', 'Chats'],
+  ] as const
+  // The page opens on the section you were last on, where a press would hide its list: start from Chats.
+  const chats = rail(page).getByRole('button', { name: 'Chats' })
+  if ((await chats.getAttribute('aria-current')) !== 'page') await chats.click()
+  for (const [button, list] of sections) {
+    await rail(page).getByRole('button', { name: button }).click()
+    await expect(rail(page).getByRole('button', { name: button })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('region', { name: list })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'You are here' })).toContainText(button)
+  }
+
+  await rail(page).getByRole('button', { name: 'Code' }).click()
+  await rail(page).getByRole('button', { name: 'Claude' }).click()
+  await expect(page.getByRole('complementary', { name: 'Claude' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Files' })).toBeHidden()
+  await rail(page).getByRole('button', { name: 'Claude' }).click()
+  await expect(page.getByRole('region', { name: 'Files' })).toBeVisible()
+})
+
+test('a row’s menu opens with the mouse, next to the resizable problem panels', async ({ page }) => {
+  await page.goto('/')
+  // Settings come from disk, where an earlier test may have left Claude open (which folds the list away).
+  const claude = rail(page).getByRole('button', { name: 'Claude' })
+  if ((await claude.getAttribute('aria-pressed')) === 'true') await claude.click()
+  const problems = rail(page).getByRole('button', { name: 'Problems' })
+  if ((await problems.getAttribute('aria-current')) !== 'page') await problems.click()
+  const list = page.getByRole('region', { name: 'Problems' })
+  await list.getByRole('button', { name: /^Pair Sum/ }).hover()
+  await list.getByRole('button', { name: 'Actions for Pair Sum' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeHidden()
 })
