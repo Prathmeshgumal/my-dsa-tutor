@@ -295,7 +295,15 @@ describe('agent tools', () => {
     await chat().send('fix it', { stream: fakeStream([approvalEvent]), ...quiet })
     const post = async () => new Response(JSON.stringify({ error: 'main.cpp changed while waiting for approval; read it again.' }), { status: 409 })
     await chat().answerApproval('p1', true, { post, beforeAnswer: async () => {} })
-    expect(approval()).toMatchObject({ state: 'expired', error: 'main.cpp changed while waiting for approval; read it again.' })
+    expect(approval()).toMatchObject({ state: 'expired', error: 'main.cpp changed while waiting for approval; read it again.', noLongerFits: true })
+  })
+
+  test('if the server can’t be reached, applying can be tried again', async () => {
+    await chat().send('fix it', { stream: fakeStream([approvalEvent]), ...quiet })
+    const post = async () => Promise.reject(new TypeError('Failed to fetch'))
+    await chat().answerApproval('p1', true, { post, beforeAnswer: async () => {} })
+    expect(approval().state).toBe('expired')
+    expect(approval().noLongerFits).toBeUndefined()
   })
 
   test('dismissing a proposal Claude stopped waiting for sends nothing', async () => {

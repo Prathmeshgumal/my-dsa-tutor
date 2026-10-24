@@ -34,6 +34,8 @@ export interface Approval {
   change?: Change
   /** Why applying it later didn't work (e.g. the file changed since). */
   error?: string
+  /** Applying it was refused (the file changed, or is already there), so trying again won't help. */
+  noLongerFits?: boolean
 }
 
 export interface ChatMessage {
@@ -360,7 +362,9 @@ export const useAiChat = create<AiChatState>()(
         try {
           const res = await send('/api/claude/apply', { change: approval.change })
           const body = (await res.json()) as { effects?: ChangeEffect[]; error?: string }
-          if (!res.ok) return patch({ state: 'expired', error: body.error ?? `HTTP ${res.status}` })
+          if (!res.ok) {
+            return patch({ state: 'expired', error: body.error ?? `HTTP ${res.status}`, ...(res.status === 409 ? { noLongerFits: true } : {}) })
+          }
           patch({ state: 'approved', error: undefined })
           await afterApply(body.effects ?? [])
         } catch {

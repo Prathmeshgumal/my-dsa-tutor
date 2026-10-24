@@ -10,8 +10,16 @@ import { codeOf, isCodeName, isSlug, problemProblems, type Problem } from '../sr
 import { writeFileAtomic } from './atomicWrite.ts'
 import { createProblem, linkNote, ProblemNotFound, readEntry, writeCode, writeTests } from './problemStore.ts'
 
-/** A problem with the request Claude (or the user) can read and act on. */
-export class ToolError extends Error {}
+/** A problem with the request Claude can read and act on. */
+export class ToolError extends Error {
+  /** The same problem in words for the person, when they apply a change themselves ("Apply anyway"). */
+  readonly forPerson: string
+
+  constructor(message: string, forPerson = message) {
+    super(message)
+    this.forPerson = forPerson
+  }
+}
 
 /** A plain code file name directly inside the solutions folder. */
 export function checkName(name: string): void {
@@ -50,13 +58,15 @@ async function readOr(file: string, missing: string): Promise<string> {
   try {
     return await readFile(file, 'utf8')
   } catch {
-    throw new ToolError(missing)
+    throw new ToolError(missing, `${path.basename(file)} doesn't exist any more.`)
   }
 }
 
 /** Replaces old text that must still be there exactly as Claude saw it. */
-function replaceOnce(content: string, oldText: string, newText: string, changed: string): string {
-  if (!oldText || !content.includes(oldText)) throw new ToolError(changed)
+function replaceOnce(content: string, oldText: string, newText: string, changed: string, where: string): string {
+  if (!oldText || !content.includes(oldText)) {
+    throw new ToolError(changed, `${where} has changed since Claude suggested this, so the change no longer fits.`)
+  }
   return content.replace(oldText, () => newText)
 }
 
@@ -65,7 +75,7 @@ async function problemEntry(problemsDir: string, slug: string) {
   try {
     return await readEntry(problemsDir, slug)
   } catch (e) {
-    if (e instanceof ProblemNotFound) throw new ToolError(`${e.message} Use list_problems to see them.`)
+    if (e instanceof ProblemNotFound) throw new ToolError(`${e.message} Use list_problems to see them.`, e.message)
     throw e
   }
 }
@@ -77,7 +87,7 @@ export async function applyChange({ dir, notesDir, problemsDir }: ChangeStores, 
       const { name } = change
       checkName(name)
       const latest = await readOr(path.join(dir, name), `${name} doesn't exist. Use list_files to see the files.`)
-      const next = replaceOnce(latest, change.oldText, change.newText, `${name} changed while waiting for approval; read it again.`)
+      const next = replaceOnce(latest, change.oldText, change.newText, `${name} changed while waiting for approval; read it again.`, name)
       await writeFileAtomic(path.join(dir, name), next)
       return { text: `Applied the edit to ${name}; the editor shows the new code.`, effects: [{ type: 'file_changed', file: name }] }
     }
@@ -87,7 +97,7 @@ export async function applyChange({ dir, notesDir, problemsDir }: ChangeStores, 
       try {
         await writeFileAtomic(path.join(dir, name), change.content, { exclusive: true })
       } catch (e) {
-        if (isExisting(e)) throw new ToolError(`${name} already exists; use edit_file to change it.`)
+        if (isExisting(e)) throw new ToolError(`${name} already exists; use edit_file to change it.`, `${name} already exists.`)
         throw e
       }
       return { text: `Created ${name}.`, effects: [{ type: 'file_changed', file: name }] }
@@ -124,7 +134,7 @@ export async function applyChange({ dir, notesDir, problemsDir }: ChangeStores, 
       const { name } = change
       checkNoteName(name)
       const latest = await readOr(path.join(notesDir, name), `${name} doesn't exist. Use list_notes to see the notes.`)
-      const next = replaceOnce(latest, change.oldText, change.newText, `${name} changed while waiting for approval; read it again.`)
+      const next = replaceOnce(latest, change.oldText, change.newText, `${name} changed while waiting for approval; read it again.`, name)
       await writeFileAtomic(path.join(notesDir, name), next)
       return { text: `Updated ${name}.`, effects: [{ type: 'note_changed', note: name }] }
     }
@@ -148,8 +158,8 @@ export async function applyChange({ dir, notesDir, problemsDir }: ChangeStores, 
       const entry = await problemEntry(problemsDir, change.slug)
       const where = `${entry.slug}/${change.name}`
       const latest = codeOf(entry, change.name)
-      if (latest === null) throw new ToolError(`${entry.slug} has no ${change.name}.`)
-      const next = replaceOnce(latest, change.oldText, change.newText, `${where} changed while waiting for approval; read it again with get_problem.`)
+      if (latest === null) throw new ToolError(`${entry.slug} has no ${change.name}.`, `${entry.slug} has no ${change.name} any more.`)
+      const next = replaceOnce(latest, change.oldText, change.newText, `${where} changed while waiting for approval; read it again with get_problem.`, where)
       await writeCode(problemsDir, entry.slug, change.name, next)
       return { text: `Applied the edit to ${where}.`, effects: [{ type: 'problem_changed', slug: entry.slug, open: false }] }
     }
@@ -157,7 +167,10 @@ export async function applyChange({ dir, notesDir, problemsDir }: ChangeStores, 
       const entry = await problemEntry(problemsDir, change.slug)
       if (!isCodeName(change.name)) throw new ToolError(`"${change.name}" isn't a good name; use something like brute-force.cpp.`)
       if (codeOf(entry, change.name) !== null) {
-        throw new ToolError(`${entry.slug} already has ${change.name}; use edit_solution with file "${change.name}" to change it.`)
+        throw new ToolError(
+          `${entry.slug} already has ${change.name}; use edit_solution with file "${change.name}" to change it.`,
+          `${entry.slug} already has ${change.name}.`,
+        )
       }
       await writeCode(problemsDir, entry.slug, change.name, change.content)
       return {

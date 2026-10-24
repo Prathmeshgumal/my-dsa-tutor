@@ -123,3 +123,12 @@ test('a problem saved by a newer editor is never overwritten, and says why', asy
   expect((await res.json()).error).toBe('"two-sum" was saved by a newer version of the editor. Update the editor to open it.')
   expect(await readFile(file, 'utf8')).toBe(future)
 })
+
+test('lists the problems a newer editor saved, which the list leaves out', async () => {
+  const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: '', driver: '' })
+  await createProblem(dir, { problem: problem('Three Sum'), solution: '', driver: '' })
+  const file = path.join(dir, slug, 'problem.json')
+  await writeFile(file, JSON.stringify({ ...JSON.parse(await readFile(file, 'utf8')), formatVersion: 99 }))
+  expect((await (await fetch(base)).json()).map((e: { slug: string }) => e.slug)).toEqual(['three-sum'])
+  expect(await (await fetch(`${base}/_newer`)).json()).toEqual(['two-sum'])
+})

@@ -18,6 +18,8 @@ import { useSettings } from './settings'
 interface ProblemsState {
   /** Newest first */
   entries: ProblemEntry[]
+  /** Problems a newer version of the editor saved; they can't be opened here. */
+  newer: string[]
   activeSlug: string | null
   /** The code file open in the editor: solution.cpp or another version. */
   activeFile: string
@@ -120,6 +122,7 @@ export const useProblems = create<ProblemsState>()(
 
       return {
         entries: [],
+        newer: [],
         activeSlug: null,
         activeFile: SOLUTION_FILE,
         status: 'idle',
@@ -132,7 +135,14 @@ export const useProblems = create<ProblemsState>()(
         async load() {
           set({ status: 'loading' })
           try {
-            const loaded = (await (await request(API)).json()) as ProblemEntry[]
+            const [loaded, newer] = await Promise.all([
+              request(API).then((res) => res.json() as Promise<ProblemEntry[]>),
+              // Only a note under the list: never let it stop the problems loading.
+              request(`${API}/_newer`)
+                .then((res) => res.json() as Promise<unknown>)
+                .then((slugs) => (Array.isArray(slugs) ? slugs.filter((s): s is string => typeof s === 'string') : []))
+                .catch(() => [] as string[]),
+            ])
             // Keep what the student is typing; disk hasn't seen it yet.
             const entries = loaded.map((e) =>
               pending && e.slug === pending.slug ? { ...e, ...withCode(e, pending.name, pending.code) } : e,
@@ -146,6 +156,7 @@ export const useProblems = create<ProblemsState>()(
             const fileGone = entry && codeOf(entry, get().activeFile) === null
             set({
               entries,
+              newer,
               activeSlug: slug,
               status: 'ready',
               ...(changed ? fresh : fileGone ? { activeFile: SOLUTION_FILE } : {}),

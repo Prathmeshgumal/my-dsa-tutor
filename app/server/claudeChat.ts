@@ -331,7 +331,7 @@ export function createClaudeChatMiddleware({
         } catch (e) {
           // The change no longer fits: the file changed since, or is already there.
           res.statusCode = e instanceof ToolError ? 409 : 500
-          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
+          res.end(JSON.stringify({ error: e instanceof ToolError ? e.forPerson : e instanceof Error ? e.message : String(e) }))
         }
       })()
       return

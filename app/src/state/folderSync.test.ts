@@ -11,10 +11,16 @@ vi.mock('./playground', () => ({ usePlayground: { getState: () => ({ load: loads
 vi.mock('./problems', () => ({ useProblems: { getState: () => ({ load: loads.problems }) } }))
 
 function fakeSource() {
-  return { onmessage: null as ((e: { data: string }) => void) | null, onopen: null as (() => void) | null, close: vi.fn() }
+  return {
+    onmessage: null as ((e: { data: string }) => void) | null,
+    onopen: null as (() => void) | null,
+    onerror: null as (() => void) | null,
+    close: vi.fn(),
+  }
 }
 
 beforeEach(() => vi.clearAllMocks())
+afterEach(() => vi.useRealTimers())
 
 test('a files change saves pending edits, then re-reads the folder', async () => {
   const source = fakeSource()
@@ -51,4 +57,42 @@ test('garbage is ignored and stop closes the connection', () => {
   source.onmessage!({ data: '{"area":"elsewhere"}' })
   stop()
   expect(source.close).toHaveBeenCalled()
+})
+
+test('while the server is down it retries less and less often, and back to soon once connected', () => {
+  vi.useFakeTimers()
+  const sources: ReturnType<typeof fakeSource>[] = []
+  startFolderSync(() => {
+    sources.push(fakeSource())
+    return sources.at(-1)!
+  })
+  const dropAndWait = (ms: number) => {
+    const before = sources.length
+    const current = sources.at(-1)!
+    current.onerror!()
+    expect(current.close).toHaveBeenCalled()
+    vi.advanceTimersByTime(ms - 1)
+    expect(sources).toHaveLength(before)
+    vi.advanceTimersByTime(1)
+    expect(sources).toHaveLength(before + 1)
+  }
+  dropAndWait(3000)
+  dropAndWait(6000)
+  dropAndWait(12000)
+  sources.at(-1)!.onopen!()
+  dropAndWait(3000)
+})
+
+test('stop cancels a retry that is waiting', () => {
+  vi.useFakeTimers()
+  let opened = 0
+  const source = fakeSource()
+  const stop = startFolderSync(() => {
+    opened++
+    return source
+  })
+  source.onerror!()
+  stop()
+  vi.advanceTimersByTime(60_000)
+  expect(opened).toBe(1)
 })

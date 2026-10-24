@@ -1,5 +1,6 @@
 // Dev-server API for practice problems (see ./problemStore.ts for the folder layout).
 //   GET    /api/problems                    → ProblemEntry[]
+//   GET    /api/problems/_newer             → slugs of problems a newer editor saved (left out of the list)
 //   PUT    /api/problems/:slug/solution     { content } → save the student's code
 //   PUT    /api/problems/:slug/files/:name  { content } → save another version of the code (e.g. brute-force.cpp)
 //   DELETE /api/problems/:slug/files/:name  → delete a version (not solution.cpp)
@@ -16,6 +17,7 @@ import {
   deleteProblem,
   listAttempts,
   listEntries,
+  listNewer,
   ProblemNotFound,
   saveAttempt,
   writeCode,
@@ -96,6 +98,7 @@ async function handle(dir: string, req: IncomingMessage, res: ServerResponse): P
     if (method !== 'GET') throw new HttpError(405, 'Method not allowed')
     return json(res, await listEntries(dir))
   }
+  if (rest === '/_newer' && method === 'GET') return json(res, await listNewer(dir))
 
   const [slug, action, ...extra] = rest.slice(1).split('/')
   if (action === 'files' && extra.length === 1) {

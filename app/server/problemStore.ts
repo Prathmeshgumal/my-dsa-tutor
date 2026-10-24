@@ -88,6 +88,21 @@ export async function listEntries(dir: string): Promise<ProblemEntry[]> {
   return entries.filter((e): e is ProblemEntry => e !== null).sort((a, b) => b.problem.createdAt - a.problem.createdAt)
 }
 
+/** Problems saved by a newer version of the editor, which listEntries leaves out. */
+export async function listNewer(dir: string): Promise<string[]> {
+  const newer = await Promise.all(
+    (await slugs(dir)).map(async (slug) => {
+      try {
+        parseSaved<Problem>('problem', await readFile(path.join(dir, slug, 'problem.json'), 'utf8'))
+        return null
+      } catch (e) {
+        return e instanceof NewerFormatError ? slug : null
+      }
+    }),
+  )
+  return newer.filter((s): s is string => s !== null).sort()
+}
+
 export async function createProblem(
   dir: string,
   { problem, solution, driver }: { problem: Problem; solution: string; driver: string },

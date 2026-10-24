@@ -84,7 +84,15 @@ describe('POST /api/claude/apply', () => {
   test('a change that no longer fits answers 409 with the reason', async () => {
     const res = await post({ change: { type: 'edit_file', name: 'gone.cpp', oldText: 'a', newText: 'b' } })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/gone.cpp doesn't exist/)
+    expect((await res.json()).error).toBe("gone.cpp doesn't exist any more.")
+  })
+
+  test('the reason is written for the person, not for Claude', async () => {
+    await writeFile(path.join(stores.dir, 'a.cpp'), 'int x = 9;')
+    const edit = await post({ change: { type: 'edit_file', name: 'a.cpp', oldText: 'int x = 1;', newText: 'int x = 5;' } })
+    expect((await edit.json()).error).toBe('a.cpp has changed since Claude suggested this, so the change no longer fits.')
+    const create = await post({ change: { type: 'create_file', name: 'a.cpp', content: 'theirs' } })
+    expect((await create.json()).error).toBe('a.cpp already exists.')
   })
 
   test('something that isn’t a change answers 400', async () => {

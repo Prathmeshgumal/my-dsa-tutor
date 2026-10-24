@@ -25,8 +25,15 @@ const RELOAD: Record<FolderArea, () => Promise<void>> = {
 interface SourceLike {
   onmessage: ((e: { data: string }) => void) | null
   onopen: (() => void) | null
+  onerror: (() => void) | null
   close(): void
 }
+
+/**
+ * How long to wait before reconnecting, after each failed try in a row. The browser's own retry is every
+ * 3 seconds forever, which fills the console while the server is down.
+ */
+const RETRY_MS = [3000, 6000, 12000, 30000, 60000]
 
 /**
  * Listens for outside changes to the data folders and reloads what changed. After a dropped connection
@@ -34,19 +41,36 @@ interface SourceLike {
  */
 export function startFolderSync(open?: () => SourceLike): () => void {
   if (!open && typeof EventSource === 'undefined') return () => {}
-  const source = open ? open() : (new EventSource('/api/events') as unknown as SourceLike)
+  const connect = open ?? (() => new EventSource('/api/events') as unknown as SourceLike)
   let connectedBefore = false
-  source.onopen = () => {
-    if (connectedBefore) for (const reload of Object.values(RELOAD)) void reload()
-    connectedBefore = true
-  }
-  source.onmessage = (e) => {
-    try {
-      const { area } = JSON.parse(e.data) as FolderEvent
-      void RELOAD[area]?.()
-    } catch {
-      // not an event we know
+  let failures = 0
+  let source: SourceLike
+  let retry: ReturnType<typeof setTimeout> | undefined
+
+  const listen = () => {
+    source = connect()
+    source.onopen = () => {
+      failures = 0
+      if (connectedBefore) for (const reload of Object.values(RELOAD)) void reload()
+      connectedBefore = true
+    }
+    source.onmessage = (e) => {
+      try {
+        const { area } = JSON.parse(e.data) as FolderEvent
+        void RELOAD[area]?.()
+      } catch {
+        // not an event we know
+      }
+    }
+    source.onerror = () => {
+      source.close()
+      retry = setTimeout(listen, RETRY_MS[Math.min(failures++, RETRY_MS.length - 1)])
     }
   }
-  return () => source.close()
+
+  listen()
+  return () => {
+    clearTimeout(retry)
+    source.close()
+  }
 }

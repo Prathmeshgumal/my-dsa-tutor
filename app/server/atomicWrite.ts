@@ -1,7 +1,7 @@
 // Saves a file so that a crash or power cut mid-save can never leave it half-written: the content goes to
 // a temporary file next to it, is flushed to disk, and then replaces the file in one step (rename).
 import { randomBytes } from 'node:crypto'
-import { link, open, rename, rm } from 'node:fs/promises'
+import { link, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { noteOwnChange } from './ownChanges.ts'
 
@@ -30,5 +30,24 @@ export async function writeFileAtomic(file: string, content: string, { exclusive
     else await rename(temp, file)
   } finally {
     await rm(temp, { force: true })
+  }
+}
+
+/** A temporary file older than this can't belong to a save still in progress. */
+const LEFTOVER_MS = 10 * 60 * 1000
+
+/**
+ * Deletes temporary files that a crash or power cut left behind (the real files are untouched), in these
+ * folders and their subfolders. Missing folders are skipped.
+ */
+export async function removeLeftoverTempFiles(dirs: string[], now = Date.now()): Promise<void> {
+  for (const dir of dirs) {
+    const entries = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => [])
+    for (const e of entries) {
+      if (!e.isFile() || !isTempFile(e.name)) continue
+      const file = path.join(e.parentPath, e.name)
+      const { mtimeMs } = await stat(file).catch(() => ({ mtimeMs: now }))
+      if (now - mtimeMs > LEFTOVER_MS) await rm(file, { force: true })
+    }
   }
 }

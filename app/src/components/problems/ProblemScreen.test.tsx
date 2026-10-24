@@ -112,3 +112,14 @@ test('the problem list can be hidden, and the problem stays open', async () => {
   expect(screen.getByRole('heading', { name: 'Two Sum' })).toBeInTheDocument()
   useSettings.setState({ problemListOpen: true })
 })
+
+test('problems saved by a newer editor are named, with what to do', async () => {
+  configureProblems({
+    fetchImpl: ((url: string) => json(url === '/api/problems' ? [entry] : url === '/api/problems/_newer' ? ['graph-colouring'] : [])) as typeof fetch,
+  })
+  renderScreen()
+  expect(await screen.findByText(/graph-colouring/)).toHaveTextContent(
+    'Not shown: graph-colouring. A newer version of the editor saved it; update the editor to open it.',
+  )
+})
+

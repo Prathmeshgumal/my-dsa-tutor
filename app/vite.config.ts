@@ -3,6 +3,7 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
+import { removeLeftoverTempFiles } from './server/atomicWrite.ts'
 import { createClaudeChatMiddleware } from './server/claudeChat.ts'
 import { createFolderEventsMiddleware } from './server/folderEvents.ts'
 import { createHealthMiddleware } from './server/healthApi.ts'
@@ -33,8 +34,14 @@ function solutionsApi(): Plugin {
       // First: other websites open in your browser may not use any of the routes below.
       server.middlewares.use(createSameSiteGuard())
       const logger = createLogger(logsDir)
-      process.on('unhandledRejection', (reason) => logger.log('error', 'Unhandled error in the server', reason))
+      const onRejection = (reason: unknown) => logger.log('error', 'Unhandled error in the server', reason)
+      process.on('unhandledRejection', onRejection)
+      // Vite restarts the server when its files change; the old one's listener must go with it.
+      server.httpServer?.once('close', () => process.off('unhandledRejection', onRejection))
       server.middlewares.use(createLogMiddleware(logger))
+      void removeLeftoverTempFiles([solutionsDir, notesDir, playgroundDir, problemsDir]).catch((e) =>
+        logger.log('warn', 'Couldn’t clear temporary files left by an interrupted save', e),
+      )
       server.middlewares.use(
         createHealthMiddleware({
           pistonUrl,

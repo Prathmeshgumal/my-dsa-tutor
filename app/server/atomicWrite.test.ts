@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { isTempFile, writeFileAtomic } from './atomicWrite'
+import { isTempFile, removeLeftoverTempFiles, writeFileAtomic } from './atomicWrite'
 
 let dir: string
 
@@ -39,4 +39,17 @@ test('a failed write leaves the old file untouched and no temporary file behind'
 test('temporary files are recognisable', () => {
   expect(isTempFile('.a.cpp.1a2b3c4d.saving')).toBe(true)
   expect(isTempFile('a.cpp')).toBe(false)
+})
+
+test('temporary files left by a save that crashed are removed, in subfolders too; a save in progress is left alone', async () => {
+  await mkdir(path.join(dir, 'two-sum', 'attempts'), { recursive: true })
+  const old = [path.join(dir, '.a.cpp.1a2b3c4d.saving'), path.join(dir, 'two-sum', 'attempts', '.1.json.1a2b3c4d.saving')]
+  const fresh = path.join(dir, '.b.cpp.5e6f7a8b.saving')
+  for (const f of [...old, fresh]) await writeFile(f, 'half')
+  await writeFile(path.join(dir, 'a.cpp'), 'mine')
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
+  for (const f of old) await utimes(f, hourAgo, hourAgo)
+  await removeLeftoverTempFiles([dir, path.join(dir, 'missing')])
+  expect((await readdir(dir)).sort()).toEqual(['.b.cpp.5e6f7a8b.saving', 'a.cpp', 'two-sum'])
+  expect(await readdir(path.join(dir, 'two-sum', 'attempts'))).toEqual([])
 })

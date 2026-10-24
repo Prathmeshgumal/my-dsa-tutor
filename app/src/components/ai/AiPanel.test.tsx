@@ -254,7 +254,6 @@ describe('proposed changes', () => {
             {
               ...proposal('expired'),
               change: { type: 'edit_file', name: 'array.cpp', oldText: 'a', newText: 'b' },
-              error: 'array.cpp changed while waiting for approval; read it again.',
             },
           ],
         },
@@ -263,9 +262,38 @@ describe('proposed changes', () => {
     )
     render(<AiPanel />)
     const card = screen.getByRole('group', { name: 'Proposed change to array.cpp' })
-    expect(within(card).getByRole('alert')).toHaveTextContent('Couldn’t apply it: array.cpp changed while waiting')
+    expect(card).toHaveTextContent('You can still apply it.')
     await userEvent.click(within(card).getByRole('button', { name: 'Apply anyway' }))
     expect(answerApproval).toHaveBeenCalledWith('p1', true)
+    await userEvent.click(within(card).getByRole('button', { name: 'Dismiss' }))
+    expect(answerApproval).toHaveBeenCalledWith('p1', false)
+  })
+
+  test('a proposal that no longer fits says why and can only be dismissed', async () => {
+    showMessages(
+      [
+        {
+          id: '2',
+          role: 'assistant',
+          text: '',
+          tools: [],
+          approvals: [
+            {
+              ...proposal('expired'),
+              change: { type: 'edit_file', name: 'array.cpp', oldText: 'a', newText: 'b' },
+              error: 'array.cpp has changed since Claude suggested this, so the change no longer fits.',
+              noLongerFits: true,
+            },
+          ],
+        },
+      ],
+      { status: 'idle', streamingChatId: null },
+    )
+    render(<AiPanel />)
+    const card = screen.getByRole('group', { name: 'Proposed change to array.cpp' })
+    expect(within(card).getByRole('alert')).toHaveTextContent('Couldn’t apply it: array.cpp has changed since Claude suggested this')
+    expect(card).not.toHaveTextContent('You can still apply it.')
+    expect(within(card).queryByRole('button', { name: 'Apply anyway' })).not.toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: 'Dismiss' }))
     expect(answerApproval).toHaveBeenCalledWith('p1', false)
   })

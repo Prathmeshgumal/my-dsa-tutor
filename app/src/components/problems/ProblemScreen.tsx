@@ -103,6 +103,7 @@ function ProblemRow({ entry, active }: { entry: ProblemEntry; active: boolean })
 
 function ProblemList() {
   const entries = useProblems((s) => s.entries)
+  const newer = useProblems((s) => s.newer)
   const activeSlug = useProblems((s) => s.activeSlug)
   const solved = entries.filter((e) => e.solved).length
   return (
@@ -139,6 +140,12 @@ function ProblemList() {
           </ul>
         ) : (
           <p className="px-4 py-6 text-[12px] text-muted-foreground">No problems yet.</p>
+        )}
+        {newer.length > 0 && (
+          <p className="px-4 pb-4 text-[12px] text-amber-600 dark:text-amber-400">
+            Not shown: {newer.join(', ')}. A newer version of the editor saved {newer.length === 1 ? 'it' : 'them'}; update
+            the editor to open {newer.length === 1 ? 'it' : 'them'}.
+          </p>
         )}
       </ScrollArea>
     </aside>

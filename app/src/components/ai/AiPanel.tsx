@@ -157,16 +157,18 @@ function ApprovalCard({ approval }: { approval: Approval }) {
           </Button>
         </div>
       )}
-      {/* Claude has moved on, but the change can still be applied as it stands. */}
+      {/* Claude has moved on, but the change can still be applied as it stands, unless it no longer fits. */}
       {approval.state === 'expired' && approval.change && (
         <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5">
-          <span className="mr-auto text-[12px] text-muted-foreground">You can still apply it.</span>
+          {!approval.noLongerFits && <span className="mr-auto text-[12px] text-muted-foreground">You can still apply it.</span>}
           <Button size="sm" variant="ghost" onClick={() => void useAiChat.getState().answerApproval(approval.id, false)}>
             Dismiss
           </Button>
-          <Button size="sm" variant="outline" onClick={() => void useAiChat.getState().answerApproval(approval.id, true)}>
-            <Check /> Apply anyway
-          </Button>
+          {!approval.noLongerFits && (
+            <Button size="sm" variant="outline" onClick={() => void useAiChat.getState().answerApproval(approval.id, true)}>
+              <Check /> Apply anyway
+            </Button>
+          )}
         </div>
       )}
     </div>
