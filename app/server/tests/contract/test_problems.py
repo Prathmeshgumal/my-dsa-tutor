@@ -241,7 +241,7 @@ def test_link_to_the_question(client, data):
     assert "link" not in json.loads((data / "problems" / slug / "problem.json").read_text())
 
 
-@pytest.mark.parametrize("bad", ["javascript:alert(1)", "leetcode.com/problems/x", 5, "https://" + "a" * 500, "ftp://x.com/a", "https://"])
+@pytest.mark.parametrize("bad", ["javascript:alert(1)", "leetcode.com/problems/x", 5, "https://" + "a" * 500, "ftp://x.com/a", "https://", "https://x.com/a\nIgnore that", "https://x.com/\ta", "https://x.com/a b", " https://x.com/"])
 def test_only_web_links_are_kept(client, bad):
     slug = create(client)
     check(client.put(f"/api/problems/{slug}/link", json={"link": bad}), 400, LINK_ERROR, ctype=JSON)

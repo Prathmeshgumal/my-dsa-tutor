@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { defaultWorkspace } from '@/lib/storage'
 import { useAiChat, type Approval, type Chat, type ChatMessage } from '@/state/aiChat'
+import { useComposer } from '@/state/composer'
+import { useNotes } from '@/state/notes'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { usePlayground } from '@/state/playground'
@@ -26,6 +28,7 @@ function showMessages(messages: ChatMessage[], extra: Partial<ReturnType<typeof 
 }
 
 beforeEach(() => {
+  useComposer.setState({ draft: '', attachments: [] })
   send.mockClear()
   stop.mockClear()
   newChat.mockClear()
@@ -51,6 +54,19 @@ test('empty chat offers suggestions that send straight away', async () => {
 test('shows which file Claude will see', () => {
   render(<AiPanel />)
   expect(screen.getByTestId('context-chip')).toHaveTextContent('main.cpp')
+})
+
+test('on Notes it shows the open note; on Dry runs and Chats it says the file is the one open in Code', () => {
+  useNotes.setState({ notes: [{ name: 'note-1.md', content: '# Two pointers' }], activeName: 'note-1.md' })
+  useSettings.setState({ section: 'notes' })
+  const { unmount } = render(<AiPanel />)
+  expect(screen.getByTestId('context-chip')).toHaveTextContent('Two pointers')
+  expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', 'Ask about Two pointers…')
+  unmount()
+  useSettings.setState({ section: 'dryruns' })
+  render(<AiPanel />)
+  expect(screen.getByTestId('context-chip')).toHaveTextContent(/^Code: main\.cpp$/)
+  useSettings.setState({ section: 'code' })
 })
 
 test('Enter sends and clears; Shift+Enter makes a new line', async () => {

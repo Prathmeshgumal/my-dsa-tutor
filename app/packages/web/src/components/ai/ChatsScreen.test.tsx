@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { defaultWorkspace } from '@/lib/storage'
 import { useAiChat, type Chat, type ChatMessage } from '@/state/aiChat'
+import { useComposer } from '@/state/composer'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { AiPanel } from './AiPanel'
@@ -23,6 +24,7 @@ const list = () => screen.getByRole('list', { name: 'Chats' })
 
 beforeEach(() => {
   for (const f of [send, stop, newChat, selectChat, deleteChat]) f.mockClear()
+  useComposer.setState({ draft: '', attachments: [] })
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useSettings.setState({ section: 'chats', aiOpen: false, listOpen: { problems: true, code: true, notes: true, dryruns: true, chats: true } })
   useAiChat.setState({
@@ -92,4 +94,15 @@ test('a reply still streaming keeps going from the side panel to the Chats page 
   page.unmount()
   expect(stop).not.toHaveBeenCalled()
   expect(useAiChat.getState()).toMatchObject({ status: 'streaming', streamingChatId: 'a', activeChatId: 'a' })
+})
+
+test('a half-typed message and attached images come along from the panel to the Chats page', async () => {
+  const panel = render(<AiPanel />)
+  await userEvent.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'and the space')
+  await userEvent.upload(screen.getByLabelText('Attach image'), new File([new Uint8Array([137, 80, 78, 71])], 'shot.png', { type: 'image/png' }))
+  await screen.findByRole('list', { name: 'Attached images' })
+  panel.unmount()
+  render(<ChatsScreen />)
+  expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveValue('and the space')
+  expect(within(screen.getByRole('list', { name: 'Attached images' })).getAllByRole('listitem')).toHaveLength(1)
 })

@@ -110,11 +110,17 @@ export function slugify(title: string): string {
   return slug || 'problem'
 }
 
-/** Only web addresses are shown as links (never `javascript:` and the like). */
+/** Longest link kept, as on the server (problem_store.MAX_LINK). */
+export const MAX_LINK = 500
+
+/** Only web addresses are shown as links (never `javascript:` and the like). The same ones the server keeps:
+ * http(s)://host…, at most MAX_LINK long, no spaces or control characters. */
 export function isWebLink(url: string): boolean {
+  // Control characters are exactly what's being kept out.
+  // eslint-disable-next-line no-control-regex
+  if (url.length > MAX_LINK || !/^https?:\/\/[^\s\x00-\x1f\x7f]+$/i.test(url)) return false
   try {
-    const { protocol } = new URL(url)
-    return protocol === 'https:' || protocol === 'http:'
+    return new URL(url).hostname !== ''
   } catch {
     return false
   }

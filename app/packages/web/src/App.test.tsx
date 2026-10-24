@@ -16,9 +16,11 @@ beforeEach(() => {
   useFileDialogs.setState({ kind: null, fileId: null })
   useSettingsDialog.setState({ open: false })
   useCommandMenu.setState({ open: false })
+  useSettings.setState({ section: 'code' })
 })
 
-const pressRun = () => fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+// At the page, as a browser does (the Dry runs page reads the key's target element).
+const pressRun = () => fireEvent.keyDown(document.body, { key: 'Enter', ctrlKey: true })
 
 test('Ctrl+Enter anywhere runs the active file', () => {
   render(<App />)
@@ -33,6 +35,13 @@ test.each([
 ])('Ctrl+Enter does nothing while the %s is open', (_, open) => {
   render(<App />)
   open()
+  pressRun()
+  expect(runActiveFile).not.toHaveBeenCalled()
+})
+
+test.each(['notes', 'dryruns', 'chats'] as const)('Ctrl+Enter on %s doesn’t run code you can’t see', (section) => {
+  useSettings.setState({ section })
+  render(<App />)
   pressRun()
   expect(runActiveFile).not.toHaveBeenCalled()
 })

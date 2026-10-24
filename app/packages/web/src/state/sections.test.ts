@@ -86,6 +86,18 @@ describe('Claude and the list share the room', () => {
 })
 
 describe('review fixes', () => {
+  test('panel sizes from the old layout are carried over or dropped', async () => {
+    const s = await loadSaved({
+      playgroundLayout: {
+        'list-main': { list: 18, main: 82 },
+        'problem-outer': { list: 16, description: 38, work: 46 },
+        'problem-outer-no-list': { description: 40, work: 60 },
+        'problem-work': { editor: 70, tests: 30 },
+      },
+    })
+    expect(s.playgroundLayout).toEqual({ 'problem-main': { description: 40, work: 60 }, 'problem-work': { editor: 70, tests: 30 } })
+  })
+
   test('the Chats list shows even when Claude was open, since the chat is the page there', () => {
     const { result } = renderHook(() => useListVisible('chats'))
     act(() => useSettings.getState().setAiOpen(true))

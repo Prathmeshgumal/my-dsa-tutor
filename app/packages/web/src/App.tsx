@@ -19,9 +19,13 @@ import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 import { useWorkspace } from '@/state/workspace'
 
-// On the Problem screen, Run checks the problem's test cases; elsewhere it runs the open file.
-const runActiveFile = () =>
-  useSettings.getState().section === 'problems' ? void useProblems.getState().test('run') : void useRun.getState().runActiveFile()
+// On Problems, Run checks the problem's test cases; on Code it runs the open file. Elsewhere the code and its output
+// aren't on screen, so nothing runs.
+const runActiveFile = () => {
+  const { section } = useSettings.getState()
+  if (section === 'problems') void useProblems.getState().test('run')
+  else if (section === 'code') void useRun.getState().runActiveFile()
+}
 
 const modalOpen = () =>
   useFileDialogs.getState().kind !== null || useSettingsDialog.getState().open || useCommandMenu.getState().open

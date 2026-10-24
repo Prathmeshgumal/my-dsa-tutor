@@ -222,3 +222,52 @@ test('a note linked to the problem opens in the Notes section', async () => {
   await vi.waitFor(() => expect(useNotes.getState().activeName).toBe('note-1.md'))
   expect(useSettings.getState().section).toBe('notes')
 })
+
+test('a link the server turns down keeps the box open and says why', async () => {
+  configureProblems({
+    fetchImpl: ((url: string, init?: RequestInit) =>
+      init?.method === 'PUT'
+        ? Promise.resolve(new Response(JSON.stringify({ error: 'The link must be a web address.' }), { status: 400 }))
+        : json(url === '/api/problems' ? [entry] : [])) as typeof fetch,
+  })
+  renderScreen()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add link' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save link' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('The link must be a web address.')
+  expect(screen.getByRole('textbox', { name: 'Link to the question' })).toHaveValue('https://leetcode.com/problems/two-sum/')
+})
+
+test('a saved link can be removed straight from the problem', async () => {
+  const sent: unknown[] = []
+  configureProblems({
+    fetchImpl: ((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') sent.push(JSON.parse(init.body as string))
+      return url === '/api/problems'
+        ? json([{ ...entry, problem: { ...entry.problem, link: 'https://leetcode.com/problems/two-sum/' } }])
+        : Promise.resolve(new Response(null, { status: 204 }))
+    }) as typeof fetch,
+  })
+  renderScreen()
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove link' }))
+  expect(await screen.findByRole('button', { name: 'Add link' })).toBeInTheDocument()
+  expect(sent).toEqual([{ link: null }])
+})
+
+test('code typed but not saved yet is written when you leave the Problems section', async () => {
+  const sent: { url: string; body: unknown }[] = []
+  configureProblems({
+    delayMs: 60_000,
+    fetchImpl: ((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        sent.push({ url, body: JSON.parse(init.body as string) })
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      return json(url === '/api/problems' ? [entry] : [])
+    }) as typeof fetch,
+  })
+  const { unmount } = renderScreen()
+  fireEvent.change(await screen.findByTestId('monaco'), { target: { value: 'optimal code!' } })
+  expect(sent).toEqual([])
+  unmount()
+  await vi.waitFor(() => expect(sent).toEqual([{ url: expect.stringContaining('/two-sum/'), body: { content: 'optimal code!' } }]))
+})

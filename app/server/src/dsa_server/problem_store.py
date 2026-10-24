@@ -190,7 +190,8 @@ MAX_LINK = 500
 
 def web_link(value) -> bool:
     """An http(s) address the page can safely show as a link."""
-    if not isinstance(value, str) or len(value) > MAX_LINK:
+    # urlsplit drops tabs and newlines before parsing, so they're refused here: the link is shown to Claude on one line.
+    if not isinstance(value, str) or len(value) > MAX_LINK or re.search(r"[\s\x00-\x1f\x7f]", value):
         return False
     try:
         parts = urlsplit(value)

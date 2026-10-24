@@ -132,52 +132,77 @@ function ProblemList() {
  * become links, so a saved "javascript:" can't run anything. */
 function QuestionLink({ entry }: { entry: ProblemEntry }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const { link, title } = entry.problem
-  const save = (value: string | null) => {
-    void useProblems.getState().setLink(value)
-    setDraft(null)
+  const edit = (value: string | null) => {
+    setDraft(value)
+    setError(null)
   }
+  // The box closes only once the server has kept the link; if it turns it down, the box stays with the reason.
+  const save = async (value: string | null) => {
+    try {
+      await useProblems.getState().setLink(value)
+      edit(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+  const problem = error && (
+    <p role="alert" className="basis-full text-[12px] text-red-600 dark:text-red-400">
+      {error}
+    </p>
+  )
   if (draft !== null) {
     const ok = isWebLink(draft.trim())
     return (
       <form
-        className="flex min-w-0 flex-1 items-center gap-1.5"
+        className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
         onSubmit={(e) => {
           e.preventDefault()
-          if (ok) save(draft.trim())
+          if (ok) void save(draft.trim())
         }}
       >
         <input
           aria-label="Link to the question"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setDraft(null)}
+          onKeyDown={(e) => e.key === 'Escape' && edit(null)}
           autoFocus
           className="h-6 min-w-0 flex-1 rounded border bg-background px-1.5 text-[12px] outline-none focus:border-violet-500"
         />
         <Button type="submit" size="sm" className="h-6 px-2 text-[12px]" disabled={!ok} aria-label="Save link">
           Save
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => setDraft(null)}>
+        <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => edit(null)}>
           Cancel
         </Button>
         {link && (
-          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => save(null)}>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => void save(null)}>
             Remove link
           </Button>
         )}
+        {problem}
       </form>
     )
   }
   if (link && isWebLink(link)) {
     return (
-      <span className="ml-auto flex items-center gap-1">
+      <span className="ml-auto flex flex-wrap items-center gap-1">
         <a href={link} target="_blank" rel="noreferrer" className="rounded-full border px-2 py-0.5 font-medium hover:bg-muted">
           {linkLabel(link)} ↗
         </a>
-        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setDraft(link)}>
+        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => edit(link)}>
           Edit
         </button>
+        <button
+          type="button"
+          aria-label="Remove link"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => void save(null)}
+        >
+          Remove
+        </button>
+        {problem}
       </span>
     )
   }
@@ -185,7 +210,7 @@ function QuestionLink({ entry }: { entry: ProblemEntry }) {
     <button
       type="button"
       className="ml-auto text-muted-foreground hover:text-foreground"
-      onClick={() => setDraft(link ?? guessLeetCodeLink(title))}
+      onClick={() => edit(link ?? guessLeetCodeLink(title))}
     >
       Add link
     </button>
@@ -235,7 +260,7 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
         {tab === 'description' ? (
           <div className="flex flex-col gap-3 p-4">
             <h1 className="text-[18px] leading-tight font-semibold text-balance">{problem.title}</h1>
-            <div className="flex items-center gap-3 text-[12px]">
+            <div className="flex flex-wrap items-center gap-3 text-[12px]">
               <span
                 className={cn(
                   'rounded-full bg-muted px-2 py-0.5 font-medium',
@@ -513,8 +538,7 @@ export function ProblemScreen() {
         orientation="horizontal"
         defaultLayout={
           entry
-            ? // Sizes saved before the list moved out of these panels are still used.
-              (savedLayout('problem-main') ?? savedLayout('problem-outer-no-list') ?? { description: 45, work: 55 })
+            ? (savedLayout('problem-main') ?? { description: 45, work: 55 })
             : { empty: 100 }
         }
         onLayoutChanged={(l) => entry && saveLayout('problem-main')(l)}

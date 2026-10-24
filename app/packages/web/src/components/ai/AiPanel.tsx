@@ -5,8 +5,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { IMAGE_TYPES, MAX_IMAGES } from '@dsa/core/chatEvents'
-import { readImage, type Attachment } from '@/lib/images'
+import { readImage } from '@/lib/images'
 import { activeChat, useAiChat, type Approval, type ChatMessage, type ToolActivity } from '@/state/aiChat'
+import { useComposer } from '@/state/composer'
+import { noteTitle, useNotes } from '@/state/notes'
 import { useSettings } from '@/state/settings'
 import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
@@ -304,10 +306,27 @@ export function Conversation() {
   const fileName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
   // On the Problem screen Claude is told about the problem instead of the open file.
   const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
-  const onProblem = useSettings((s) => s.section === 'problems')
-  const activeName = onProblem ? problemTitle : fileName
-  const [draft, setDraft] = useState('')
-  const [attachments, setAttachments] = useState<(Attachment & { id: string })[]>([])
+  const noteName = useNotes((s) => {
+    const note = s.notes.find((n) => n.name === s.activeName)
+    return note ? noteTitle(note.content) : null
+  })
+  // What Claude is told about, as the server gets it (aiChat.ts editorContext): the problem on Problems, the note on
+  // Notes, and the file open in Code everywhere else.
+  const section = useSettings((s) => s.section)
+  const onProblem = section === 'problems'
+  const onNote = section === 'notes' && noteName !== null
+  const activeName = onProblem ? problemTitle : onNote ? noteName : fileName
+  const chip = onProblem
+    ? { icon: ListChecks, text: problemTitle ?? 'No problem open', title: 'Claude sees this problem and your solution', mono: false }
+    : onNote
+      ? { icon: NotebookPen, text: noteName, title: 'Claude sees this note, and the file open in Code', mono: false }
+      : {
+          icon: FileCode2,
+          text: section === 'code' ? (fileName ?? 'No file open') : `Code: ${fileName ?? 'no file open'}`,
+          title: 'Claude sees the current code of the file open in Code',
+          mono: section === 'code',
+        }
+  const { draft, setDraft, attachments, setAttachments } = useComposer()
   const [attachError, setAttachError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -422,10 +441,10 @@ export function Conversation() {
         <div
           data-testid="context-chip"
           className="mb-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          title={onProblem ? 'Claude sees this problem and your solution' : 'Claude sees this file’s current code'}
+          title={chip.title}
         >
-          {onProblem ? <ListChecks className="size-3 shrink-0" aria-hidden /> : <FileCode2 className="size-3 shrink-0" aria-hidden />}
-          <span className={cn('truncate', !onProblem && 'font-mono')}>{activeName ?? (onProblem ? 'No problem open' : 'No file open')}</span>
+          <chip.icon className="size-3 shrink-0" aria-hidden />
+          <span className={cn('truncate', chip.mono && 'font-mono')}>{chip.text}</span>
         </div>
         {attachments.length > 0 && (
           <ul aria-label="Attached images" className="mb-1.5 flex flex-wrap gap-1.5">

@@ -84,11 +84,24 @@ const OLD_SCREENS: Record<string, Section> = { editor: 'code', problem: 'problem
 
 /** Settings from before v2: `screen`, `notesOpen` (a panel beside the editor) and two list switches. */
 function toSections(saved: Record<string, unknown>): Record<string, unknown> {
-  const { screen = 'editor', notesOpen, problemListOpen, playgroundListOpen, ...rest } = saved
+  const { screen = 'editor', notesOpen, problemListOpen, playgroundListOpen, playgroundLayout, ...rest } = saved
   const listOpen = { ...ALL_LISTS_OPEN }
   if (problemListOpen === false) listOpen.problems = false
   if (playgroundListOpen === false) listOpen.dryruns = false
   const section = screen === 'editor' && notesOpen === true ? 'notes' : (OLD_SCREENS[String(screen)] ?? 'code')
   // Claude was open: start with the lists folded away, as opening it would.
-  return { ...rest, section, listOpen, foldedForClaude: rest.aiOpen === true }
+  return { ...rest, section, listOpen, foldedForClaude: rest.aiOpen === true, playgroundLayout: layoutsWithoutLists(playgroundLayout) }
+}
+
+/** The Problems and Playground lists used to sit inside their resizable panels; their sizes are dropped, and the
+ * problem's sizes without the list carry on as 'problem-main'. */
+function layoutsWithoutLists(saved: unknown): Record<string, Record<string, number>> {
+  if (!saved || typeof saved !== 'object') return {}
+  const {
+    'list-main': _list,
+    'problem-outer': _outer,
+    'problem-outer-no-list': noList,
+    ...rest
+  } = saved as Record<string, Record<string, number>>
+  return noList && !rest['problem-main'] ? { ...rest, 'problem-main': noList } : rest
 }

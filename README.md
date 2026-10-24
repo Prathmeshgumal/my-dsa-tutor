@@ -88,7 +88,7 @@ that's stuck waiting or looping; a run can last up to 2 minutes.
 
 | Keys | Action |
 |---|---|
-| ⌘/Ctrl + Enter | Run the current file (on Problems: run the test cases) |
+| ⌘/Ctrl + Enter | On Code, run the open file; on Problems, run the test cases |
 | ⌘/Ctrl + K | Search files and commands |
 | ⌘/Ctrl + J | Show or hide the output |
 

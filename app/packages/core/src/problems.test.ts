@@ -5,6 +5,7 @@ import {
   casesFor,
   describeInput,
   guessLeetCodeLink,
+  isWebLink,
   judgeOutput,
   linkLabel,
   problemProblems,
@@ -209,6 +210,12 @@ public:
 })
 
 describe('links to the question', () => {
+  it('accepts the same addresses as the server, and nothing else', () => {
+    expect(isWebLink('https://leetcode.com/problems/two-sum/')).toBe(true)
+    for (const bad of ['https:example.com', 'https://x.com/a\nb', 'https://x.com/a b', ' https://x.com/', 'https://' + 'a'.repeat(500)]) {
+      expect(isWebLink(bad), bad).toBe(false)
+    }
+  })
   it('names LeetCode, or the site', () => {
     expect(linkLabel('https://leetcode.com/problems/two-sum/')).toBe('LeetCode')
     expect(linkLabel('https://leetcode.cn/problems/two-sum/')).toBe('LeetCode')
