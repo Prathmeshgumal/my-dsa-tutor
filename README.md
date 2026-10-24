@@ -12,7 +12,8 @@ A local, browser-based code editor for practising DSA in C++, Java and Python.
 link; plain `docker compose up -d` works too.) That starts everything, and it all restarts by itself after a reboot:
 
 - **editor**: the editor itself, which also saves your files and talks to Claude
-  Code. Your edits to `app/` show up live without rebuilding.
+  Code. It runs the built app on a small Node server; after changing anything in `app/`,
+  rebuild it with `./start.sh --build`.
 - **piston**: runs your code ([Piston](https://github.com/engineer-man/piston), free,
   no API key). It's pinned to one version, with a small patch (`piston/api-v2.js`) so
   **Stop** really ends a running program.
@@ -23,8 +24,7 @@ link; plain `docker compose up -d` works too.) That starts everything, and it al
 The Claude panel signs in with a token from your Claude subscription. The first time,
 `./start.sh` asks for it: run `claude setup-token` in another terminal and paste what it
 prints. It's saved in `.env`, which git ignores. The editor never sees the rest of your
-`~/.claude` folder. To stop everything: `docker compose down`. After changing
-`package.json` or the Dockerfile: `docker compose up -d --build`.
+`~/.claude` folder. To stop everything: `docker compose down`.
 
 **Something not working?** The ⚙️ button in the left bar opens **Setup**. It checks that
 Piston is running with C++, Java and Python, that Claude is signed in, and that your folders
@@ -33,7 +33,22 @@ and warns you if something needs attention. **Copy diagnostics** copies the chec
 of the log file (`logs/editor.log`), ready to paste into a bug report.
 
 Not using Docker for the editor? `docker compose up -d piston piston-setup`, then
-`cd app && npm install && npm run dev`.
+`cd app && npm install && npm run build && npm start`. Working on the editor itself?
+`npm run dev` instead serves the same thing with instant reloads as you change the code.
+
+### Settings
+
+The defaults need no setup. To change them, put a `dsa-tutor.json` in the data folder (the
+repo root unless you set `DATA_DIR`), for example:
+
+```json
+{ "port": 5199, "pistonUrl": "http://127.0.0.1:2000", "folders": { "notes": "my-notes" } }
+```
+
+`folders` can move `solutions`, `notes`, `playground`, `problems`, `logs` and `state`; relative
+paths are inside the data folder. Environment settings win over the file: `PORT`, `HOST`,
+`PISTON_URL`, `DATA_DIR`, and `SOLUTIONS_DIR`, `NOTES_DIR`, `PLAYGROUND_DIR`, `PROBLEMS_DIR`,
+`LOGS_DIR`, `STATE_DIR` for single folders.
 
 ## Where your code is saved
 

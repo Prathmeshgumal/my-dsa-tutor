@@ -32,7 +32,7 @@ services:
     entrypoint: ["sh", "/piston-install.sh"]
     restart: "no"
 
-  # The editor itself, plus its file-saving and Claude chat endpoints.
+  # The editor itself: the page, its file-saving and Claude chat endpoints, on one small Node server.
   editor:
     build: ./app
     container_name: dsa-editor
@@ -43,28 +43,24 @@ services:
     environment:
       HOME: /home/node
       PISTON_URL: http://piston:2000
-      SOLUTIONS_DIR: /workspace/solutions
-      NOTES_DIR: /workspace/notes
-      PLAYGROUND_DIR: /workspace/playground
-      PROBLEMS_DIR: /workspace/problems
-      LOGS_DIR: /workspace/logs
+      # Your data folders below are mounted here.
+      DATA_DIR: /workspace
       # Your Claude login, made with `claude setup-token` and saved in .env by ./start.sh.
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     ports:
       - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
     volumes:
-      - ./app:/workspace/app
-      - editor-node-modules:/workspace/app/node_modules
       - ./solutions:/workspace/solutions
       - ./notes:/workspace/notes
       - ./playground:/workspace/playground
       - ./problems:/workspace/problems
       # The editor's log file (Setup → Copy diagnostics includes its end).
       - ./logs:/workspace/logs
+      # What you had open, your chats and settings.
+      - ./state:/workspace/state
       # Claude's own folder for this editor's chats. Your ~/.claude stays private to you.
       - claude-home:/home/node/.claude
 
 volumes:
   piston-packages:
-  editor-node-modules:
   claude-home:

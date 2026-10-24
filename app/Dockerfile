@@ -1,4 +1,5 @@
-# The editor: Vite dev server, which also serves the file-saving and Claude chat endpoints.
+# The editor as a real app: the built page and its API on one small Node server (server/main.ts).
+# Code changes need a rebuild: ./start.sh --build
 FROM node:24-bookworm-slim
 
 WORKDIR /workspace/app
@@ -10,6 +11,9 @@ RUN mkdir -p /home/node/.claude
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# The source is mounted from the repo at runtime (see docker-compose.yml), so edits show up live.
-# `npm install` on start picks up dependency changes without rebuilding the image.
-CMD ["sh", "-c", "npm install --no-audit --no-fund --loglevel=error && exec npm run dev -- --host 0.0.0.0"]
+COPY --chown=node:node . .
+RUN npm run build
+
+# Inside the container it must listen on every address; docker-compose.yml only publishes it to this computer.
+ENV HOST=0.0.0.0
+CMD ["node", "server/main.ts"]

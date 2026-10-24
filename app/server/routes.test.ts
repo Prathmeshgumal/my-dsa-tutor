@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { existsSync } from 'node:fs'
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -50,4 +51,12 @@ test('anything else is passed on', async () => {
 test('other websites are refused before any route runs', async () => {
   const res = await fetch(`${base}/api/files`, { headers: { 'Sec-Fetch-Site': 'cross-site', Origin: 'https://evil.example' } })
   expect(res.status).toBe(403)
+})
+
+test('a fresh data folder gets all its folders, so nothing has to be set up by hand', async () => {
+  const fresh = await mkdtemp(path.join(tmpdir(), 'fresh-'))
+  const config = loadConfig({ env: {}, defaultDataDir: path.join(fresh, 'data') })
+  createRoutes(config)
+  for (const folder of Object.values(config.folders)) expect(existsSync(folder)).toBe(true)
+  await rm(fresh, { recursive: true, force: true })
 })

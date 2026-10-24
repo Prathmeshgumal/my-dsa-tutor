@@ -1,5 +1,6 @@
 // Every route the editor serves, in order. Used by both the dev server (vite.config.ts) and the real server
 // (main.ts), so they can't drift apart. Requests for anything else (the page itself) are passed on.
+import { mkdirSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createPistonRunner } from '../src/lib/runner/piston.ts'
 import { removeLeftoverTempFiles } from './atomicWrite.ts'
@@ -37,6 +38,8 @@ export function createRoutes(config: Config, { logger = createLogger(config.fold
   logger: Logger
 } {
   const { solutions, notes, playground, problems } = config.folders
+  // A fresh data folder (first start, or a new DATA_DIR) gets everything it needs.
+  for (const folder of Object.values(config.folders)) mkdirSync(folder, { recursive: true })
   void removeLeftoverTempFiles([solutions, notes, playground, problems]).catch((e) =>
     logger.log('warn', 'Couldn’t clear temporary files left by an interrupted save', e),
   )

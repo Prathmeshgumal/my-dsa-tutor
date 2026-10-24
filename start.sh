@@ -6,7 +6,7 @@ PORT="${EDITOR_PORT:-5199}"
 URL="http://localhost:$PORT"
 
 # Create the data folders first, so Docker doesn't make them owned by root.
-mkdir -p solutions notes playground problems logs
+mkdir -p solutions notes playground problems logs state
 
 # The Claude panel signs in with a long-lived token from `claude setup-token`, kept in .env (never committed).
 if ! grep -qs '^CLAUDE_CODE_OAUTH_TOKEN=.' .env; then
