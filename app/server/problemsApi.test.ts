@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -111,4 +111,15 @@ test('stores which notes belong to a problem', async () => {
   expect((await send(`${base}/${slug}/notes`, 'PUT', { notes: ['note-1.md', 'note-1.md', 'note-3.md'] })).status).toBe(204)
   const [entry] = await (await fetch(base)).json()
   expect(entry.problem.notes).toEqual(['note-1.md', 'note-3.md'])
+})
+
+test('a problem saved by a newer editor is never overwritten, and says why', async () => {
+  const slug = await createProblem(dir, { problem: problem('Two Sum'), solution: '', driver: '' })
+  const file = path.join(dir, slug, 'problem.json')
+  const future = JSON.stringify({ ...JSON.parse(await readFile(file, 'utf8')), formatVersion: 99 })
+  await writeFile(file, future)
+  const res = await send(`${base}/${slug}/tests`, 'PUT', { tests: [] })
+  expect(res.status).toBe(404)
+  expect((await res.json()).error).toBe('"two-sum" was saved by a newer version of the editor. Update the editor to open it.')
+  expect(await readFile(file, 'utf8')).toBe(future)
 })

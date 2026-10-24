@@ -64,7 +64,7 @@ export async function readEntry(dir: string, slug: string): Promise<ProblemEntry
   try {
     problem = parseSaved<Problem>('problem', await readFile(path.join(base, 'problem.json'), 'utf8'))
   } catch (e) {
-    if (e instanceof NewerFormatError) throw new ProblemNotFound(`"${slug}" ${e.message.replace(/^This/, 'was')}`)
+    if (e instanceof NewerFormatError) throw new ProblemNotFound(`"${slug}" ${e.message.replace(/^This /, '')}`)
     throw new ProblemNotFound(`There's no problem called "${slug}".`)
   }
   const attempts = await listAttempts(dir, slug)
