@@ -83,6 +83,8 @@ def normalize(value, data: Path):
     text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", lambda m: ids.setdefault(m[0], f"<id{len(ids)}>"), text)
     text = re.sub(r"\b[0-9a-f]{64}\b", "<hash>", text)
     text = re.sub(r'"(at|createdAt)": ?\d{13}', r'"\1": "<time>"', text)
+    # The engine tells Claude today's date.
+    text = re.sub(r"Today's date is \d{4}-\d{2}-\d{2}", "Today's date is <date>", text)
     return json.loads(text)
 
 

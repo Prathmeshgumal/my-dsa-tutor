@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { stateStorage } from '@/lib/stateSync'
+import type { Effort } from './models'
 import { listVisible, type Section } from './sections'
 
 export type ThemePref = 'system' | 'light' | 'dark'
@@ -25,6 +26,10 @@ interface SettingsState {
   foldedForClaude: boolean
   /** Playground panel sizes (percent), per area: list|main, and code|drawing side by side or stacked. */
   playgroundLayout: Record<string, Record<string, number>>
+  /** The model Claude replies with; null leaves it to Claude Code's default. */
+  claudeModel: { value: string; name: string } | null
+  /** How hard Claude thinks; null leaves it to the model's default. */
+  claudeEffort: Effort | null
   setTheme(t: ThemePref): void
   setPanelLayout(l: number[]): void
   setOutputPosition(p: OutputPosition): void
@@ -37,6 +42,7 @@ interface SettingsState {
   pressSection(section: Section): void
   setListOpen(section: Section, open: boolean): void
   setPlaygroundLayout(area: string, layout: Record<string, number>): void
+  setClaudeChoice(model: { value: string; name: string } | null, effort: Effort | null): void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -53,6 +59,8 @@ export const useSettings = create<SettingsState>()(
       listOpen: ALL_LISTS_OPEN,
       foldedForClaude: false,
       playgroundLayout: {},
+      claudeModel: null,
+      claudeEffort: null,
       setTheme: (theme) => set({ theme }),
       setPanelLayout: (panelLayout) => set({ panelLayout }),
       setOutputPosition: (outputPosition) => set({ outputPosition }),
@@ -69,6 +77,7 @@ export const useSettings = create<SettingsState>()(
       setListOpen: (section, open) =>
         set((s) => ({ listOpen: { ...s.listOpen, [section]: open }, foldedForClaude: false })),
       setPlaygroundLayout: (area, layout) => set((s) => ({ playgroundLayout: { ...s.playgroundLayout, [area]: layout } })),
+      setClaudeChoice: (claudeModel, claudeEffort) => set({ claudeModel, claudeEffort }),
     }),
     {
       name: 'dsa-editor:settings',

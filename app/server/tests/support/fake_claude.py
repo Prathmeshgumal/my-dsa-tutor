@@ -6,6 +6,7 @@ engine would see them, the prompt, every tool result), and plays back a reply fr
 pointed at it with DSA_CLAUDE_CLI, so their records can be compared exactly.
 
   FAKE_CLAUDE_LOG     where to append the record (JSON lines)
+  FAKE_CLAUDE_MODELS  the models its initialize answer lists (JSON; none if unset)
   FAKE_CLAUDE_SCRIPT  the reply: a JSON list of steps
       {"emit": {...}}                     a message to print as the engine would (session_id is filled in)
       {"call": "read_file", "args": {}}   call an editor tool; its result is recorded and sent back as a tool_result
@@ -92,7 +93,8 @@ def main() -> None:
         if msg.get("type") == "control_request":
             body = msg["request"]
             record("control_request", body)
-            response = {"commands": [], "output_style": "default", "available_output_styles": ["default"], "models": [], "account": {}} if body.get("subtype") == "initialize" else {}
+            models = json.loads(os.environ.get("FAKE_CLAUDE_MODELS") or "[]")
+            response = {"commands": [], "output_style": "default", "available_output_styles": ["default"], "models": models, "account": {}} if body.get("subtype") == "initialize" else {}
             send({"type": "control_response", "response": {"subtype": "success", "request_id": msg["request_id"], "response": response}})
         elif msg.get("type") == "user":
             record("user", msg)

@@ -1,5 +1,6 @@
 """The editor's Claude agent (the Claude Code engine, using the existing Claude Code login).
-  POST /api/claude/chat      { message, sessionId, context } → one turn, streamed as server-sent events
+  POST /api/claude/chat      { message, sessionId, context, model?, effort? } → one turn, streamed as server-sent events
+  GET  /api/claude/models                                    → the models (and their effort levels) the engine offers
   GET  /api/claude/turns/:id?after=n                         → the same turn's events after the nth (reconnect)
   POST /api/claude/turns/:id/stop                            → stops the turn
   POST /api/claude/approval  { id, approved }                → the user's answer to a proposed change
@@ -20,7 +21,7 @@ import httpx
 from .changes import ToolError, apply_change, parse_change
 from .core import js_trim, language_from_filename
 from .editor_tools import TOOL_NAMES, TOOLS, EditorTools, js_length
-from .engine import Aborted, Engine
+from .engine import Aborted, Engine, EngineError, list_models
 from .log import Logger
 from .runner import PistonRunner
 from .tool_inputs import UNDEFINED, check_input
@@ -29,6 +30,7 @@ from .web import Request, dumps, js_to_number, loads
 ROUTE = "/api/claude/chat"
 APPROVAL_ROUTE = "/api/claude/approval"
 APPLY_ROUTE = "/api/claude/apply"
+MODELS_ROUTE = "/api/claude/models"
 TURN_ROUTE = re.compile(r"/api/claude/turns/([\w-]+)(/stop)?", re.ASCII)
 
 SYSTEM_PROMPT = (Path(__file__).parent / "data" / "system_prompt.md").read_text(encoding="utf-8")
@@ -353,7 +355,51 @@ def _event_text(index: float, event) -> str:
     return f"id: {dumps(index + 1)}\ndata: {data}\n\n"
 
 
-def claude_routes(folders: dict[str, str], piston_url: str, client: httpx.AsyncClient, logger: Logger, turns: Turns, approvals: Approvals | None = None):
+class Models:
+    """The engine's model list, asked for once (it starts the engine for a moment) and kept until the server restarts."""
+
+    def __init__(self, fetch: Callable[[], Awaitable[list[dict]]] = list_models):
+        self.fetch = fetch
+        self.models: list[dict] | None = None
+        self.lock = asyncio.Lock()
+
+    async def get(self) -> list[dict]:
+        async with self.lock:
+            if self.models is None:
+                self.models = [
+                    {
+                        "value": m["value"],
+                        "displayName": m.get("displayName") if isinstance(m.get("displayName"), str) else m["value"],
+                        "description": m.get("description") if isinstance(m.get("description"), str) else "",
+                        "efforts": [e for e in m.get("supportedEffortLevels") or [] if isinstance(e, str)],
+                    }
+                    for m in await self.fetch()
+                ]
+            return self.models
+
+    async def check(self, model, effort) -> tuple[str | None, str | None] | str:
+        """The --model and --effort to start the engine with, or why the choice can't be used. "default" (or no
+        model) leaves --model out, and no effort leaves --effort out: the engine then starts exactly as before."""
+        if model is not None and not isinstance(model, str):
+            return '"model" must be text'
+        if effort is not None and not isinstance(effort, str):
+            return '"effort" must be text'
+        if model is None and effort is None:
+            return None, None
+        try:
+            models = await self.get()
+        except EngineError as e:
+            return f"Couldn’t check the model: {e}"
+        row = next((m for m in models if m["value"] == (model or "default")), None)
+        if model is not None and row is None:
+            return "That model isn’t available. Pick one from the list."
+        if effort is not None and (row is None or effort not in row["efforts"]):
+            return f"{row['displayName'] if row else 'This model'} doesn’t have that effort level."
+        return (None if model in (None, "default") else model), effort
+
+
+def claude_routes(folders: dict[str, str], piston_url: str, client: httpx.AsyncClient, logger: Logger, turns: Turns, approvals: Approvals | None = None, models: Models | None = None):
+    models = models or Models()
     stores = {"solutions": folders["solutions"], "notes": folders["notes"], "problems": folders["problems"]}
     runner = PistonRunner(f"{piston_url}/api/v2", client)
     approvals = approvals or Approvals()
@@ -395,6 +441,12 @@ def claude_routes(folders: dict[str, str], piston_url: str, client: httpx.AsyncC
             await req.respond(400, dumps({"error": problem}))
             return
 
+        choice = await models.check(body.get("model"), body.get("effort"))
+        if isinstance(choice, str):
+            await req.respond(400, dumps({"error": choice}))
+            return
+        model, effort = choice
+
         context = parse_context(body.get("context"))
         session_id = body["sessionId"] if isinstance(body.get("sessionId"), str) else None
 
@@ -427,6 +479,8 @@ def claude_routes(folders: dict[str, str], piston_url: str, client: httpx.AsyncC
                 allowed_tools=[TOOL_PREFIX + n for n in TOOL_NAMES],
                 call_tool=call_tool,
                 resume=session_id,
+                model=model,
+                effort=effort,
             )
             to_events = EventMapper()
             session_sent = False
@@ -466,6 +520,13 @@ def claude_routes(folders: dict[str, str], piston_url: str, client: httpx.AsyncC
                     await req.respond(404, dumps({"error": "That reply is no longer available (the editor may have restarted)."}))
                 return True
             return False
+        if route == MODELS_ROUTE and req.method == "GET":
+            try:
+                await req.respond(200, dumps({"models": await models.get()}), {"Content-Type": "application/json"})
+            except EngineError as e:
+                logger.log("error", "Couldn't list Claude's models", e)
+                await req.respond(502, dumps({"error": f"Couldn’t list the models: {e}"}), {"Content-Type": "application/json"})
+            return True
         if req.method != "POST" or route not in (ROUTE, APPROVAL_ROUTE, APPLY_ROUTE):
             return False
         if route == APPLY_ROUTE:

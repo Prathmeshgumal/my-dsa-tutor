@@ -74,6 +74,9 @@ export interface ChatRequest {
   sessionId: string | null
   context: EditorContext
   images?: ChatImage[]
+  /** Left out, Claude Code uses its default model and effort. */
+  model?: string
+  effort?: string
 }
 
 /** The agent's tools live on an in-process MCP server named "editor". */

@@ -195,6 +195,12 @@ or close the page, the reply carries on, and the page picks it up again where it
 your answer: the card shows **Apply anyway**, which applies it only if the code it changes is
 still there.
 
+**Model and effort**: the chip at the top right of the message box (e.g. `Default` or
+`Opus · High`) picks which model replies and how hard it thinks, like on claude.ai. The list of
+models and the effort levels each one supports come from the Claude Code engine for your login.
+Until you pick something, Claude Code's own defaults are used, exactly as before; **Reset to
+default** goes back to that. Your choice is remembered and applies from your next message.
+
 It can only act through these tools:
 
 | Tool | What it does | Asks you first? |
@@ -213,6 +219,7 @@ It can only act through these tools:
 | `list_problems` / `get_problem` / `list_attempts` | Your problems, one problem with its tests and your solution, your past submissions | No |
 | `run_tests` | Runs a problem's test cases against your solution (doesn't count as a submission) | No |
 | `add_test_case` | Adds an edge case to a problem | **Yes** |
+| `set_problem_link` | Saves where a problem's question lives (e.g. its LeetCode page), shown as the LeetCode logo | No |
 | `edit_solution` | Replaces one exact piece of a problem's solution (or another version) | **Yes** |
 | `save_code_version` | Saves another version of a problem's code, e.g. a brute-force one | **Yes** |
 

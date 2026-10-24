@@ -29,7 +29,7 @@ beforeEach(() => {
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle' })
   useRun.setState({ state: 'idle', result: null, error: null, lastFile: null })
-  useSettings.setState({ section: 'code' })
+  useSettings.setState({ section: 'code', claudeModel: null, claudeEffort: null })
 })
 
 test('the first message starts a chat titled after it, and the reply is built from the stream', async () => {
@@ -72,6 +72,20 @@ test('follow-ups stay in the same chat and resume its session, with the open fil
       openProblem: null,
     },
   })
+})
+
+test('the chosen model and effort go with each message', async () => {
+  useSettings.setState({ claudeModel: { value: 'sonnet', name: 'Sonnet 5.5' }, claudeEffort: 'high' })
+  const stream = fakeStream([{ type: 'done' }])
+  await chat().send('hi', { stream, ...quiet })
+  expect(stream.mock.calls[0][0]).toMatchObject({ model: 'sonnet', effort: 'high' })
+})
+
+test('with nothing chosen, nothing about the model is sent, so Claude starts as before', async () => {
+  const stream = fakeStream([{ type: 'done' }])
+  await chat().send('hi', { stream, ...quiet })
+  expect(stream.mock.calls[0][0]).not.toHaveProperty('model')
+  expect(stream.mock.calls[0][0]).not.toHaveProperty('effort')
 })
 
 test('new chat starts fresh (no session) and keeps the old chat in the list', async () => {

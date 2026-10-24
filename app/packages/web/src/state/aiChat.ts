@@ -123,6 +123,12 @@ export function activeChat(state: Pick<AiChatState, 'chats' | 'activeChatId'>): 
 
 let controller: AbortController | null = null
 
+/** The model and effort picked in the message box; whatever isn't picked is left out, so Claude Code's defaults apply. */
+function claudeChoice(): Pick<ChatRequest, 'model' | 'effort'> {
+  const { claudeModel, claudeEffort } = useSettings.getState()
+  return { ...(claudeModel ? { model: claudeModel.value } : {}), ...(claudeEffort ? { effort: claudeEffort } : {}) }
+}
+
 function editorContext(): ChatRequest['context'] {
   const { files, openIds } = useWorkspace.getState()
   const active = useWorkspace.getState().activeFile()
@@ -308,6 +314,7 @@ export const useAiChat = create<AiChatState>()(
                 sessionId: existing?.sessionId ?? null,
                 context: editorContext(),
                 ...(attachments.length ? { images: attachments.map((a) => a.image) } : {}),
+                ...claudeChoice(),
               },
               onEvent,
               { signal },

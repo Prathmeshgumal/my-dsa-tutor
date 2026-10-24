@@ -99,6 +99,8 @@ class Engine:
         call_tool: ToolCall,
         resume: str | None,
         max_turns: int = 30,
+        model: str | None = None,
+        effort: str | None = None,
     ):
         self.cwd = cwd
         self.system_prompt = system_prompt
@@ -107,6 +109,8 @@ class Engine:
         self.call_tool = call_tool
         self.resume = resume
         self.max_turns = max_turns
+        self.model = model
+        self.effort = effort
         self.process: asyncio.subprocess.Process | None = None
         self.stderr = ""
         self.write_lock = asyncio.Lock()
@@ -119,7 +123,14 @@ class Engine:
         self.last_error_result: str | None = None
 
     def args(self) -> list[str]:
-        args = ["--output-format", "stream-json", "--verbose", "--input-format", "stream-json", f"--max-turns={self.max_turns}", "--permission-prompt-tool=stdio"]
+        # --effort and --model go where the SDK puts them; left out, the engine uses its own defaults.
+        args = ["--output-format", "stream-json", "--verbose", "--input-format", "stream-json"]
+        if self.effort:
+            args.append(f"--effort={self.effort}")
+        args.append(f"--max-turns={self.max_turns}")
+        if self.model:
+            args.append(f"--model={self.model}")
+        args.append("--permission-prompt-tool=stdio")
         if self.resume:
             args.append(f"--resume={self.resume}")
         args += [f"--allowedTools={','.join(self.allowed_tools)}", "--tools=", "--setting-sources=", "--strict-mcp-config", "--include-partial-messages"]
@@ -353,3 +364,49 @@ class Engine:
                 with contextlib.suppress(Exception):
                     await asyncio.wait_for(self.process.wait(), 5)
             stderr_task.cancel()
+
+
+async def list_models(timeout: float = 30.0) -> list[dict]:
+    """The models the engine offers this login, with their effort levels, as the SDK's supportedModels() gets them:
+    from the engine's answer to initialize. No message is sent, so nothing is used up."""
+    engine = Engine(cwd=str(Path.home()), system_prompt="", tools={"tools": []}, allowed_tools=[], call_tool=None, resume=None)  # type: ignore[arg-type]
+    try:
+        process = await asyncio.create_subprocess_exec(
+            engine_path(),
+            *engine.args(),
+            cwd=engine.cwd,
+            env=engine.env(),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            limit=1 << 30,
+        )
+    except OSError as e:
+        raise EngineError(f"Failed to spawn Claude Code process: {e.strerror or e}") from None
+    assert process.stdin and process.stdout
+    request_id = _request_id()
+    try:
+        process.stdin.write((dumps({"request_id": request_id, "type": "control_request", "request": {"subtype": "initialize"}}) + "\n").encode())
+        await process.stdin.drain()
+        async with asyncio.timeout(timeout):
+            while line := await process.stdout.readline():
+                try:
+                    message = loads(line.decode("utf-8", "replace"))
+                except ValueError:
+                    continue
+                response = message.get("response") if isinstance(message, dict) and message.get("type") == "control_response" else None
+                if not isinstance(response, dict) or response.get("request_id") != request_id:
+                    continue
+                if response.get("subtype") != "success":
+                    raise EngineError(_redact(str(response.get("error") or "Claude Code couldn't start.")))
+                models = (response.get("response") or {}).get("models")
+                return [m for m in models if isinstance(m, dict) and isinstance(m.get("value"), str)] if isinstance(models, list) else []
+        raise EngineError("Claude Code stopped before listing its models.")
+    except TimeoutError:
+        raise EngineError("Claude Code took too long to list its models.") from None
+    finally:
+        with contextlib.suppress(Exception):
+            process.stdin.close()
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        await process.wait()

@@ -12,6 +12,7 @@ import { noteTitle, useNotes } from '@/state/notes'
 import { useSettings } from '@/state/settings'
 import { usePlayground } from '@/state/playground'
 import { SidePanelResizer } from '@/components/shell/SidePanelResizer'
+import { ModelPicker } from './ModelPicker'
 import { useWorkspace } from '@/state/workspace'
 import { activeProblem, useProblems } from '@/state/problems'
 import { Markdown } from './Markdown'
@@ -439,13 +440,17 @@ export function Conversation() {
         }}
         className="m-3 mt-0 rounded-xl border bg-card/60 p-2 transition-colors focus-within:border-violet-500/50"
       >
-        <div
-          data-testid="context-chip"
-          className="mb-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          title={chip.title}
-        >
-          <chip.icon className="size-3 shrink-0" aria-hidden />
-          <span className={cn('truncate', chip.mono && 'font-mono')}>{chip.text}</span>
+        <div className="mb-1.5 flex min-w-0 items-center gap-2">
+          <div
+            data-testid="context-chip"
+            className="inline-flex min-w-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+            title={chip.title}
+          >
+            <chip.icon className="size-3 shrink-0" aria-hidden />
+            <span className={cn('truncate', chip.mono && 'font-mono')}>{chip.text}</span>
+          </div>
+          <div className="flex-1" />
+          <ModelPicker />
         </div>
         {attachments.length > 0 && (
           <ul aria-label="Attached images" className="mb-1.5 flex flex-wrap gap-1.5">
