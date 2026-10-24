@@ -92,11 +92,11 @@ test('Notes opens as a section, and Claude can sit beside it', async () => {
   renderShell()
   await userEvent.click(rail().getByRole('button', { name: 'Notes' }))
   expect(rail().getByRole('button', { name: 'Notes' })).toHaveAttribute('aria-current', 'page')
-  expect(screen.getByRole('complementary', { name: 'Notes' })).toBeInTheDocument()
+  expect(screen.getByRole('main', { name: 'Note' })).toBeInTheDocument()
   expect(screen.getByText('EDITOR')).not.toBeVisible()
   await userEvent.click(rail().getByRole('button', { name: 'Claude' }))
   expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
-  expect(screen.getByRole('complementary', { name: 'Notes' })).toBeInTheDocument()
+  expect(screen.getByRole('main', { name: 'Note' })).toBeInTheDocument()
 })
 
 test('on the Chats section the chat is the page, so Claude isn’t also on the right', async () => {

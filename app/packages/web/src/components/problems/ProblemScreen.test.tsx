@@ -179,3 +179,13 @@ test('Add link suggests the LeetCode address and saves what you confirm', async 
   expect(await screen.findByRole('link', { name: /LeetCode/ })).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
   expect(sent).toEqual([{ url: '/api/problems/two-sum/link', body: { link: 'https://leetcode.com/problems/two-sum/' } }])
 })
+
+test('a note linked to the problem opens in the Notes section', async () => {
+  useSettings.setState({ section: 'problems' })
+  renderScreen()
+  fireEvent.click(await screen.findByRole('tab', { name: /notes/i }))
+  fireEvent.click(await screen.findByRole('button', { name: /Hash map trick/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  await vi.waitFor(() => expect(useNotes.getState().activeName).toBe('note-1.md'))
+  expect(useSettings.getState().section).toBe('notes')
+})

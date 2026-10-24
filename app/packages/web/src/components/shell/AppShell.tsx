@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { FilesList } from '@/components/files/FilesList'
-import { NotesPanel } from '@/components/notes/NotesPanel'
+import { NotesScreen } from '@/components/notes/NotesScreen'
 import { Playground } from '@/components/playground/Playground'
 import { ProblemScreen } from '@/components/problems/ProblemScreen'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
@@ -59,7 +59,7 @@ export function AppShell({ editor, output, connection, cursor, onOpenCommand }: 
           )}
           {section === 'notes' && (
             <ErrorBoundary name="The Notes section">
-              <NotesPanel page />
+              <NotesScreen />
             </ErrorBoundary>
           )}
           {section === 'chats' && (
