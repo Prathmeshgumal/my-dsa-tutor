@@ -23,7 +23,7 @@ export function TopBar({ narrow, onRun, running, canRun, onOpenCommand }: Props)
   const file = useWorkspace((s) => s.files.find((f) => f.id === s.activeId) ?? null)
   const setActiveLanguage = useWorkspace((s) => s.setActiveLanguage)
   const language = file ? languageFromFilename(file.name) : null
-  const onProblem = useSettings((s) => s.screen === 'problem')
+  const onProblem = useSettings((s) => s.section === 'problems')
   const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
 
   return (

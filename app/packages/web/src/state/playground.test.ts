@@ -28,7 +28,7 @@ beforeEach(() => {
     }) as typeof fetch,
   })
   usePlayground.setState({ runs: [], activeId: null, step: 0, playing: false, speed: 1, status: 'idle' })
-  useSettings.setState({ screen: 'editor' })
+  useSettings.setState({ section: 'code' })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -43,7 +43,7 @@ test('a new dry run from Claude goes to the top; opening it switches to the Play
   expect(pg().runs[0].id).toBe('new')
   pg().open('new')
   expect(pg()).toMatchObject({ activeId: 'new', step: 0, playing: false })
-  expect(useSettings.getState().screen).toBe('playground')
+  expect(useSettings.getState().section).toBe('dryruns')
 })
 
 test('stepping stays within the dry run', () => {

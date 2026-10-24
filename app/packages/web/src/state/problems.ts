@@ -174,7 +174,7 @@ export const useProblems = create<ProblemsState>()(
         },
 
         async open(slug) {
-          useSettings.getState().setScreen('problem')
+          useSettings.getState().setSection('problems')
           if (slug === get().activeSlug) return
           await get().flush()
           set({ activeSlug: slug, ...fresh })

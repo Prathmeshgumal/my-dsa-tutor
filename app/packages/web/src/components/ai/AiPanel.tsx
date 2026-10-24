@@ -372,7 +372,8 @@ function ChatList({ onPicked }: { onPicked(): void }) {
 }
 
 /** Chat with the user's local Claude Code, which works in the solutions folder and sees the open file. */
-export function AiPanel() {
+/** `page`: filling a section instead of sitting on the right. */
+export function AiPanel({ page = false }: { page?: boolean }) {
   const width = useSettings((s) => s.sidePanelWidth)
   const { status, send, stop, newChat } = useAiChat()
   const current = useAiChat(activeChat)
@@ -382,7 +383,7 @@ export function AiPanel() {
   const fileName = useWorkspace((s) => s.files.find((f) => f.id === s.activeId)?.name ?? null)
   // On the Problem screen Claude is told about the problem instead of the open file.
   const problemTitle = useProblems((s) => activeProblem(s)?.problem.title ?? null)
-  const onProblem = useSettings((s) => s.screen === 'problem')
+  const onProblem = useSettings((s) => s.section === 'problems')
   const activeName = onProblem ? problemTitle : fileName
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<(Attachment & { id: string })[]>([])
@@ -434,8 +435,11 @@ export function AiPanel() {
   return (
     <aside
       aria-label="Claude"
-      style={{ width }}
-      className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+      style={page ? undefined : { width }}
+      className={cn(
+        'relative flex flex-col bg-background/60',
+        page ? 'min-w-0 flex-1' : 'max-w-[70vw] shrink-0 border-l',
+      )}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -456,7 +460,7 @@ export function AiPanel() {
           Drop images to send to Claude
         </div>
       )}
-      <SidePanelResizer />
+      {!page && <SidePanelResizer />}
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-cyan-400 text-white">
           <Sparkles className="size-3" aria-hidden />
@@ -481,9 +485,11 @@ export function AiPanel() {
         >
           <SquarePen />
         </HeaderButton>
-        <HeaderButton label="Close Claude" onClick={() => useSettings.getState().setAiOpen(false)}>
+        {!page && (
+<HeaderButton label="Close Claude" onClick={() => useSettings.getState().setAiOpen(false)}>
           <X />
         </HeaderButton>
+)}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">

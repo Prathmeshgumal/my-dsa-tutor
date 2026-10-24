@@ -136,14 +136,14 @@ function editorContext(): ChatRequest['context'] {
 }
 
 function openProblem(): ChatRequest['context']['openProblem'] {
-  if (useSettings.getState().screen !== 'problem') return null
+  if (useSettings.getState().section !== 'problems') return null
   const state = useProblems.getState()
   const entry = activeProblem(state)
   return entry ? { slug: entry.slug, title: entry.problem.title, file: state.activeFile } : null
 }
 
 function openNote(): ChatRequest['context']['openNote'] {
-  if (!useSettings.getState().notesOpen) return null
+  if (useSettings.getState().section !== 'notes') return null
   const { notes, activeName } = useNotes.getState()
   const note = notes.find((n) => n.name === activeName)
   return note ? { name: note.name, title: noteTitle(note.content) } : null

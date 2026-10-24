@@ -1,98 +1,56 @@
-import { Clapperboard, Code2, FolderOpen, ListChecks, NotebookPen, Settings, Sparkles } from 'lucide-react'
+import { Clapperboard, Code2, ListChecks, MessagesSquare, NotebookPen, Settings, Sparkles } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useFilesPanel } from '@/state/filesPanel'
-import { useSettings, type Screen } from '@/state/settings'
+import { SECTIONS, useListVisible, type Section } from '@/state/sections'
+import { useSettings } from '@/state/settings'
 import { useSettingsDialog } from '@/state/settingsDialog'
 
-const SCREENS: { id: Screen; label: string; icon: typeof Code2 }[] = [
-  { id: 'editor', label: 'Editor', icon: Code2 },
-  { id: 'problem', label: 'Problems', icon: ListChecks },
-  { id: 'playground', label: 'Playground', icon: Clapperboard },
-]
+const ICONS: Record<Section, typeof Code2> = {
+  problems: ListChecks,
+  code: Code2,
+  notes: NotebookPen,
+  dryruns: Clapperboard,
+  chats: MessagesSquare,
+}
 
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
 export function IconRail() {
-  const filesOpen = useFilesPanel((s) => s.open)
-  const setFilesOpen = useFilesPanel((s) => s.setOpen)
   const aiOpen = useSettings((s) => s.aiOpen)
-  const notesOpen = useSettings((s) => s.notesOpen)
-  const screen = useSettings((s) => s.screen)
-  const playgroundListOpen = useSettings((s) => s.playgroundListOpen)
-  const problemListOpen = useSettings((s) => s.problemListOpen)
-  // On its own screen, a screen's button hides or shows that screen's list (the Editor's is the files).
-  const tip = (id: Screen, label: string) => {
-    if (id !== screen) return label
-    if (id === 'playground') return playgroundListOpen ? 'Hide dry runs' : 'Show dry runs'
-    if (id === 'problem') return problemListOpen ? 'Hide problems' : 'Show problems'
-    return filesOpen ? 'Hide files' : 'Show files'
-  }
+  const section = useSettings((s) => s.section)
+  const listShown = useListVisible(section)
+  // On its own section, a section's button hides or shows that section's list.
+  const tip = (id: Section, label: string) =>
+    id !== section ? label : `${listShown ? 'Hide' : 'Show'} the ${label.toLowerCase()} list`
 
   return (
     <nav aria-label="Sidebar" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 border-r py-2.5">
-      {SCREENS.map(({ id, label, icon: Icon }) => (
-        <Tooltip key={id}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={label}
-              aria-current={screen === id ? 'page' : undefined}
-              // On the Editor this button opens and closes the files, so a press mustn't count as clicking outside them.
-              data-files-toggle={id === 'editor' && screen === 'editor' ? '' : undefined}
-              onClick={() => useSettings.getState().pressScreen(id)}
-              className={cn(
-                item,
-                screen === id
-                  ? 'bg-violet-500/15 text-violet-600 ring-1 ring-violet-500/30 ring-inset dark:text-violet-300'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <Icon />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{tip(id, label)}</TooltipContent>
-        </Tooltip>
-      ))}
+      {SECTIONS.map(({ id, label }) => {
+        const Icon = ICONS[id]
+        return (
+          <Tooltip key={id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={label}
+                aria-current={section === id ? 'page' : undefined}
+                onClick={() => useSettings.getState().pressSection(id)}
+                className={cn(
+                  item,
+                  section === id
+                    ? 'bg-violet-500/15 text-violet-600 ring-1 ring-violet-500/30 ring-inset dark:text-violet-300'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <Icon />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{tip(id, label)}</TooltipContent>
+          </Tooltip>
+        )
+      })}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="Files"
-            aria-pressed={filesOpen}
-            data-files-toggle
-            onClick={() => setFilesOpen(!filesOpen)}
-            className={cn(
-              item,
-              filesOpen
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <FolderOpen />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{filesOpen ? 'Hide files' : 'Show files'}</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="Notes"
-            aria-pressed={notesOpen}
-            onClick={() => useSettings.getState().setNotesOpen(!notesOpen)}
-            className={cn(
-              item,
-              notesOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <NotebookPen />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{notesOpen ? 'Hide notes' : 'Notes'}</TooltipContent>
-      </Tooltip>
+      <div className="my-1 h-px w-6 bg-border" aria-hidden />
 
       <Tooltip>
         <TooltipTrigger asChild>

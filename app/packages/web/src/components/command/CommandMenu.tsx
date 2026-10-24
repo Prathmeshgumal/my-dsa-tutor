@@ -90,10 +90,10 @@ export function CommandMenu() {
             <CommandItem value="Ask Claude" onSelect={run(() => useSettings.getState().setAiOpen(true))}>
               <Sparkles /> Ask Claude
             </CommandItem>
-            <CommandItem value="Open Playground" onSelect={run(() => useSettings.getState().setScreen('playground'))}>
+            <CommandItem value="Open Playground" onSelect={run(() => useSettings.getState().setSection('dryruns'))}>
               <Clapperboard /> Open Playground
             </CommandItem>
-            <CommandItem value="Open notes" onSelect={run(() => useSettings.getState().setNotesOpen(true))}>
+            <CommandItem value="Open notes" onSelect={run(() => useSettings.getState().setSection('notes'))}>
               <NotebookPen /> Open notes
             </CommandItem>
             <CommandItem value="Run" onSelect={run(() => void useRun.getState().runActiveFile())}>

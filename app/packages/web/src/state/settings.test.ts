@@ -1,5 +1,4 @@
 import { useSettings } from './settings'
-import { useFilesPanel } from './filesPanel'
 
 beforeEach(() => {
   localStorage.clear()
@@ -44,35 +43,4 @@ test('output is at the bottom and shown by default', () => {
 test('remembers whether the output is shown', () => {
   useSettings.getState().setOutputOpen(false)
   expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.outputOpen).toBe(false)
-})
-
-describe('pressing the button of the screen you are on hides or shows its list', () => {
-  beforeEach(() => {
-    useSettings.setState({ screen: 'editor', playgroundListOpen: true, problemListOpen: true })
-    useFilesPanel.setState({ open: false })
-  })
-
-  test('Problems: opens the screen, then hides and shows the problem list', () => {
-    useSettings.getState().pressScreen('problem')
-    expect(useSettings.getState()).toMatchObject({ screen: 'problem', problemListOpen: true })
-    useSettings.getState().pressScreen('problem')
-    expect(useSettings.getState().problemListOpen).toBe(false)
-    useSettings.getState().pressScreen('problem')
-    expect(useSettings.getState().problemListOpen).toBe(true)
-  })
-
-  test('Editor: hides and shows the files', () => {
-    useSettings.getState().pressScreen('editor')
-    expect(useFilesPanel.getState().open).toBe(true)
-    useSettings.getState().pressScreen('editor')
-    expect(useFilesPanel.getState().open).toBe(false)
-  })
-
-  test('switching screens leaves the lists as they were', () => {
-    useSettings.setState({ screen: 'problem', problemListOpen: false })
-    useSettings.getState().pressScreen('editor')
-    useSettings.getState().pressScreen('problem')
-    expect(useSettings.getState()).toMatchObject({ screen: 'problem', problemListOpen: false })
-    expect(useFilesPanel.getState().open).toBe(false)
-  })
 })

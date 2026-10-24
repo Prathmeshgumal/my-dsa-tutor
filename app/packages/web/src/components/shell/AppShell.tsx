@@ -3,12 +3,12 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { FilesPanel } from '@/components/files/FilesPanel'
+import { FilesList } from '@/components/files/FilesList'
 import { NotesPanel } from '@/components/notes/NotesPanel'
 import { Playground } from '@/components/playground/Playground'
 import { ProblemScreen } from '@/components/problems/ProblemScreen'
 import { NARROW_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
-import { useFilesPanel } from '@/state/filesPanel'
+import { useListVisible } from '@/state/sections'
 import { useSettings } from '@/state/settings'
 import { IconRail } from './IconRail'
 import { StatusBar, type Connection } from './StatusBar'
@@ -31,13 +31,12 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
   const narrow = useMediaQuery(NARROW_QUERY)
   const panelLayout = useSettings((s) => s.panelLayout)
   const setPanelLayout = useSettings((s) => s.setPanelLayout)
-  const filesOpen = useFilesPanel((s) => s.open)
+  const filesShown = useListVisible('code')
   const outputPosition = useSettings((s) => s.outputPosition)
   const vertical = narrow || outputPosition === 'bottom'
   const outputOpen = useSettings((s) => s.outputOpen)
   const aiOpen = useSettings((s) => s.aiOpen)
-  const notesOpen = useSettings((s) => s.notesOpen)
-  const screen = useSettings((s) => s.screen)
+  const section = useSettings((s) => s.section)
   const [editorSize, outputSize] = panelLayout ?? DEFAULT_LAYOUT
 
   return (
@@ -46,23 +45,33 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
         <TopBar narrow={narrow} onRun={onRun} running={running} canRun={canRun} onOpenCommand={onOpenCommand} />
         <div className="relative flex min-h-0 flex-1">
           <IconRail />
-          {filesOpen && (
+          {section === 'code' && filesShown && (
             <ErrorBoundary name="The file list">
-              <FilesPanel />
+              <FilesList />
             </ErrorBoundary>
           )}
-          {screen === 'playground' && (
+          {section === 'dryruns' && (
             <ErrorBoundary name="The Playground">
               <Playground />
             </ErrorBoundary>
           )}
-          {screen === 'problem' && (
+          {section === 'problems' && (
             <ErrorBoundary name="The Problems screen">
               <ProblemScreen />
             </ErrorBoundary>
           )}
-          {/* Kept mounted (just hidden) on the Playground, so Monaco keeps its cursor, scroll and undo history. */}
-          <div hidden={screen !== 'editor'} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {section === 'notes' && (
+            <ErrorBoundary name="The Notes section">
+              <NotesPanel page />
+            </ErrorBoundary>
+          )}
+          {section === 'chats' && (
+            <ErrorBoundary name="The Chats section">
+              <AiPanel page />
+            </ErrorBoundary>
+          )}
+          {/* Kept mounted (just hidden) on other sections, so Monaco keeps its cursor, scroll and undo history. */}
+          <div hidden={section !== 'code'} className="flex min-h-0 min-w-0 flex-1 flex-col">
             {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}
             <ResizablePanelGroup
               key={vertical ? 'vertical' : 'horizontal'}
@@ -95,14 +104,10 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
               )}
             </ResizablePanelGroup>
           </div>
-          {aiOpen && (
+          {/* On Chats the chat is the page already. */}
+          {aiOpen && section !== 'chats' && (
             <ErrorBoundary name="The Claude panel">
               <AiPanel />
-            </ErrorBoundary>
-          )}
-          {notesOpen && !aiOpen && (
-            <ErrorBoundary name="The Notes panel">
-              <NotesPanel />
             </ErrorBoundary>
           )}
         </div>

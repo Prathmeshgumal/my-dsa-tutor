@@ -1,0 +1,138 @@
+import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react'
+import { MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
+
+const Query = createContext('')
+
+const matches = (title: string, query: string) => title.toLowerCase().includes(query.trim().toLowerCase())
+
+interface ListPaneProps {
+  title: string
+  count?: number
+  onNew?(): void
+  newLabel?: string
+  /** A box that keeps only the rows whose title matches. */
+  search?: boolean
+  /** Shown when there are no rows at all. */
+  empty: ReactNode
+  /** ListRows. */
+  children: ReactNode
+}
+
+/** The list on the left of every section: title, count, New, search, and the same rows everywhere. */
+export function ListPane({ title, count, onNew, newLabel = 'New', search, empty, children }: ListPaneProps) {
+  const [query, setQuery] = useState('')
+  const rows = Children.toArray(children)
+  const titles = rows.flatMap((r) =>
+    isValidElement<{ title?: unknown }>(r) && typeof r.props.title === 'string' ? [r.props.title] : [],
+  )
+  const noMatch = query.trim() !== '' && titles.length > 0 && !titles.some((t) => matches(t, query))
+
+  return (
+    <section aria-label={title} className="flex w-60 shrink-0 flex-col border-r">
+      <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
+        <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{title}</span>
+        {count !== undefined && <span className="text-[11px] text-muted-foreground/70 tabular-nums">{count}</span>}
+        <div className="flex-1" />
+        {onNew && (
+          <Button variant="ghost" size="icon-sm" aria-label={newLabel} onClick={onNew} className="text-muted-foreground">
+            <Plus />
+          </Button>
+        )}
+      </div>
+      {search && rows.length > 0 && (
+        <label className="mx-1.5 mt-1.5 flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-muted-foreground focus-within:border-violet-500">
+          <Search className="size-3.5 shrink-0" aria-hidden />
+          <input
+            type="search"
+            aria-label={`Search ${title.toLowerCase()}`}
+            placeholder="Search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+      )}
+      <ScrollArea className="min-h-0 flex-1">
+        {rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[13px] text-muted-foreground">{empty}</div>
+        ) : (
+          <>
+            <ul aria-label={title} className="grid gap-px p-1.5">
+              <Query.Provider value={query}>{children}</Query.Provider>
+            </ul>
+            {noMatch && <p className="px-4 py-4 text-center text-[12.5px] text-muted-foreground">Nothing matches “{query.trim()}”.</p>}
+          </>
+        )}
+      </ScrollArea>
+    </section>
+  )
+}
+
+interface ListRowProps {
+  icon: ReactNode
+  title: string
+  /** A second, quieter line: a tag, a date, a count. */
+  meta?: ReactNode
+  active?: boolean
+  onOpen(): void
+  onDoubleClick?(): void
+  actions?: { label: string; onSelect(): void; destructive?: boolean }[]
+}
+
+export function ListRow({ icon, title, meta, active, onOpen, onDoubleClick, actions }: ListRowProps) {
+  const query = useContext(Query)
+  if (query && !matches(title, query)) return null
+  return (
+    <li
+      className={cn(
+        'group/row flex items-center rounded-md transition-colors',
+        active ? 'bg-violet-500/12 text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      <button
+        type="button"
+        aria-current={active || undefined}
+        onClick={onOpen}
+        onDoubleClick={onDoubleClick}
+        className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left outline-none focus-visible:underline"
+      >
+        <span className="flex shrink-0 [&_svg]:size-3.5">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12.5px]">{title}</span>
+          {meta && <span className="block truncate text-[11px] text-muted-foreground">{meta}</span>}
+        </span>
+      </button>
+      {actions && actions.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Actions for ${title}`}
+              className="mr-1 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right">
+            {actions.map((a) => (
+              <DropdownMenuItem key={a.label} variant={a.destructive ? 'destructive' : 'default'} onSelect={a.onSelect}>
+                {a.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </li>
+  )
+}

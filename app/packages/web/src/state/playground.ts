@@ -103,7 +103,7 @@ export const usePlayground = create<PlaygroundState>()((set, get) => {
     open(id) {
       pause()
       set({ activeId: id, step: 0 })
-      useSettings.getState().setScreen('playground')
+      useSettings.getState().setSection('dryruns')
     },
 
     openExample() {

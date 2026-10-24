@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { defaultWorkspace } from '@/lib/storage'
-import { useFilesPanel } from '@/state/filesPanel'
 import { useSettings } from '@/state/settings'
 import { useWorkspace } from '@/state/workspace'
 import { mockMatchMedia } from '@/test/matchMedia'
@@ -27,8 +26,14 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false, screen: 'editor' })
-  useFilesPanel.setState({ open: false })
+  useSettings.setState({
+    outputPosition: 'right',
+    outputOpen: true,
+    aiOpen: false,
+    section: 'code',
+    listOpen: { problems: true, code: true, notes: true, dryruns: true, chats: true },
+    foldedForClaude: false,
+  })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
 })
@@ -70,14 +75,39 @@ test('Run button disabled and busy while running', () => {
   expect(run).toHaveAttribute('aria-busy', 'true')
 })
 
-test('Notes button opens the notes panel, and it shares the right side with Claude', async () => {
+const rail = () => within(screen.getByRole('navigation', { name: 'Sidebar' }))
+
+test('the left bar: five sections, then Claude, then Setup', () => {
   renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Notes' }))
+  expect(rail().getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+    'Problems',
+    'Code',
+    'Notes',
+    'Dry runs',
+    'Chats',
+    'Claude',
+    'Setup',
+  ])
+  expect(rail().getByRole('button', { name: 'Code' })).toHaveAttribute('aria-current', 'page')
+  expect(rail().getByRole('button', { name: 'Claude' })).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('Notes opens as a section, and Claude can sit beside it', async () => {
+  renderShell()
+  await userEvent.click(rail().getByRole('button', { name: 'Notes' }))
+  expect(rail().getByRole('button', { name: 'Notes' })).toHaveAttribute('aria-current', 'page')
   expect(screen.getByRole('complementary', { name: 'Notes' })).toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: 'Claude' }))
+  expect(screen.getByText('EDITOR')).not.toBeVisible()
+  await userEvent.click(rail().getByRole('button', { name: 'Claude' }))
   expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
-  expect(screen.queryByRole('complementary', { name: 'Notes' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Notes' })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByRole('complementary', { name: 'Notes' })).toBeInTheDocument()
+})
+
+test('on the Chats section the chat is the page, so Claude isn’t also on the right', async () => {
+  useSettings.setState({ aiOpen: true })
+  renderShell()
+  await userEvent.click(rail().getByRole('button', { name: 'Chats' }))
+  expect(screen.getAllByRole('complementary', { name: 'Claude' })).toHaveLength(1)
 })
 
 test('search bar calls onOpenCommand', async () => {
@@ -136,52 +166,32 @@ test('rail Setup button opens the setup check', async () => {
   expect(useSettingsDialog.getState().open).toBe(true)
 })
 
-test('Files button toggles the files panel and reflects its state', async () => {
+test('the Code section lists the files; pressing Code again hides and shows the list', async () => {
   renderShell()
-  const button = screen.getByRole('button', { name: 'Files' })
-  expect(button).toHaveAttribute('aria-pressed', 'false')
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
-  await userEvent.click(button)
-  expect(button).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
-  await userEvent.click(button)
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Files' })).toBeInTheDocument()
+  await userEvent.click(rail().getByRole('button', { name: 'Code' }))
+  expect(screen.queryByRole('region', { name: 'Files' })).not.toBeInTheDocument()
+  await userEvent.click(rail().getByRole('button', { name: 'Code' }))
+  expect(screen.getByRole('region', { name: 'Files' })).toBeInTheDocument()
 })
 
-test('clicking anywhere outside the files panel (e.g. the code) closes it', async () => {
+test('picking a file in the list opens it and the list stays', async () => {
+  useWorkspace.getState().createFile('two_sum.py')
+  useWorkspace.getState().closeTab(useWorkspace.getState().activeId!)
   renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
-  await userEvent.click(screen.getByText('EDITOR'))
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'false')
+  await userEvent.click(screen.getByRole('button', { name: 'two_sum.py' }))
+  expect(useWorkspace.getState().activeFile()!.name).toBe('two_sum.py')
+  expect(screen.getByRole('region', { name: 'Files' })).toBeInTheDocument()
 })
 
-test('Escape closes the files panel', async () => {
+test.each([false, true])('opening Claude folds the list away and closing it brings it back (narrow: %s)', async (narrow) => {
+  mockMatchMedia(() => narrow)
   renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
-  await userEvent.keyboard('{Escape}')
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
-})
-
-test('clicking inside the files panel keeps it open', async () => {
-  renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
-  await userEvent.click(screen.getByText('solutions/'))
-  expect(screen.getByRole('complementary', { name: 'Files' })).toBeInTheDocument()
-})
-
-test('picking a file in the panel opens it and closes the panel', async () => {
-  useWorkspace.getState().createFile('two.py')
-  renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Files' }))
-  await userEvent.click(screen.getByRole('button', { name: 'main.cpp' }))
-  expect(useWorkspace.getState().activeFile()!.name).toBe('main.cpp')
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
-})
-
-test('the files panel is closed after a reload', () => {
-  renderShell()
-  expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument()
+  await userEvent.click(rail().getByRole('button', { name: 'Claude' }))
+  expect(screen.queryByRole('region', { name: 'Files' })).not.toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
+  await userEvent.click(rail().getByRole('button', { name: 'Claude' }))
+  expect(screen.getByRole('region', { name: 'Files' })).toBeInTheDocument()
 })
 
 test('output position "bottom" stacks the output under the editor on a wide window', () => {
@@ -261,24 +271,22 @@ test('Claude panel stays open while you click into the code', async () => {
   expect(screen.getByRole('complementary', { name: 'Claude' })).toBeInTheDocument()
 })
 
-test('the Claude and Notes panels use the remembered width and can be resized', () => {
+test('the Claude panel uses the remembered width and can be resized', () => {
   useSettings.setState({ aiOpen: true, sidePanelWidth: 520 })
   renderShell()
   expect(screen.getByRole('complementary', { name: 'Claude' })).toHaveStyle({ width: '520px' })
   expect(screen.getByRole('separator', { name: 'Resize panel' })).toBeInTheDocument()
-  act(() => useSettings.getState().setNotesOpen(true))
-  expect(screen.getByRole('complementary', { name: 'Notes' })).toHaveStyle({ width: '520px' })
 })
 
-test('the Playground button switches the main area; the editor stays loaded behind it', async () => {
+test('the Dry runs button switches the main area; the editor stays loaded behind it', async () => {
   const mounts = vi.fn()
   function EditorProbe() {
     useEffect(() => mounts(), [])
     return <div>EDITOR</div>
   }
   renderShell({ editor: <EditorProbe /> })
-  const editorBtn = screen.getByRole('button', { name: 'Editor' })
-  const playgroundBtn = screen.getByRole('button', { name: 'Playground' })
+  const editorBtn = rail().getByRole('button', { name: 'Code' })
+  const playgroundBtn = rail().getByRole('button', { name: 'Dry runs' })
   expect(editorBtn).toHaveAttribute('aria-current', 'page')
   await userEvent.click(playgroundBtn)
   expect(screen.getByRole('main', { name: 'Playground' })).toBeInTheDocument()

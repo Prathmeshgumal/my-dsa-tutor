@@ -298,28 +298,24 @@ describe('fixing the code from a dry run', () => {
 })
 
 describe('hiding the list of dry runs', () => {
-  afterEach(() => useSettings.setState({ playgroundListOpen: true, screen: 'editor' }))
+  afterEach(() => useSettings.getState().setListOpen('dryruns', true))
 
   test('the list has a hide button, and stays hidden', async () => {
     render(<Playground />)
     await userEvent.click(screen.getByRole('button', { name: 'Hide dry runs' }))
     expect(screen.queryByRole('list', { name: 'Dry runs' })).not.toBeInTheDocument()
-    expect(useSettings.getState().playgroundListOpen).toBe(false)
+    expect(useSettings.getState().listOpen.dryruns).toBe(false)
     // The dry run itself is still showing.
     expect(screen.getByRole('heading', { name: run.title })).toBeInTheDocument()
   })
 
-  test('the Playground button in the left bar opens the screen, then hides and shows the list', () => {
-    useSettings.setState({ screen: 'editor', playgroundListOpen: true })
-    useSettings.getState().pressScreen('playground')
-    expect(useSettings.getState()).toMatchObject({ screen: 'playground', playgroundListOpen: true })
-    useSettings.getState().pressScreen('playground')
-    expect(useSettings.getState().playgroundListOpen).toBe(false)
-    useSettings.getState().pressScreen('playground')
-    expect(useSettings.getState().playgroundListOpen).toBe(true)
-    // Other screens just switch.
-    useSettings.getState().pressScreen('editor')
-    expect(useSettings.getState()).toMatchObject({ screen: 'editor', playgroundListOpen: true })
+  test('pressing Dry runs again in the left bar hides and shows the list', async () => {
+    useSettings.setState({ section: 'dryruns' })
+    render(<Playground />)
+    act(() => useSettings.getState().pressSection('dryruns'))
+    expect(screen.queryByRole('list', { name: 'Dry runs' })).not.toBeInTheDocument()
+    act(() => useSettings.getState().pressSection('dryruns'))
+    expect(await screen.findByRole('list', { name: 'Dry runs' })).toBeInTheDocument()
   })
 })
 

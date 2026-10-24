@@ -126,14 +126,14 @@ test('Ask Claude opens the Claude panel', async () => {
   expect(useSettings.getState().aiOpen).toBe(true)
 })
 
-test('Open notes opens the notes panel', async () => {
-  useSettings.setState({ notesOpen: false })
+test('Open notes opens the Notes section', async () => {
+  useSettings.setState({ section: 'code' })
   await choose(/open notes/i)
-  expect(useSettings.getState().notesOpen).toBe(true)
+  expect(useSettings.getState().section).toBe('notes')
 })
 
 test('Open Playground switches to the Playground', async () => {
-  useSettings.setState({ screen: 'editor' })
+  useSettings.setState({ section: 'code' })
   await choose(/open playground/i)
-  expect(useSettings.getState().screen).toBe('playground')
+  expect(useSettings.getState().section).toBe('dryruns')
 })

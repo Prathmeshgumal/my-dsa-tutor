@@ -34,6 +34,7 @@ import { currentPhase, lineHits, stepChanges } from '@/lib/dryRunInsights'
 import { cn } from '@/lib/utils'
 import { ProblemTag } from '@/components/problems/ProblemTag'
 import { usePlayground } from '@/state/playground'
+import { useListVisible } from '@/state/sections'
 import { useSettings } from '@/state/settings'
 import { FinalCheck, InputCard, Legend, PhaseBands, StartVsEnd, StepChanges, TraceTable } from './Explain'
 import { StructureView } from './StructureView'
@@ -828,7 +829,7 @@ export function Playground() {
   const { runs, activeId } = usePlayground()
   const run = runs.find((r) => r.id === activeId) ?? null
   const savedOuter = useSettings((s) => s.playgroundLayout['list-main'])
-  const listOpen = useSettings((s) => s.playgroundListOpen)
+  const listOpen = useListVisible('dryruns')
 
   useEffect(() => {
     void usePlayground.getState().load()
@@ -874,7 +875,7 @@ export function Playground() {
                         variant="ghost"
                         size="icon-sm"
                         aria-label="Hide dry runs"
-                        onClick={() => useSettings.getState().setPlaygroundListOpen(false)}
+                        onClick={() => useSettings.getState().setListOpen('dryruns', false)}
                         className="ml-auto text-muted-foreground"
                       >
                         <PanelLeftClose />

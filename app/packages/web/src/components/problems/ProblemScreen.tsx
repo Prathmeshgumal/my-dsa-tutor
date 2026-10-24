@@ -37,6 +37,7 @@ import {
 } from '@dsa/core/problems'
 import { cn } from '@/lib/utils'
 import { activeProblem, flushProblemsOnUnload, useProblems } from '@/state/problems'
+import { useListVisible } from '@/state/sections'
 import { useSettings } from '@/state/settings'
 import { useAiChat } from '@/state/aiChat'
 import { useNotes } from '@/state/notes'
@@ -133,7 +134,7 @@ function ProblemList() {
               variant="ghost"
               size="icon-sm"
               aria-label="Hide problems"
-              onClick={() => useSettings.getState().setProblemListOpen(false)}
+              onClick={() => useSettings.getState().setListOpen('problems', false)}
               className={cn('text-muted-foreground', !entries.length && 'ml-auto')}
             >
               <PanelLeftClose />
@@ -601,7 +602,7 @@ function Empty() {
 export function ProblemScreen() {
   const entry = useProblems(activeProblem)
   const status = useProblems((s) => s.status)
-  const listOpen = useSettings((s) => s.problemListOpen)
+  const listOpen = useListVisible('problems')
   // Sizes are kept separately with and without the list, so hiding it doesn't squash the others.
   const outer = listOpen ? 'problem-outer' : 'problem-outer-no-list'
 

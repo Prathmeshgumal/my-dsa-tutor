@@ -96,7 +96,7 @@ export const useNotes = create<NotesState>()((set, get) => {
       set((s) => ({ notes: [...s.notes, note], activeName: note.name }))
       await save(note)
       // A note started while a problem is open belongs to that problem.
-      if (useSettings.getState().screen === 'problem') await useProblems.getState().linkNote(note.name).catch(() => {})
+      if (useSettings.getState().section === 'problems') await useProblems.getState().linkNote(note.name).catch(() => {})
     },
 
     async select(name) {

@@ -21,14 +21,14 @@ import { useWorkspace } from '@/state/workspace'
 
 // On the Problem screen, Run checks the problem's test cases; elsewhere it runs the open file.
 const runActiveFile = () =>
-  useSettings.getState().screen === 'problem' ? void useProblems.getState().test('run') : void useRun.getState().runActiveFile()
+  useSettings.getState().section === 'problems' ? void useProblems.getState().test('run') : void useRun.getState().runActiveFile()
 
 const modalOpen = () =>
   useFileDialogs.getState().kind !== null || useSettingsDialog.getState().open || useCommandMenu.getState().open
 
 export default function App() {
   const [cursor, setCursor] = useState<{ line: number; col: number } | null>(null)
-  const onProblem = useSettings((s) => s.screen === 'problem')
+  const onProblem = useSettings((s) => s.section === 'problems')
   const fileRunning = useRun((s) => s.state === 'running')
   const testing = useProblems((s) => s.testing !== null)
   const hasProblem = useProblems((s) => s.activeSlug !== null)

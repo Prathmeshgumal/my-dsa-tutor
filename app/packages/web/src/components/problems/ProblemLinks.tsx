@@ -44,11 +44,11 @@ export function ProblemNotes({ entry }: { entry: ProblemEntry }) {
   const newNote = async () => {
     // Linked automatically, because the Problem screen is showing.
     await useNotes.getState().create()
-    useSettings.getState().setNotesOpen(true)
+    useSettings.getState().setSection('notes')
   }
   const edit = (name: string) => {
     void useNotes.getState().select(name)
-    useSettings.getState().setNotesOpen(true)
+    useSettings.getState().setSection('notes')
   }
   const add = (
     <Button size="sm" variant="outline" onClick={() => void newNote()}>

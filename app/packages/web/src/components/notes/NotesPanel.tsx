@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, FilePlus2, Loader2, NotebookPen, StickyNote, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, FilePlus2, Loader2, NotebookPen, StickyNote, Trash2 } from 'lucide-react'
 import { Markdown } from '@/components/ai/Markdown'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -79,7 +79,8 @@ const SAVE_LABEL = {
 } as const
 
 /** Markdown notes in the right-hand panel; each note is a .md file in notes/. */
-export function NotesPanel() {
+/** `page`: filling a section instead of sitting on the right. */
+export function NotesPanel({ page = false }: { page?: boolean }) {
   const width = useSettings((s) => s.sidePanelWidth)
   const { notes, activeName, status, saveStatus, create, select, edit } = useNotes()
   const active = notes.find((n) => n.name === activeName) ?? null
@@ -117,10 +118,13 @@ export function NotesPanel() {
   return (
     <aside
       aria-label="Notes"
-      style={{ width }}
-      className="relative flex max-w-[70vw] shrink-0 flex-col border-l bg-background/60"
+      style={page ? undefined : { width }}
+      className={cn(
+        'relative flex flex-col bg-background/60',
+        page ? 'min-w-0 flex-1' : 'max-w-[70vw] shrink-0 border-l',
+      )}
     >
-      <SidePanelResizer />
+      {!page && <SidePanelResizer />}
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="grid size-5 shrink-0 place-items-center rounded-md bg-gradient-to-br from-amber-400 to-violet-500 text-white">
           <NotebookPen className="size-3" aria-hidden />
@@ -137,9 +141,6 @@ export function NotesPanel() {
         </button>
         <HeaderButton label="New note" onClick={() => void newNote()}>
           <FilePlus2 />
-        </HeaderButton>
-        <HeaderButton label="Close notes" onClick={() => useSettings.getState().setNotesOpen(false)}>
-          <X />
         </HeaderButton>
       </div>
 

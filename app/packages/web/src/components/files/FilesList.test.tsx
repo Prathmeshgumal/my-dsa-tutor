@@ -2,18 +2,16 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useFileDialogs } from '@/components/editor/FileDialogs'
 import { defaultWorkspace } from '@/lib/storage'
-import { useFilesPanel } from '@/state/filesPanel'
 import { useWorkspace } from '@/state/workspace'
 import { focusEditor } from '@/components/editor/editorFocus'
-import { FilesPanel } from './FilesPanel'
+import { FilesList } from './FilesList'
 
 vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
 
 const ws = () => useWorkspace.getState()
-const rows = () => within(screen.getByRole('list', { name: 'All files' })).getAllByRole('listitem')
+const rows = () => within(screen.getByRole('list', { name: 'Files' })).getAllByRole('listitem')
 
 beforeEach(() => {
-  useFilesPanel.setState({ open: true })
   useWorkspace.setState({ ...defaultWorkspace(), ready: true, saveStatus: 'saved', lastSavedAt: null })
   useFileDialogs.setState({ kind: null, fileId: null })
   ws().createFile('two_sum.py')
@@ -22,60 +20,61 @@ beforeEach(() => {
 })
 
 test('lists every file sorted by name, including files whose tabs are closed', () => {
-  render(<FilesPanel />)
+  render(<FilesList />)
   expect(rows().map((r) => r.textContent)).toEqual([
     expect.stringContaining('bfs.java'),
     expect.stringContaining('main.cpp'),
     expect.stringContaining('two_sum.py'),
   ])
-  expect(screen.getByText('3 files')).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Files' })).toHaveTextContent('3')
 })
 
 test('marks the active file', () => {
-  render(<FilesPanel />)
+  render(<FilesList />)
   expect(screen.getByRole('button', { name: 'bfs.java' })).toHaveAttribute('aria-current', 'true')
   expect(screen.getByRole('button', { name: 'main.cpp' })).not.toHaveAttribute('aria-current')
 })
 
 test('clicking a closed file reopens its tab, makes it active and focuses the editor', async () => {
   vi.mocked(focusEditor).mockClear()
-  render(<FilesPanel />)
+  render(<FilesList />)
   await userEvent.click(screen.getByRole('button', { name: 'two_sum.py' }))
   expect(ws().activeFile()!.name).toBe('two_sum.py')
   expect(ws().openIds).toContain(ws().activeId)
   expect(focusEditor).toHaveBeenCalled()
 })
 
+test('search finds a file by name', async () => {
+  render(<FilesList />)
+  await userEvent.type(screen.getByRole('searchbox', { name: 'Search files' }), 'sum')
+  expect(rows().map((r) => r.textContent)).toEqual([expect.stringContaining('two_sum.py')])
+})
+
 test('+ opens the new-file dialog', async () => {
-  render(<FilesPanel />)
+  render(<FilesList />)
   await userEvent.click(screen.getByRole('button', { name: 'New file' }))
   expect(useFileDialogs.getState().kind).toBe('new')
 })
 
 test('double-click opens rename for that file', async () => {
-  render(<FilesPanel />)
+  render(<FilesList />)
   await userEvent.dblClick(screen.getByRole('button', { name: 'main.cpp' }))
   const main = ws().files.find((f) => f.name === 'main.cpp')!
   expect(useFileDialogs.getState()).toEqual({ kind: 'rename', fileId: main.id })
 })
 
-test('row menu (rendered outside the drawer) works and does not close the drawer', async () => {
-  render(<FilesPanel />)
+test('row menu opens the delete dialog', async () => {
+  render(<FilesList />)
   const main = ws().files.find((f) => f.name === 'main.cpp')!
   await userEvent.click(screen.getByRole('button', { name: 'Actions for main.cpp' }))
   await userEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
   expect(useFileDialogs.getState()).toEqual({ kind: 'delete', fileId: main.id })
-  expect(useFilesPanel.getState().open).toBe(true)
 })
 
 test('no files → empty message with a New file button', async () => {
   useWorkspace.setState({ files: [], openIds: [], activeId: null })
-  render(<FilesPanel />)
+  render(<FilesList />)
   expect(screen.getByText(/no files yet/i)).toBeInTheDocument()
-  expect(screen.getByText('0 files')).toBeInTheDocument()
-})
-
-test('shows the folder files are saved in', () => {
-  render(<FilesPanel />)
-  expect(screen.getByText('solutions/')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'New file' }))
+  expect(useFileDialogs.getState().kind).toBe('new')
 })

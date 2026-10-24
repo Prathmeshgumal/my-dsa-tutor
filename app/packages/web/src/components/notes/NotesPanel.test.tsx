@@ -2,7 +2,6 @@ import { act, render as rtlRender, screen, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNotes } from '@/state/notes'
-import { useSettings } from '@/state/settings'
 import { NotesPanel } from './NotesPanel'
 
 const render = (ui: React.ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
@@ -14,7 +13,6 @@ const remove = vi.fn(async () => {})
 
 beforeEach(() => {
   for (const f of [load, create, select, edit, remove]) f.mockClear()
-  useSettings.setState({ notesOpen: true })
   useNotes.setState({
     notes: [
       { name: 'note-1.md', content: '# Graphs\n\n- **BFS** uses a queue' },
@@ -93,12 +91,6 @@ test('with no notes yet, offers to create the first one', async () => {
   render(<NotesPanel />)
   await userEvent.click(screen.getByRole('button', { name: 'Create a note' }))
   expect(create).toHaveBeenCalled()
-})
-
-test('close button hides the panel', async () => {
-  render(<NotesPanel />)
-  await userEvent.click(screen.getByRole('button', { name: 'Close notes' }))
-  expect(useSettings.getState().notesOpen).toBe(false)
 })
 
 test('a new note puts the cursor at the end, so typing goes after the heading', async () => {

@@ -29,7 +29,7 @@ beforeEach(() => {
   useWorkspace.setState({ ...defaultWorkspace(), ready: true })
   useAiChat.setState({ chats: [], activeChatId: null, streamingChatId: null, status: 'idle' })
   useRun.setState({ state: 'idle', result: null, error: null, lastFile: null })
-  useSettings.setState({ notesOpen: false })
+  useSettings.setState({ section: 'code' })
 })
 
 test('the first message starts a chat titled after it, and the reply is built from the stream', async () => {
@@ -373,7 +373,7 @@ describe('agent tools', () => {
   })
 
   test('tells Claude which note is open in the Notes panel', async () => {
-    useSettings.setState({ notesOpen: true })
+    useSettings.setState({ section: 'notes' })
     useNotes.setState({ notes: [{ name: 'note-1.md', content: '# Two pointers' }], activeName: 'note-1.md' })
     const stream = fakeStream([{ type: 'done' }])
     await chat().send('hi', { stream, ...quiet })
@@ -455,10 +455,10 @@ describe('chats about a problem', () => {
   beforeEach(() => {
     useProblems.setState({ entries: [entry('two-sum'), entry('three-sum')], activeSlug: null, activeFile: 'solution.cpp' })
   })
-  afterEach(() => useSettings.setState({ screen: 'editor' }))
+  afterEach(() => useSettings.setState({ section: 'code' }))
 
   test('a chat started on the Problem screen belongs to that problem and tells Claude about it', async () => {
-    useSettings.setState({ screen: 'problem' })
+    useSettings.setState({ section: 'problems' })
     useProblems.setState({ activeSlug: 'two-sum' })
     const stream = fakeStream([{ type: 'done' }])
     await chat().send('hint?', { stream, ...quiet })
@@ -504,7 +504,7 @@ describe('chats about a problem', () => {
   })
 
   test('the chat that creates a problem becomes its chat and stays in view', async () => {
-    useSettings.setState({ screen: 'problem' })
+    useSettings.setState({ section: 'problems' })
     const { load, open } = useProblems.getState()
     useProblems.setState({ load: async () => {}, open: async (slug: string) => {
         useProblems.setState({ activeSlug: slug })

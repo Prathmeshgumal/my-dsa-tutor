@@ -103,14 +103,14 @@ test('switches between versions of the code', async () => {
 })
 
 test('the problem list can be hidden, and the problem stays open', async () => {
-  useSettings.setState({ problemListOpen: true })
+  useSettings.getState().setListOpen('problems', true)
   renderScreen()
   expect(await screen.findByRole('list', { name: 'Problems' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Hide problems' }))
-  expect(useSettings.getState().problemListOpen).toBe(false)
+  expect(useSettings.getState().listOpen.problems).toBe(false)
   expect(screen.queryByRole('list', { name: 'Problems' })).not.toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Two Sum' })).toBeInTheDocument()
-  useSettings.setState({ problemListOpen: true })
+  useSettings.getState().setListOpen('problems', true)
 })
 
 test('problems saved by a newer editor are named, with what to do', async () => {

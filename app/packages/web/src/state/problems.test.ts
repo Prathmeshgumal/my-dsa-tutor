@@ -63,7 +63,7 @@ test('load picks the first problem and open switches to the Problem screen', asy
   expect(useProblems.getState().activeSlug).toBe('two-sum')
   await useProblems.getState().open('three-sum')
   expect(useProblems.getState().activeSlug).toBe('three-sum')
-  expect(useSettings.getState().screen).toBe('problem')
+  expect(useSettings.getState().section).toBe('problems')
 })
 
 test('typing saves the solution after a pause', async () => {
