@@ -9,6 +9,7 @@ Used by the /api/problems routes and by Claude's problem tools.
 import os
 import re
 import shutil
+from urllib.parse import urlsplit
 
 from .atomic_write import write_file_atomic
 from .core import SOLUTION_FILE, NewerFormatError, is_code_name, is_slug, parse_saved, stamp, unique_slug
@@ -122,8 +123,11 @@ def create_problem(base: str, problem: dict, solution: str, driver: str) -> str:
     where = folder(base, slug)
     note_own_change(where)
     os.makedirs(os.path.join(where, "attempts"), exist_ok=True)
-    # The starting code is kept for Reset.
-    saved = {**problem, "starter": solution}
+    # The starting code is kept for Reset; a link that isn't a web address is left out.
+    saved = {k: v for k, v in problem.items() if k != "link"}
+    if web_link(problem.get("link")):
+        saved["link"] = problem["link"]
+    saved["starter"] = solution
     write_file_atomic(os.path.join(where, "problem.json"), dumps(stamp("problem", saved), indent=2))
     write_file_atomic(os.path.join(where, "driver.cpp"), driver)
     write_file_atomic(os.path.join(where, "solution.cpp"), solution)
@@ -179,6 +183,26 @@ def write_tests(base: str, slug: str, tests: list[dict]) -> None:
 def link_note(base: str, slug: str, note: str) -> None:
     """Ties a note (by its file name in notes/) to a problem."""
     update_problem(base, slug, lambda p: {**p, "notes": list(dict.fromkeys([*(p.get("notes") or []), note]))})
+
+
+MAX_LINK = 500
+
+
+def web_link(value) -> bool:
+    """An http(s) address the page can safely show as a link."""
+    if not isinstance(value, str) or len(value) > MAX_LINK:
+        return False
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return False
+    return parts.scheme in ("http", "https") and bool(parts.hostname)
+
+
+def write_link(base: str, slug: str, link: str | None) -> None:
+    """Sets where the question came from, or forgets it (None)."""
+    existing(base, slug)
+    update_problem(base, slug, lambda p: {**{k: v for k, v in p.items() if k != "link"}, **({"link": link} if link else {})})
 
 
 def write_note_links(base: str, slug: str, notes: list[str]) -> None:

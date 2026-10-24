@@ -130,3 +130,26 @@ def test_inputs_are_checked_like_node():
     assert len(recorded) == len(inputs)
     mismatches = [(tool, args, expected, python_answer(tool, args)) for tool, args, expected in recorded if python_answer(tool, args) != expected]
     assert not mismatches, mismatches[:3]
+
+
+def test_create_problem_takes_an_optional_link():
+    args = {**VALID["create_problem"], "link": "https://leetcode.com/problems/two-sum/"}
+    value, error = check_input("create_problem", args)
+    assert error is None and value["link"] == "https://leetcode.com/problems/two-sum/"
+    assert list(value)[-2:] == ["link", "explanation"]
+    assert "link" not in check_input("create_problem", VALID["create_problem"])[0]
+    _, error = check_input("create_problem", {**VALID["create_problem"], "link": 5})
+    assert error is not None and '"link"' in error
+    tools = json.loads((Path(__file__).resolve().parents[2] / "src" / "dsa_server" / "data" / "editor_tools.json").read_text())["tools"]
+    schema = next(t for t in tools if t["name"] == "create_problem")["inputSchema"]
+    assert schema["properties"]["link"]["type"] == "string" and "link" not in schema["required"]
+
+
+def test_claude_sees_the_link_when_there_is_one():
+    from dsa_server.editor_tools import describe_problem
+
+    problem = {"title": "Two Sum", "difficulty": "easy", "description": "d", "params": [{"name": "n", "type": "int"}], "compare": "exact", "tests": []}
+    entry = {"slug": "two-sum", "solved": False, "problem": problem, "solution": "", "versions": [], "driver": ""}
+    assert "Link:" not in describe_problem(entry, [], [])
+    lines = describe_problem({**entry, "problem": {**problem, "link": "https://leetcode.com/problems/two-sum/"}}, [], []).splitlines()
+    assert lines[1] == "Link: https://leetcode.com/problems/two-sum/"

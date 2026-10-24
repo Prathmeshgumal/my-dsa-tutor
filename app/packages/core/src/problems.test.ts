@@ -4,7 +4,9 @@ import {
   buildStdin,
   casesFor,
   describeInput,
+  guessLeetCodeLink,
   judgeOutput,
+  linkLabel,
   problemProblems,
   runTests,
   sameAnswer,
@@ -203,5 +205,18 @@ public:
   it('is null when it can’t be worked out', () => {
     expect(starterCode({ problem, solution: '// wiped', versions: [], driver }, 'solution.cpp')).toBeNull()
     expect(starterCode({ problem, solution: solved, versions: [], driver: 'int main() {}' }, 'solution.cpp')).toBeNull()
+  })
+})
+
+describe('links to the question', () => {
+  it('names LeetCode, or the site', () => {
+    expect(linkLabel('https://leetcode.com/problems/two-sum/')).toBe('LeetCode')
+    expect(linkLabel('https://leetcode.cn/problems/two-sum/')).toBe('LeetCode')
+    expect(linkLabel('https://www.naukri.com/code360/x')).toBe('naukri.com')
+  })
+
+  it('guesses the LeetCode address from the title', () => {
+    expect(guessLeetCodeLink('3Sum')).toBe('https://leetcode.com/problems/3sum/')
+    expect(guessLeetCodeLink('Two Sum II')).toBe('https://leetcode.com/problems/two-sum-ii/')
   })
 })

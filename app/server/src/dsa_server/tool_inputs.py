@@ -381,6 +381,7 @@ INPUTS: dict[str, Obj] = {
             "tests": Array(Obj({"input": Array(Str()), "expected": Str(), "example": Bool()})),
             "starter": Str(),
             "driver": Str(),
+            "link": _opt(Str()),
             "explanation": _explanation,
         }
     ),

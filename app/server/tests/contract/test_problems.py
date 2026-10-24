@@ -224,3 +224,35 @@ class TestApply:
 
     def test_not_json(self, client):
         check(client.post("/api/claude/apply", content="nope"), 400, {"error": "That isn’t a change the editor can apply."}, ctype=JSON)
+
+
+LINK_ERROR = {"error": "The link must be a web address starting with https:// or http://."}
+
+
+def test_link_to_the_question(client, data):
+    slug = create(client, starter="class Solution {};")
+    lc = "https://leetcode.com/problems/two-sum/"
+    check(client.put(f"/api/problems/{slug}/link", json={"link": lc}), 204, ctype=ABSENT, text="")
+    saved = json.loads((data / "problems" / slug / "problem.json").read_text())
+    assert saved["link"] == lc and saved["starter"] == "class Solution {};"
+    entry = next(e for e in client.get("/api/problems").json() if e["slug"] == slug)
+    assert entry["problem"]["link"] == lc
+    check(client.put(f"/api/problems/{slug}/link", json={"link": None}), 204)
+    assert "link" not in json.loads((data / "problems" / slug / "problem.json").read_text())
+
+
+@pytest.mark.parametrize("bad", ["javascript:alert(1)", "leetcode.com/problems/x", 5, "https://" + "a" * 500, "ftp://x.com/a", "https://"])
+def test_only_web_links_are_kept(client, bad):
+    slug = create(client)
+    check(client.put(f"/api/problems/{slug}/link", json={"link": bad}), 400, LINK_ERROR, ctype=JSON)
+    check(client.put("/api/problems/no-such-problem/link", json={"link": "https://leetcode.com/"}), 404, ctype=JSON)
+
+
+def test_a_new_problem_keeps_its_link_and_drops_a_bad_one(client, data):
+    def made(link):
+        title = f"Linked {uuid.uuid4().hex[:6]}"
+        r = client.post("/api/claude/apply", json={"change": {"type": "create_problem", "problem": {**problem(title, 1), "link": link}, "starter": "s", "driver": "d"}})
+        return json.loads((data / "problems" / r.json()["effects"][0]["slug"] / "problem.json").read_text())
+
+    assert made("https://leetcode.com/problems/3sum/")["link"] == "https://leetcode.com/problems/3sum/"
+    assert "link" not in made("javascript:alert(1)")

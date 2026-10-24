@@ -37,6 +37,8 @@ export interface Problem {
   notes?: string[]
   /** The code it started with (Reset brings it back). Problems made before this was kept don't have it. */
   starter?: string
+  /** Where the question came from, e.g. https://leetcode.com/problems/two-sum/ */
+  link?: string
 }
 
 /** A C++ file in the problem's folder: solution.cpp, or another version such as brute-force.cpp. */
@@ -106,6 +108,27 @@ export function slugify(title: string): string {
     .replace(/^-|-$/g, '')
     .slice(0, 60)
   return slug || 'problem'
+}
+
+/** Only web addresses are shown as links (never `javascript:` and the like). */
+export function isWebLink(url: string): boolean {
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'https:' || protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/** The link button's name: "LeetCode", or the site, e.g. "naukri.com". */
+export function linkLabel(url: string): string {
+  const host = new URL(url).hostname.replace(/^www\./, '')
+  return /(^|\.)leetcode\.(com|cn)$/.test(host) ? 'LeetCode' : host
+}
+
+/** LeetCode's address for a title, as a starting point for "Add link": "Two Sum II" → …/problems/two-sum-ii/ */
+export function guessLeetCodeLink(title: string): string {
+  return `https://leetcode.com/problems/${slugify(title)}/`
 }
 
 /** A slug not in `taken`: two-sum, two-sum-2, two-sum-3… */

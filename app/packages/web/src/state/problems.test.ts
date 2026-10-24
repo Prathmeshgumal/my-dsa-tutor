@@ -188,3 +188,13 @@ test('Reset does nothing when the starting code can’t be worked out', async ()
   expect(calls.some((c) => c.method === 'PUT')).toBe(false)
   expect(useProblems.getState().entries[0].solution).toBe('class Solution {};')
 })
+
+test('a problem’s link is saved, and can be removed', async () => {
+  await useProblems.getState().load()
+  await useProblems.getState().setLink('https://leetcode.com/problems/two-sum/')
+  expect(calls.at(-1)).toEqual({ url: '/api/problems/two-sum/link', method: 'PUT', body: { link: 'https://leetcode.com/problems/two-sum/' } })
+  expect(useProblems.getState().entries[0].problem.link).toBe('https://leetcode.com/problems/two-sum/')
+  await useProblems.getState().setLink(null)
+  expect(calls.at(-1)?.body).toEqual({ link: null })
+  expect(useProblems.getState().entries[0].problem).not.toHaveProperty('link')
+})

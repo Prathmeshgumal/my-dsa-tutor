@@ -51,6 +51,8 @@ interface ProblemsState {
   deleteVersion(name: string): Promise<void>
   /** Puts the open file back to the code the problem started with, and saves it. */
   resetCode(): Promise<void>
+  /** Where the open problem's question came from (a web address), or null to forget it. */
+  setLink(link: string | null): Promise<void>
   test(kind: TestRun['kind'], runner?: CodeRunner): Promise<void>
   addCase(test: Pick<TestCase, 'input' | 'expected'>): Promise<void>
   /** Only the student's own cases can be removed. */
@@ -233,6 +235,16 @@ export const useProblems = create<ProblemsState>()(
           if (!entry || starter === null) return
           get().editCode(entry.slug, get().activeFile, starter)
           await get().flush()
+        },
+
+        async setLink(link) {
+          const entry = active()
+          if (!entry) return
+          await send(`${problemUrl(entry.slug)}/link`, 'PUT', { link })
+          patchEntry(entry.slug, (e) => {
+            const { link: _old, ...problem } = e.problem
+            return { problem: link ? { ...problem, link } : problem }
+          })
         },
 
         async deleteVersion(name) {

@@ -355,6 +355,10 @@
          "type": "string",
          "description": "The hidden main() using judge::run and judge::read"
         },
+        "link": {
+         "type": "string",
+         "description": "The question's web address, if it came from a site (for a LeetCode question: https://leetcode.com/problems/<slug>/). Leave out if unknown."
+        },
         "explanation": {
          "type": "string",
          "description": "One short sentence the user sees: why this change."
@@ -1569,6 +1573,10 @@
         "driver": {
          "type": "string",
          "description": "The hidden main() using judge::run and judge::read"
+        },
+        "link": {
+         "type": "string",
+         "description": "The question's web address, if it came from a site (for a LeetCode question: https://leetcode.com/problems/<slug>/). Leave out if unknown."
         },
         "explanation": {
          "type": "string",
@@ -2832,6 +2840,10 @@
         "driver": {
          "type": "string",
          "description": "The hidden main() using judge::run and judge::read"
+        },
+        "link": {
+         "type": "string",
+         "description": "The question's web address, if it came from a site (for a LeetCode question: https://leetcode.com/problems/<slug>/). Leave out if unknown."
         },
         "explanation": {
          "type": "string",
@@ -4130,6 +4142,10 @@
         "driver": {
          "type": "string",
          "description": "The hidden main() using judge::run and judge::read"
+        },
+        "link": {
+         "type": "string",
+         "description": "The question's web address, if it came from a site (for a LeetCode question: https://leetcode.com/problems/<slug>/). Leave out if unknown."
         },
         "explanation": {
          "type": "string",
@@ -5462,6 +5478,10 @@
         "driver": {
          "type": "string",
          "description": "The hidden main() using judge::run and judge::read"
+        },
+        "link": {
+         "type": "string",
+         "description": "The question's web address, if it came from a site (for a LeetCode question: https://leetcode.com/problems/<slug>/). Leave out if unknown."
         },
         "explanation": {
          "type": "string",

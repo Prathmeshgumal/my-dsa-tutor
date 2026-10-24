@@ -159,6 +159,7 @@ def describe_problem(entry: dict, notes: list[str], dry_runs: list[str]) -> str:
         )
     lines = [
         f"# {tmpl(problem['title'])} ({tmpl(problem['difficulty'])}) — {entry['slug']}{', solved' if entry['solved'] else ''}",
+        *([f"Link: {problem['link']}"] if isinstance(problem.get("link"), str) else []),
         "",
         tmpl(problem["description"]),
         "",
@@ -493,6 +494,7 @@ class EditorTools:
         driver: str,
         explanation: str,
         compare: str | None = None,
+        link: str | None = None,
     ) -> dict:
         new_problem = {
             "title": title,
@@ -503,6 +505,8 @@ class EditorTools:
             "tests": [{**t, "addedBy": "problem"} for t in tests],
             "createdAt": now_ms(),
         }
+        if store.web_link(link):
+            new_problem["link"] = link
         problems = problem_problems(new_problem)
         if problems:
             return {"text": "The problem wasn't created. Fix these and call create_problem again:\n- " + "\n- ".join(problems), "isError": True}

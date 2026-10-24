@@ -24,7 +24,17 @@ import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { codeOf, SOLUTION_FILE, starterCode, type Attempt, type Difficulty, type ProblemEntry } from '@dsa/core/problems'
+import {
+  codeOf,
+  guessLeetCodeLink,
+  isWebLink,
+  linkLabel,
+  SOLUTION_FILE,
+  starterCode,
+  type Attempt,
+  type Difficulty,
+  type ProblemEntry,
+} from '@dsa/core/problems'
 import { cn } from '@/lib/utils'
 import { activeProblem, flushProblemsOnUnload, useProblems } from '@/state/problems'
 import { useSettings } from '@/state/settings'
@@ -227,6 +237,70 @@ function Submissions() {
   )
 }
 
+/** A button to the question on the site it came from (LeetCode, mostly), or a way to add one. Only web addresses
+ * become links, so a saved "javascript:" can't run anything. */
+function QuestionLink({ entry }: { entry: ProblemEntry }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const { link, title } = entry.problem
+  const save = (value: string | null) => {
+    void useProblems.getState().setLink(value)
+    setDraft(null)
+  }
+  if (draft !== null) {
+    const ok = isWebLink(draft.trim())
+    return (
+      <form
+        className="flex min-w-0 flex-1 items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (ok) save(draft.trim())
+        }}
+      >
+        <input
+          aria-label="Link to the question"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setDraft(null)}
+          autoFocus
+          className="h-6 min-w-0 flex-1 rounded border bg-background px-1.5 text-[12px] outline-none focus:border-violet-500"
+        />
+        <Button type="submit" size="sm" className="h-6 px-2 text-[12px]" disabled={!ok} aria-label="Save link">
+          Save
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => setDraft(null)}>
+          Cancel
+        </Button>
+        {link && (
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => save(null)}>
+            Remove link
+          </Button>
+        )}
+      </form>
+    )
+  }
+  if (link && isWebLink(link)) {
+    return (
+      <span className="ml-auto flex items-center gap-1">
+        <a href={link} target="_blank" rel="noreferrer" className="rounded-full border px-2 py-0.5 font-medium hover:bg-muted">
+          {linkLabel(link)} ↗
+        </a>
+        <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setDraft(link)}>
+          Edit
+        </button>
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className="ml-auto text-muted-foreground hover:text-foreground"
+      onClick={() => setDraft(link ?? guessLeetCodeLink(title))}
+    >
+      Add link
+    </button>
+  )
+}
+
 type Tab = 'description' | 'notes' | 'dry runs' | 'chats' | 'submissions'
 
 function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
@@ -281,6 +355,7 @@ function DescriptionPanel({ entry }: { entry: ProblemEntry }) {
                   <CheckCircle2 className="size-3.5" aria-hidden /> Solved
                 </span>
               )}
+              <QuestionLink key={entry.slug} entry={entry} />
             </div>
             <div className="text-[13.5px] leading-relaxed">
               <Markdown>{problem.description}</Markdown>

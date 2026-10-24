@@ -6,6 +6,7 @@
   DELETE /api/problems/:slug/files/:name  → delete a version (not solution.cpp)
   PUT    /api/problems/:slug/notes        { notes } → which notes (file names in notes/) belong to it
   PUT    /api/problems/:slug/tests        { tests } → replace the test cases
+  PUT    /api/problems/:slug/link         { link } → where the question came from (a web address, or null)
   GET    /api/problems/:slug/attempts     → Attempt[] (newest first)
   POST   /api/problems/:slug/attempts     { attempt } → save a Submit
   DELETE /api/problems/:slug              → delete the problem and its attempts
@@ -96,6 +97,11 @@ async def _handle(base: str, req: Request) -> None:
         store.write_solution(base, slug, content)
     elif action == "tests" and method == "PUT":
         store.write_tests(base, slug, parse_tests((await read_json(req, "Too large")).get("tests")))
+    elif action == "link" and method == "PUT":
+        link = (await read_json(req, "Too large")).get("link")
+        if link is not None and not store.web_link(link):
+            raise HttpError(400, "The link must be a web address starting with https:// or http://.")
+        store.write_link(base, slug, link)
     elif action == "attempts" and method == "GET":
         return await _json(req, store.list_attempts(base, slug))
     elif action == "attempts" and method == "POST":

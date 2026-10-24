@@ -142,3 +142,40 @@ test('Reset is off when the starting code can’t be worked out', async () => {
   await screen.findByTestId('monaco')
   expect(screen.getByRole('button', { name: 'Reset code' })).toBeDisabled()
 })
+
+const withProblem = (extra: Partial<ProblemEntry['problem']>) =>
+  configureProblems({
+    fetchImpl: ((url: string) => json(url === '/api/problems' ? [{ ...entry, problem: { ...entry.problem, ...extra } }] : [])) as typeof fetch,
+  })
+
+test('a LeetCode problem has a button that opens the question', async () => {
+  withProblem({ link: 'https://leetcode.com/problems/two-sum/' })
+  renderScreen()
+  const link = await screen.findByRole('link', { name: /LeetCode/ })
+  expect(link).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
+  expect(link).toHaveAttribute('target', '_blank')
+})
+
+test('a link that isn’t a web address is never shown as one', async () => {
+  withProblem({ link: 'javascript:alert(1)' })
+  renderScreen()
+  await screen.findByRole('heading', { name: 'Two Sum' })
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+})
+
+test('Add link suggests the LeetCode address and saves what you confirm', async () => {
+  const sent: { url: string; body: unknown }[] = []
+  configureProblems({
+    fetchImpl: ((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') sent.push({ url, body: JSON.parse(init.body as string) })
+      return url === '/api/problems' ? json([entry]) : Promise.resolve(new Response(null, { status: 204 }))
+    }) as typeof fetch,
+  })
+  renderScreen()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add link' }))
+  const box = screen.getByRole('textbox', { name: 'Link to the question' })
+  expect(box).toHaveValue('https://leetcode.com/problems/two-sum/')
+  fireEvent.click(screen.getByRole('button', { name: 'Save link' }))
+  expect(await screen.findByRole('link', { name: /LeetCode/ })).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
+  expect(sent).toEqual([{ url: '/api/problems/two-sum/link', body: { link: 'https://leetcode.com/problems/two-sum/' } }])
+})
