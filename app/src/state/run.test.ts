@@ -1,10 +1,9 @@
 import type { SocketLike } from '@/lib/runner/interactive'
 import { toast } from 'sonner'
-import { useSettingsDialog } from '@/components/settings/SettingsDialog'
 import { LANGUAGES } from '@/lib/languages'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
 import { defaultWorkspace } from '@/lib/storage'
-import { configureRun, createRunner, initialConnection, useRun } from './run'
+import { configureRun, createRunner, useRun } from './run'
 import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
@@ -29,9 +28,7 @@ const run = () => useRun.getState()
 beforeEach(() => {
   vi.mocked(toast.error).mockClear()
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: null })
-  useSettings.setState({ apiKey: 'k', runner: 'judge0' })
   useRun.setState({ state: 'idle', result: null, error: null, connection: 'connected' })
-  useSettingsDialog.setState({ open: false, reason: 'manual' })
 })
 
 test('runs active file with its language and empty stdin', async () => {
@@ -63,18 +60,7 @@ test('ignores a second call while running', async () => {
   await first
 })
 
-test('no key → opens settings dialog with reason no_key, state error, no runner call', async () => {
-  useSettings.setState({ apiKey: '' })
-  const runner = fakeRunner(async () => ok)
-  await run().runActiveFile(runner)
-  expect(runner.run).not.toHaveBeenCalled()
-  expect(useSettingsDialog.getState()).toMatchObject({ open: true, reason: 'no_key' })
-  expect(run().state).toBe('error')
-  expect(run().error?.kind).toBe('no_key')
-  expect(run().connection).toBe('no_key')
-})
-
-test.each(['auth', 'quota', 'network', 'http'] as const)(
+test.each(['network', 'http'] as const)(
   '%s error → state error, connection failed, toast with message',
   async (kind) => {
     const runner = fakeRunner(async () => {
@@ -111,43 +97,12 @@ test('no active file → no-op', async () => {
   expect(run().state).toBe('idle')
 })
 
-test('piston needs no key: runs without opening settings', async () => {
-  useSettings.setState({ apiKey: '', runner: 'piston' })
-  const runner = fakeRunner(async () => ok)
-  await run().runActiveFile(runner)
-  expect(runner.run).toHaveBeenCalledOnce()
-  expect(useSettingsDialog.getState().open).toBe(false)
-  expect(run().state).toBe('done')
-})
-
 test('createRunner picks Piston via the /piston proxy', async () => {
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ run: { stdout: '', stderr: '', code: 0, signal: null, status: null, message: null } })))
   vi.stubGlobal('fetch', fetchMock)
-  await createRunner({ runner: 'piston', apiKey: '' }).run({ language: LANGUAGES.cpp, source: '', stdin: '' })
+  await createRunner().run({ language: LANGUAGES.cpp, source: '', stdin: '' })
   expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe('/piston/execute')
   vi.unstubAllGlobals()
-})
-
-test('createRunner picks Judge0 on RapidAPI', async () => {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: { id: 3, description: 'Accepted' } })))
-  vi.stubGlobal('fetch', fetchMock)
-  await createRunner({ runner: 'judge0', apiKey: 'k' }).run({ language: LANGUAGES.cpp, source: '', stdin: '' })
-  expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toMatch(/^https:\/\/judge0-ce\.p\.rapidapi\.com\//)
-  vi.unstubAllGlobals()
-})
-
-test.each([
-  [{ runner: 'piston', apiKey: '' }, 'connected'],
-  [{ runner: 'judge0', apiKey: '' }, 'no_key'],
-  [{ runner: 'judge0', apiKey: 'k' }, 'connected'],
-] as const)('initialConnection(%o) → %s', (settings, expected) => {
-  expect(initialConnection(settings)).toBe(expected)
-})
-
-test('switching runner resets the connection state', () => {
-  useRun.setState({ connection: 'failed' })
-  useSettings.getState().setRunner('piston')
-  expect(run().connection).toBe('connected')
 })
 
 test('running with the output hidden opens it straight away, before the result arrives', async () => {
@@ -157,12 +112,6 @@ test('running with the output hidden opens it straight away, before the result a
   expect(useSettings.getState().outputOpen).toBe(true)
   resolve(ok)
   await pending
-})
-
-test('no-key error still shows the output so the message is visible', async () => {
-  useSettings.setState({ apiKey: '', runner: 'judge0', outputOpen: false })
-  await run().runActiveFile(fakeRunner(async () => ok))
-  expect(useSettings.getState().outputOpen).toBe(true)
 })
 
 describe('running like a terminal (Piston)', () => {
@@ -185,7 +134,6 @@ describe('running like a terminal (Piston)', () => {
   beforeEach(() => {
     socket = new FakeSocket()
     configureRun({ connect: () => socket })
-    useSettings.setState({ runner: 'piston' })
     useRun.setState({ terminal: [], phase: null, lastStdin: '' })
     useWorkspace.getState().createFile('read.cpp')
   })

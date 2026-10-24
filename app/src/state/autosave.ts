@@ -5,6 +5,15 @@ import { useWorkspace } from './workspace'
 const DEBOUNCE_MS = 500
 
 let flushNow: (() => Promise<void>) | null = null
+let adopt: ((files: CodeFile[]) => void) | null = null
+
+/**
+ * Tells autosave these files are exactly what's on disk now (just read back from it), so it doesn't
+ * write them out again.
+ */
+export function adoptDiskFiles(files: CodeFile[]): void {
+  adopt?.(files)
+}
 
 /** Writes any pending change immediately and resolves once it is saved (used before asking Claude). */
 export function flushAutosave(): Promise<void> {
@@ -57,6 +66,9 @@ export function startAutosave({ disk }: { disk?: DiskOptions } = {}): () => void
     flush()
     await queue
   }
+  adopt = (files) => {
+    synced = files
+  }
 
   const unsubscribe = useWorkspace.subscribe((s, prev) => {
     if (s.files === prev.files && s.openIds === prev.openIds && s.activeId === prev.activeId) return
@@ -79,6 +91,7 @@ export function startAutosave({ disk }: { disk?: DiskOptions } = {}): () => void
 
   return () => {
     flushNow = null
+    adopt = null
     unsubscribe()
     if (timer !== null) clearTimeout(timer)
     timer = null

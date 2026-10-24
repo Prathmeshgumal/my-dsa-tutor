@@ -4,7 +4,7 @@
 //   problems/<slug>/solution.cpp   the student's code
 //   problems/<slug>/attempts/<time>.json   one per Submit
 // Used by the /api/problems routes and by Claude's problem tools.
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
   isCodeName,
@@ -16,6 +16,9 @@ import {
   type ProblemEntry,
   type TestCase,
 } from '../src/lib/problems.ts'
+import { NewerFormatError, parseSaved, stamp } from '../src/lib/formats.ts'
+import { writeFileAtomic } from './atomicWrite.ts'
+import { noteOwnChange } from './ownChanges.ts'
 
 export class ProblemNotFound extends Error {}
 
@@ -46,7 +49,7 @@ export async function listAttempts(dir: string, slug: string): Promise<Attempt[]
       .filter((n) => /^\d+\.json$/.test(n))
       .map(async (n) => {
         try {
-          return JSON.parse(await readFile(path.join(attemptsDir, n), 'utf8')) as Attempt
+          return parseSaved<Attempt>('attempt', await readFile(path.join(attemptsDir, n), 'utf8'))
         } catch {
           return null
         }
@@ -59,8 +62,9 @@ export async function readEntry(dir: string, slug: string): Promise<ProblemEntry
   const base = folder(dir, slug)
   let problem: Problem
   try {
-    problem = JSON.parse(await readFile(path.join(base, 'problem.json'), 'utf8')) as Problem
-  } catch {
+    problem = parseSaved<Problem>('problem', await readFile(path.join(base, 'problem.json'), 'utf8'))
+  } catch (e) {
+    if (e instanceof NewerFormatError) throw new ProblemNotFound(`"${slug}" ${e.message.replace(/^This/, 'was')}`)
     throw new ProblemNotFound(`There's no problem called "${slug}".`)
   }
   const attempts = await listAttempts(dir, slug)
@@ -90,10 +94,11 @@ export async function createProblem(
 ): Promise<string> {
   const slug = uniqueSlug(problem.title, await slugs(dir))
   const base = folder(dir, slug)
+  noteOwnChange(base)
   await mkdir(path.join(base, 'attempts'), { recursive: true })
-  await writeFile(path.join(base, 'problem.json'), JSON.stringify(problem, null, 2), 'utf8')
-  await writeFile(path.join(base, 'driver.cpp'), driver, 'utf8')
-  await writeFile(path.join(base, 'solution.cpp'), solution, 'utf8')
+  await writeFileAtomic(path.join(base, 'problem.json'), JSON.stringify(stamp('problem', problem), null, 2))
+  await writeFileAtomic(path.join(base, 'driver.cpp'), driver)
+  await writeFileAtomic(path.join(base, 'solution.cpp'), solution)
   return slug
 }
 
@@ -116,20 +121,22 @@ export class BadName extends Error {}
 /** Writes solution.cpp or another version (created if new). */
 export async function writeCode(dir: string, slug: string, name: string, content: string): Promise<void> {
   checkCodeName(name)
-  await writeFile(path.join(await existing(dir, slug), name), content, 'utf8')
+  await writeFileAtomic(path.join(await existing(dir, slug), name), content)
 }
 
 /** Deletes a version; solution.cpp always stays. */
 export async function deleteCode(dir: string, slug: string, name: string): Promise<void> {
   checkCodeName(name)
   if (name === SOLUTION_FILE) throw new BadName(`${SOLUTION_FILE} can't be deleted.`)
-  await rm(path.join(await existing(dir, slug), name), { force: true })
+  const file = path.join(await existing(dir, slug), name)
+  noteOwnChange(file)
+  await rm(file, { force: true })
 }
 
 async function updateProblem(dir: string, slug: string, change: (p: Problem) => Problem): Promise<Problem> {
   const { problem } = await readEntry(dir, slug)
   const next = change(problem)
-  await writeFile(path.join(folder(dir, slug), 'problem.json'), JSON.stringify(next, null, 2), 'utf8')
+  await writeFileAtomic(path.join(folder(dir, slug), 'problem.json'), JSON.stringify(stamp('problem', next), null, 2))
   return next
 }
 
@@ -148,10 +155,12 @@ export async function writeNoteLinks(dir: string, slug: string, notes: string[])
 
 export async function saveAttempt(dir: string, slug: string, attempt: Attempt): Promise<void> {
   const attemptsDir = path.join(await existing(dir, slug), 'attempts')
+  noteOwnChange(attemptsDir)
   await mkdir(attemptsDir, { recursive: true })
-  await writeFile(path.join(attemptsDir, `${attempt.at}.json`), JSON.stringify(attempt), 'utf8')
+  await writeFileAtomic(path.join(attemptsDir, `${attempt.at}.json`), JSON.stringify(stamp('attempt', attempt)))
 }
 
 export async function deleteProblem(dir: string, slug: string): Promise<void> {
+  noteOwnChange(folder(dir, slug))
   await rm(folder(dir, slug), { recursive: true, force: true })
 }

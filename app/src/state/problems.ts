@@ -233,7 +233,7 @@ export const useProblems = create<ProblemsState>()(
             await get().flush()
             const code = codeOf(entry, file) ?? entry.solution
             const run = await runTests(
-              runner ?? createRunner(useSettings.getState()),
+              runner ?? createRunner(),
               { ...entry, solution: code },
               kind,
             )

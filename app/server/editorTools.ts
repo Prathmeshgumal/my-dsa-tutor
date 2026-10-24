@@ -1,7 +1,7 @@
 // The only things the editor's Claude agent can do. Each tool works on the solutions folder or on
 // what the editor sent with the message; nothing else (no shell, no web, no other folders).
 import { tool } from '@anthropic-ai/claude-agent-sdk'
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import type { ApprovalKind, EditorContext } from '../src/lib/chatEvents.ts'
@@ -25,7 +25,11 @@ import {
   type TestCase,
   type TestRun,
 } from '../src/lib/problems.ts'
-import { createProblem, linkNote, listAttempts, listEntries, ProblemNotFound, readEntry, writeCode, writeTests } from './problemStore.ts'
+import type { Change } from '../src/lib/changes.ts'
+import { applyChange, checkName, checkNoteName, ToolError } from './changes.ts'
+import { listAttempts, listEntries, ProblemNotFound, readEntry } from './problemStore.ts'
+import { parseSaved, stamp } from '../src/lib/formats.ts'
+import { writeFileAtomic } from './atomicWrite.ts'
 
 export interface ApprovalRequest {
   kind: ApprovalKind
@@ -33,6 +37,8 @@ export interface ApprovalRequest {
   before: string
   after: string
   explanation: string
+  /** What gets written if the user approves, as data, so it can also be applied later. */
+  change: Change
 }
 
 export interface EditorToolDeps {
@@ -66,24 +72,10 @@ export interface ToolText {
 
 const MAX_OUTPUT = 8000
 
-class ToolError extends Error {}
-
 const fail = (text: string): ToolText => ({ text, isError: true })
 
 function clip(text: string): string {
   return text.length > MAX_OUTPUT ? `${text.slice(0, MAX_OUTPUT)}\n… (${text.length - MAX_OUTPUT} more characters cut)` : text
-}
-
-/** A plain code file name directly inside the solutions folder. */
-function checkName(name: string): void {
-  const ok =
-    name.length > 0 &&
-    name.length <= 255 &&
-    !/[/\\\0]/.test(name) &&
-    !name.startsWith('.') &&
-    path.basename(name) === name &&
-    languageFromFilename(name) !== null
-  if (!ok) throw new ToolError(`"${name}" isn't a valid solution file name (use something like two_sum.cpp, Main.java or bfs.py).`)
 }
 
 const lineCount = (text: string) => (text === '' ? 0 : text.replace(/\n$/, '').split('\n').length)
@@ -97,12 +89,6 @@ function describeRun(file: string | null, result: RunResult, stdin?: string): st
   lines.push('stdout:', result.stdout ? clip(result.stdout) : '(empty)')
   if (result.stderr) lines.push('stderr:', clip(result.stderr))
   return lines.join('\n')
-}
-
-/** A plain .md file name directly inside the notes folder. */
-function checkNoteName(name: string): void {
-  const ok = /^[^/\\\0]+\.md$/i.test(name) && !name.startsWith('.') && path.basename(name) === name && name.length <= 255
-  if (!ok) throw new ToolError(`"${name}" isn't a note name; use list_notes to see them (e.g. note-1.md).`)
 }
 
 /** Replaces text that must appear exactly once; explains what to do otherwise. */
@@ -184,7 +170,7 @@ export function createEditorTools(deps: EditorToolDeps) {
         .filter((n) => n.endsWith('.json'))
         .map(async (n) => {
           try {
-            return JSON.parse(await readFile(path.join(playgroundDir, n), 'utf8')) as DryRun
+            return parseSaved<DryRun>('dryRun', await readFile(path.join(playgroundDir, n), 'utf8'))
           } catch {
             return null
           }
@@ -243,6 +229,18 @@ export function createEditorTools(deps: EditorToolDeps) {
       }
     }
 
+  /** Shows the change to the user; if they approve, writes it and lets the editor know what changed. */
+  async function propose(request: ApprovalRequest, declined: string): Promise<ToolText> {
+    if (!(await deps.requestApproval(request))) return { text: declined }
+    const { text, effects } = await applyChange({ dir, notesDir, problemsDir }, request.change)
+    for (const e of effects) {
+      if (e.type === 'file_changed') deps.onFileChanged(e.file)
+      else if (e.type === 'note_changed') deps.onNoteChanged(e.note)
+      else deps.onProblemChanged(e.slug, e.open)
+    }
+    return { text }
+  }
+
   return {
     get_editor_state: guard(async (_: Record<string, never>) => {
       const active = context.activeFile
@@ -300,25 +298,27 @@ export function createEditorTools(deps: EditorToolDeps) {
     edit_file: guard(
       async ({ name, old_text, new_text, explanation }: { name: string; old_text: string; new_text: string; explanation: string }) => {
         uniqueCount(await readSolution(name), old_text, name)
-        const approved = await deps.requestApproval({ kind: 'edit', file: name, before: old_text, after: new_text, explanation })
-        if (!approved) return { text: `The user declined this edit to ${name}. Don't apply it another way; ask what they'd prefer.` }
-        // Re-read: the user may have typed while deciding.
-        const latest = await readSolution(name)
-        if (!latest.includes(old_text)) throw new ToolError(`${name} changed while waiting for approval; read it again.`)
-        await writeFile(path.join(dir, name), latest.replace(old_text, () => new_text), 'utf8')
-        deps.onFileChanged(name)
-        return { text: `Applied the edit to ${name}; the editor shows the new code.` }
+        return propose(
+          {
+            kind: 'edit',
+            file: name,
+            before: old_text,
+            after: new_text,
+            explanation,
+            change: { type: 'edit_file', name, oldText: old_text, newText: new_text },
+          },
+          `The user declined this edit to ${name}. Don't apply it another way; ask what they'd prefer.`,
+        )
       },
     ),
 
     create_file: guard(async ({ name, content, explanation }: { name: string; content: string; explanation: string }) => {
       checkName(name)
       if (await exists(name)) throw new ToolError(`${name} already exists; use edit_file to change it.`)
-      const approved = await deps.requestApproval({ kind: 'create', file: name, before: '', after: content, explanation })
-      if (!approved) return { text: `The user declined creating ${name}.` }
-      await writeFile(path.join(dir, name), content, { encoding: 'utf8', flag: 'wx' })
-      deps.onFileChanged(name)
-      return { text: `Created ${name}.` }
+      return propose(
+        { kind: 'create', file: name, before: '', after: content, explanation, change: { type: 'create_file', name, content } },
+        `The user declined creating ${name}.`,
+      )
     }),
 
     list_notes: guard(async (_: Record<string, never>) => {
@@ -332,30 +332,34 @@ export function createEditorTools(deps: EditorToolDeps) {
 
     create_note: guard(async ({ content, explanation }: { content: string; explanation: string }) => {
       const name = nextNoteName(await noteNames())
-      const approved = await deps.requestApproval({ kind: 'create_note', file: name, before: '', after: content, explanation })
-      if (!approved) return { text: 'The user declined creating this note.' }
-      await writeFile(path.join(notesDir, name), content, { encoding: 'utf8', flag: 'wx' })
-      deps.onNoteChanged(name)
-      // A note made while a problem is open belongs to it.
       const open = context.openProblem?.slug
-      if (open) {
-        await linkNote(problemsDir, open, name).catch(() => {})
-        deps.onProblemChanged(open, false)
-        return { text: `Saved the note as ${name} and linked it to ${open}; it shows in the Notes panel and on the problem's Notes tab.` }
-      }
-      return { text: `Saved the note as ${name}; it shows in the Notes panel.` }
+      return propose(
+        {
+          kind: 'create_note',
+          file: name,
+          before: '',
+          after: content,
+          explanation,
+          change: { type: 'create_note', name, content, ...(open ? { linkTo: open } : {}) },
+        },
+        'The user declined creating this note.',
+      )
     }),
 
     edit_note: guard(
       async ({ name, old_text, new_text, explanation }: { name: string; old_text: string; new_text: string; explanation: string }) => {
         uniqueCount(await readNote(name), old_text, name)
-        const approved = await deps.requestApproval({ kind: 'edit_note', file: name, before: old_text, after: new_text, explanation })
-        if (!approved) return { text: `The user declined this change to ${name}. Ask what they'd prefer.` }
-        const latest = await readNote(name)
-        if (!latest.includes(old_text)) throw new ToolError(`${name} changed while waiting for approval; read it again.`)
-        await writeFile(path.join(notesDir, name), latest.replace(old_text, () => new_text), 'utf8')
-        deps.onNoteChanged(name)
-        return { text: `Updated ${name}.` }
+        return propose(
+          {
+            kind: 'edit_note',
+            file: name,
+            before: old_text,
+            after: new_text,
+            explanation,
+            change: { type: 'edit_note', name, oldText: old_text, newText: new_text },
+          },
+          `The user declined this change to ${name}. Ask what they'd prefer.`,
+        )
       },
     ),
 
@@ -400,7 +404,7 @@ export function createEditorTools(deps: EditorToolDeps) {
           steps,
         }
         await mkdir(playgroundDir, { recursive: true })
-        await writeFile(path.join(playgroundDir, `${run.id}.json`), JSON.stringify(run), 'utf8')
+        await writeFileAtomic(path.join(playgroundDir, `${run.id}.json`), JSON.stringify(stamp('dryRun', run)))
         deps.onVisualization(run)
         return { text: `Saved "${title}" (${steps.length} steps). The student can watch it in the Playground; a card in the chat opens it.` }
       },
@@ -471,11 +475,17 @@ export function createEditorTools(deps: EditorToolDeps) {
           args.starter,
           '```',
         ].join('\n')
-        const approved = await deps.requestApproval({ kind: 'create_problem', file: args.title, before: '', after: preview, explanation: args.explanation })
-        if (!approved) return { text: 'The user declined creating this problem.' }
-        const slug = await createProblem(problemsDir, { problem: newProblem, solution: args.starter, driver: args.driver })
-        deps.onProblemChanged(slug, true)
-        return { text: `Created ${slug}; it's open on the Problem screen.` }
+        return propose(
+          {
+            kind: 'create_problem',
+            file: args.title,
+            before: '',
+            after: preview,
+            explanation: args.explanation,
+            change: { type: 'create_problem', problem: newProblem, starter: args.starter, driver: args.driver },
+          },
+          'The user declined creating this problem.',
+        )
       },
     ),
 
@@ -485,18 +495,17 @@ export function createEditorTools(deps: EditorToolDeps) {
         const test: TestCase = { input, expected, example: false, addedBy: 'claude' }
         const problems = problemProblems({ params: entry.problem.params, tests: [{ ...test, example: true }] })
         if (problems.length) return fail(problems.join('\n').replaceAll('Test 1', 'This test'))
-        const approved = await deps.requestApproval({
-          kind: 'add_test',
-          file: entry.problem.title,
-          before: '',
-          after: `${describeInput(entry.problem.params, test)} → ${expected}`,
-          explanation,
-        })
-        if (!approved) return { text: 'The user declined adding this test case.' }
-        const latest = await problem(entry.slug)
-        await writeTests(problemsDir, entry.slug, [...latest.problem.tests, test])
-        deps.onProblemChanged(entry.slug, false)
-        return { text: `Added the case to ${entry.slug} (case ${latest.problem.tests.length + 1}). Submit checks it.` }
+        return propose(
+          {
+            kind: 'add_test',
+            file: entry.problem.title,
+            before: '',
+            after: `${describeInput(entry.problem.params, test)} → ${expected}`,
+            explanation,
+            change: { type: 'add_test', slug: entry.slug, test },
+          },
+          'The user declined adding this test case.',
+        )
       },
     ),
 
@@ -518,13 +527,17 @@ export function createEditorTools(deps: EditorToolDeps) {
         const { name, code } = codeFile(entry, file)
         const where = `${entry.slug}/${name}`
         uniqueCount(code, old_text, where)
-        const approved = await deps.requestApproval({ kind: 'edit_solution', file: where, before: old_text, after: new_text, explanation })
-        if (!approved) return { text: `The user declined this edit. Don't apply it another way; ask what they'd prefer.` }
-        const latest = codeOf(await problem(entry.slug), name) ?? ''
-        if (!latest.includes(old_text)) throw new ToolError(`${where} changed while waiting for approval; read it again with get_problem.`)
-        await writeCode(problemsDir, entry.slug, name, latest.replace(old_text, () => new_text))
-        deps.onProblemChanged(entry.slug, false)
-        return { text: `Applied the edit to ${where}.` }
+        return propose(
+          {
+            kind: 'edit_solution',
+            file: where,
+            before: old_text,
+            after: new_text,
+            explanation,
+            change: { type: 'edit_solution', slug: entry.slug, name, oldText: old_text, newText: new_text },
+          },
+          `The user declined this edit. Don't apply it another way; ask what they'd prefer.`,
+        )
       },
     ),
 
@@ -544,11 +557,17 @@ export function createEditorTools(deps: EditorToolDeps) {
         const entry = await problem(slug)
         if (!isCodeName(name)) throw new ToolError(`"${name}" isn't a good name; use something like brute-force.cpp.`)
         if (codeOf(entry, name) !== null) throw new ToolError(`${entry.slug} already has ${name}; use edit_solution with file "${name}" to change it.`)
-        const approved = await deps.requestApproval({ kind: 'create', file: `${entry.slug}/${name}`, before: '', after: content, explanation })
-        if (!approved) return { text: `The user declined saving ${name}.` }
-        await writeCode(problemsDir, entry.slug, name, content)
-        deps.onProblemChanged(entry.slug, false)
-        return { text: `Saved ${name} next to solution.cpp; the student can switch to it above the editor.` }
+        return propose(
+          {
+            kind: 'create',
+            file: `${entry.slug}/${name}`,
+            before: '',
+            after: content,
+            explanation,
+            change: { type: 'save_code_version', slug: entry.slug, name, content },
+          },
+          `The user declined saving ${name}.`,
+        )
       },
     ),
 

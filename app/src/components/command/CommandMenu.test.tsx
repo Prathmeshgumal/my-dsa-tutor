@@ -21,7 +21,7 @@ beforeEach(() => {
   ws().setActive(ws().files[0].id)
   useCommandMenu.setState({ open: false })
   useFileDialogs.setState({ kind: null, fileId: null })
-  useSettingsDialog.setState({ open: false, reason: 'manual' })
+  useSettingsDialog.setState({ open: false })
   useSettings.setState({ theme: 'dark' })
 })
 
@@ -84,8 +84,8 @@ test('Toggle theme flips dark → light', async () => {
   expect(useSettings.getState().theme).toBe('light')
 })
 
-test('Open settings opens the settings dialog', async () => {
-  await choose(/open settings/i)
+test('Check setup opens the setup check', async () => {
+  await choose(/check setup/i)
   expect(useSettingsDialog.getState().open).toBe(true)
 })
 

@@ -3,16 +3,13 @@ import { persist } from 'zustand/middleware'
 import { useFilesPanel } from './filesPanel'
 
 export type ThemePref = 'system' | 'light' | 'dark'
-export type RunnerKind = 'piston' | 'judge0'
 export type OutputPosition = 'right' | 'bottom'
 /** The main area: the code editor, a practice problem, or the Playground with dry-run visualizations. */
 export type Screen = 'editor' | 'problem' | 'playground'
 
 interface SettingsState {
-  apiKey: string
   theme: ThemePref
   panelLayout: number[] | null
-  runner: RunnerKind
   outputPosition: OutputPosition
   outputOpen: boolean
   aiOpen: boolean
@@ -26,10 +23,8 @@ interface SettingsState {
   problemListOpen: boolean
   /** Playground panel sizes (percent), per area: list|main, and code|drawing side by side or stacked. */
   playgroundLayout: Record<string, Record<string, number>>
-  setApiKey(k: string): void
   setTheme(t: ThemePref): void
   setPanelLayout(l: number[]): void
-  setRunner(r: RunnerKind): void
   setOutputPosition(p: OutputPosition): void
   setOutputOpen(open: boolean): void
   /** Claude and Notes share the right side: opening one closes the other. */
@@ -50,10 +45,8 @@ interface SettingsState {
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      apiKey: '',
       theme: 'system',
       panelLayout: null,
-      runner: 'piston',
       outputPosition: 'bottom',
       outputOpen: true,
       aiOpen: false,
@@ -63,10 +56,8 @@ export const useSettings = create<SettingsState>()(
       playgroundListOpen: true,
       problemListOpen: true,
       playgroundLayout: {},
-      setApiKey: (apiKey) => set({ apiKey }),
       setTheme: (theme) => set({ theme }),
       setPanelLayout: (panelLayout) => set({ panelLayout }),
-      setRunner: (runner) => set({ runner }),
       setOutputPosition: (outputPosition) => set({ outputPosition }),
       setOutputOpen: (outputOpen) => set({ outputOpen }),
       setAiOpen: (aiOpen) => set(aiOpen ? { aiOpen, notesOpen: false } : { aiOpen }),
@@ -86,6 +77,14 @@ export const useSettings = create<SettingsState>()(
       setPlaygroundLayout: (area, layout) => set((s) => ({ playgroundLayout: { ...s.playgroundLayout, [area]: layout } })),
       setNotesOpen: (notesOpen) => set(notesOpen ? { notesOpen, aiOpen: false } : { notesOpen }),
     }),
-    { name: 'dsa-editor:settings' },
+    {
+      name: 'dsa-editor:settings',
+      // v1 dropped Judge0: forget the runner choice and wipe any RapidAPI key saved in this browser.
+      version: 1,
+      migrate: (saved) => {
+        const { apiKey: _key, runner: _runner, ...rest } = (saved ?? {}) as Record<string, unknown>
+        return rest as unknown as SettingsState
+      },
+    },
   ),
 )

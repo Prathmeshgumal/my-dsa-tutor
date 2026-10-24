@@ -4,10 +4,12 @@
 //   PUT    /api/files/:name         { content } → write (create or overwrite)
 //   DELETE /api/files/:name         → delete (idempotent)
 //   POST   /api/files/:name/rename  { to } → rename
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { languageFromFilename } from '../src/lib/languages.ts'
+import { writeFileAtomic } from './atomicWrite.ts'
+import { noteOwnChange } from './ownChanges.ts'
 
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
@@ -101,8 +103,9 @@ async function handle(store: Store, req: IncomingMessage, res: ServerResponse): 
   if (action === undefined && method === 'PUT') {
     const { content } = await readJson(req)
     if (typeof content !== 'string') throw new HttpError(400, '"content" must be a string')
-    await writeFile(file, content, 'utf8')
+    await writeFileAtomic(file, content)
   } else if (action === undefined && method === 'DELETE') {
+    noteOwnChange(file)
     await rm(file, { force: true })
   } else if (action === 'rename' && method === 'POST') {
     const { to } = await readJson(req)
@@ -111,6 +114,8 @@ async function handle(store: Store, req: IncomingMessage, res: ServerResponse): 
     const clash = (await readdir(dir)).find((n) => n.toLowerCase() === to.toLowerCase() && n !== name)
     if (clash) throw new HttpError(409, `${clash} already exists`)
     if (!(await exists(file))) throw new HttpError(404, `${name} not found`)
+    noteOwnChange(file)
+    noteOwnChange(path.join(dir, to))
     await rename(file, path.join(dir, to))
   } else {
     throw new HttpError(405, 'Method not allowed')

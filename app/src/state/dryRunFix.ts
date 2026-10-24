@@ -6,7 +6,6 @@ import { useAiChat } from './aiChat'
 import { usePlayground } from './playground'
 import { useProblems } from './problems'
 import { createRunner } from './run'
-import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
 /** Where a dry run's code lives, so it can be edited from the Playground. */
@@ -86,7 +85,7 @@ export const useDryRunFix = create<DryRunFixState>()((set, get) => ({
       const code = currentCode(source)
       if (entry && code !== null) {
         set({ tests: { forRuns: [run.id], status: 'running' } })
-        void runTests(runner ?? createRunner(useSettings.getState()), { ...entry, solution: code }, 'submit')
+        void runTests(runner ?? createRunner(), { ...entry, solution: code }, 'submit')
           .then((result) => set((s) => ({ tests: s.tests && { ...s.tests, status: 'done', result } })))
           .catch((e: unknown) =>
             set((s) => ({ tests: s.tests && { ...s.tests, status: 'error', error: e instanceof Error ? e.message : String(e) } })),

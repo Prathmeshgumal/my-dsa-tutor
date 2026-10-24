@@ -119,14 +119,14 @@ export function IconRail() {
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label="Settings"
+            aria-label="Setup"
             onClick={() => useSettingsDialog.getState().show()}
             className={`${item} text-muted-foreground hover:bg-muted hover:text-foreground`}
           >
             <Settings />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">Settings</TooltipContent>
+        <TooltipContent side="right">Setup check</TooltipContent>
       </Tooltip>
     </nav>
   )

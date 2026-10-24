@@ -2,5 +2,7 @@ node_modules
 dist
 .superpowers/
 .playwright-mcp/
-# Holds SECRETS_KEY, which decrypts your saved API keys
+# Holds your secrets, e.g. the Claude login token
 .env
+# The editor's log file
+logs/

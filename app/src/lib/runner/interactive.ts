@@ -148,8 +148,8 @@ export function startSession({ language, source, fileName, onEvent, connect }: O
       if (stage === 'done') return
       stoppedByUser = true
       if (stage === 'run') socket.send(JSON.stringify({ type: 'signal', signal: 'SIGKILL' }))
-      // Piston (as of its current image) never passes the signal on to the program, and keeps a program
-      // whose socket closed until its time limit. So the run ends here; Piston drops the program later.
+      // Closing the socket ends the program too (piston/api-v2.js patches Piston to do both), so the run
+      // ends here without waiting for Piston's answer.
       finish({ status: 'runtime_error', statusText: 'Stopped' })
     },
   }

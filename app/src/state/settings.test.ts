@@ -3,11 +3,11 @@ import { useFilesPanel } from './filesPanel'
 
 beforeEach(() => {
   localStorage.clear()
-  useSettings.setState({ apiKey: '', theme: 'system', panelLayout: null, runner: 'piston' })
+  useSettings.setState({ theme: 'system', panelLayout: null })
 })
 
 test('defaults', () => {
-  expect(useSettings.getState()).toMatchObject({ apiKey: '', theme: 'system', panelLayout: null, runner: 'piston' })
+  expect(useSettings.getState()).toMatchObject({ theme: 'system', panelLayout: null })
 })
 
 test('persists theme to dsa-editor:settings', () => {
@@ -15,15 +15,19 @@ test('persists theme to dsa-editor:settings', () => {
   expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.theme).toBe('light')
 })
 
-test('stores api key and panel layout', () => {
-  useSettings.getState().setApiKey('k')
+test('stores the panel layout', () => {
   useSettings.getState().setPanelLayout([60, 40])
-  expect(useSettings.getState()).toMatchObject({ apiKey: 'k', panelLayout: [60, 40] })
+  expect(useSettings.getState()).toMatchObject({ panelLayout: [60, 40] })
 })
 
-test('stores the runner choice', () => {
-  useSettings.getState().setRunner('judge0')
-  expect(JSON.parse(localStorage.getItem('dsa-editor:settings')!).state.runner).toBe('judge0')
+test('a RapidAPI key saved by an older version is wiped from the browser, other settings kept', async () => {
+  localStorage.setItem('dsa-editor:settings', JSON.stringify({ state: { apiKey: 'secret', runner: 'judge0', theme: 'dark' }, version: 0 }))
+  await useSettings.persist.rehydrate()
+  const saved = localStorage.getItem('dsa-editor:settings')!
+  expect(saved).not.toContain('secret')
+  expect(JSON.parse(saved).state).toMatchObject({ theme: 'dark' })
+  expect(JSON.parse(saved).state).not.toHaveProperty('runner')
+  expect(useSettings.getState()).not.toHaveProperty('apiKey')
 })
 
 

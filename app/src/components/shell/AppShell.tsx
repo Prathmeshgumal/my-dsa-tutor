@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AiPanel } from '@/components/ai/AiPanel'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { FilesPanel } from '@/components/files/FilesPanel'
 import { NotesPanel } from '@/components/notes/NotesPanel'
 import { Playground } from '@/components/playground/Playground'
@@ -44,9 +45,21 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
         <TopBar narrow={narrow} onRun={onRun} running={running} canRun={canRun} onOpenCommand={onOpenCommand} />
         <div className="relative flex min-h-0 flex-1">
           <IconRail />
-          {filesOpen && <FilesPanel />}
-          {screen === 'playground' && <Playground />}
-          {screen === 'problem' && <ProblemScreen />}
+          {filesOpen && (
+            <ErrorBoundary name="The file list">
+              <FilesPanel />
+            </ErrorBoundary>
+          )}
+          {screen === 'playground' && (
+            <ErrorBoundary name="The Playground">
+              <Playground />
+            </ErrorBoundary>
+          )}
+          {screen === 'problem' && (
+            <ErrorBoundary name="The Problems screen">
+              <ProblemScreen />
+            </ErrorBoundary>
+          )}
           {/* Kept mounted (just hidden) on the Playground, so Monaco keeps its cursor, scroll and undo history. */}
           <div hidden={screen !== 'editor'} className="flex min-h-0 min-w-0 flex-1 flex-col">
             {/* The editor panel stays mounted when the output is hidden, so Monaco keeps its cursor and scroll. */}
@@ -61,7 +74,7 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
               className="min-w-0 flex-1"
             >
               <ResizablePanel id="editor" minSize="25" className="flex min-h-0 min-w-0 flex-col">
-                {editor}
+                <ErrorBoundary name="The code editor">{editor}</ErrorBoundary>
               </ResizablePanel>
               {outputOpen && (
                 <>
@@ -75,14 +88,22 @@ export function AppShell({ editor, output, onRun, running, canRun, connection, c
                     defaultSize={`${outputSize}`}
                     className="flex min-h-0 min-w-0 flex-col"
                   >
-                    {output}
+                    <ErrorBoundary name="The output panel">{output}</ErrorBoundary>
                   </ResizablePanel>
                 </>
               )}
             </ResizablePanelGroup>
           </div>
-          {aiOpen && <AiPanel />}
-          {notesOpen && !aiOpen && <NotesPanel />}
+          {aiOpen && (
+            <ErrorBoundary name="The Claude panel">
+              <AiPanel />
+            </ErrorBoundary>
+          )}
+          {notesOpen && !aiOpen && (
+            <ErrorBoundary name="The Notes panel">
+              <NotesPanel />
+            </ErrorBoundary>
+          )}
         </div>
         <StatusBar connection={connection} cursor={cursor} />
       </div>

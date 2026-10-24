@@ -31,6 +31,7 @@ async function start(queryImpl: QueryFn, approvals: Approvals = createApprovals(
 }
 
 afterEach(async () => {
+  server.closeAllConnections()
   await new Promise((r) => server.close(r))
 })
 
@@ -44,8 +45,33 @@ async function chat(body: unknown): Promise<ChatEvent[]> {
   const text = await res.text()
   return text
     .split('\n\n')
-    .filter((chunk) => chunk.startsWith('data: '))
-    .map((chunk) => JSON.parse(chunk.slice(6)) as ChatEvent)
+    .flatMap((chunk) => {
+      const data = /^data: (.*)$/m.exec(chunk)?.[1]
+      return data ? [JSON.parse(data) as ChatEvent] : []
+    })
+    // Every reply starts with its turn id; the tests below are about what follows it.
+    .filter((e) => e.type !== 'turn')
+}
+
+/** Reads server-sent events until `count` have arrived, keeping their ids. */
+async function readEvents(res: Response, count: number) {
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
+  const events: { id: number; event: ChatEvent }[] = []
+  let buffer = ''
+  while (events.length < count) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    let end: number
+    while ((end = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, end)
+      buffer = buffer.slice(end + 2)
+      const id = Number(/^id: (\d+)$/m.exec(chunk)?.[1])
+      const data = /^data: (.*)$/m.exec(chunk)?.[1]
+      if (data) events.push({ id, event: JSON.parse(data) as ChatEvent })
+    }
+  }
+  return { events, reader }
 }
 
 const sid = 'session-123'
@@ -203,12 +229,16 @@ test('error results and thrown errors become error events', async () => {
   expect(await chat(body)).toEqual([{ type: 'error', message: 'Claude Code is not logged in' }])
 })
 
-test('client disconnect aborts the Claude run', async () => {
+test('a dropped connection doesn’t stop the reply: reconnecting picks up after the last event seen, and Stop ends it', async () => {
   let signal: AbortSignal | undefined
+  let release!: () => void
+  const more = new Promise<void>((r) => (release = r))
   await start(
     fakeQuery(async function* (options) {
       signal = options.abortController!.signal
-      yield textDelta('working…')
+      yield textDelta('one')
+      await more
+      yield textDelta('two')
       await new Promise((r) => signal!.addEventListener('abort', r))
     }),
   )
@@ -219,10 +249,31 @@ test('client disconnect aborts the Claude run', async () => {
     body: JSON.stringify(body),
     signal: controller.signal,
   })
-  const reader = res.body!.getReader()
-  await reader.read()
+  const first = await readEvents(res, 3)
+  const [turn, session, one] = first.events
+  expect(turn.event).toMatchObject({ type: 'turn' })
+  expect(session.event).toMatchObject({ type: 'session' })
+  expect(one).toEqual({ id: 3, event: { type: 'text', text: 'one' } })
   controller.abort()
+  await new Promise((r) => setTimeout(r, 50))
+  expect(signal?.aborted).toBe(false)
+
+  // Meanwhile Claude carried on; reconnecting after event 3 gets only what came next.
+  release()
+  const turnId = (turn.event as { turnId: string }).turnId
+  const again = await fetch(`${base}/api/claude/turns/${turnId}?after=3`)
+  const second = await readEvents(again, 1)
+  expect(second.events).toEqual([{ id: 4, event: { type: 'text', text: 'two' } }])
+
+  expect((await fetch(`${base}/api/claude/turns/${turnId}/stop`, { method: 'POST' })).status).toBe(204)
   await vi.waitFor(() => expect(signal?.aborted).toBe(true))
+  await second.reader.cancel()
+})
+
+test('reconnecting to a reply the server doesn’t know (e.g. after a restart) answers 404', async () => {
+  await start(fakeQuery([success]))
+  expect((await fetch(`${base}/api/claude/turns/nope?after=0`)).status).toBe(404)
+  expect((await fetch(`${base}/api/claude/turns/nope/stop`, { method: 'POST' })).status).toBe(404)
 })
 
 test('missing message → 400', async () => {

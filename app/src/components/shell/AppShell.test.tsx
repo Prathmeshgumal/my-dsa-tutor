@@ -27,7 +27,7 @@ function renderShell(props: ShellProps = {}) {
 }
 
 beforeEach(() => {
-  useSettings.setState({ runner: 'piston', outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false, screen: 'editor' })
+  useSettings.setState({ outputPosition: 'right', outputOpen: true, aiOpen: false, notesOpen: false, screen: 'editor' })
   useFilesPanel.setState({ open: false })
   mockMatchMedia(() => false)
   useWorkspace.setState({ ...defaultWorkspace(), saveStatus: 'saved', lastSavedAt: Date.now() })
@@ -104,7 +104,6 @@ test('status bar shows minutes since last save', () => {
 })
 
 test.each([
-  ['no_key', 'No API key'],
   ['connected', 'Piston connected'],
   ['failed', 'Last run failed'],
 ] as const)('status bar connection %s', (connection, text) => {
@@ -129,18 +128,12 @@ test('below 900px uses vertical panel direction', () => {
   expect(screen.getByTestId('workspace-panels')).toHaveStyle({ flexDirection: 'column' })
 })
 
-test('rail settings button opens the settings dialog', async () => {
+test('rail Setup button opens the setup check', async () => {
   const { useSettingsDialog } = await import('@/state/settingsDialog')
   useSettingsDialog.setState({ open: false })
   renderShell()
-  await userEvent.click(screen.getByRole('button', { name: 'Settings' }))
-  expect(useSettingsDialog.getState()).toMatchObject({ open: true, reason: 'manual' })
-})
-
-test('status bar names Judge0 when that runner is selected', () => {
-  useSettings.setState({ runner: 'judge0' })
-  renderShell({ connection: 'connected' })
-  expect(screen.getByText('Judge0 connected')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Setup' }))
+  expect(useSettingsDialog.getState().open).toBe(true)
 })
 
 test('Files button toggles the files panel and reflects its state', async () => {

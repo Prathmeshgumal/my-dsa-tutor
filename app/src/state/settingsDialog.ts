@@ -1,17 +1,14 @@
 import { create } from 'zustand'
 
-export type SettingsDialogReason = 'manual' | 'no_key'
-
+/** The Setup dialog (⚙️ in the left bar). */
 interface SettingsDialogState {
   open: boolean
-  reason: SettingsDialogReason
-  show(reason?: SettingsDialogReason): void
+  show(): void
   hide(): void
 }
 
 export const useSettingsDialog = create<SettingsDialogState>()((set) => ({
   open: false,
-  reason: 'manual',
-  show: (reason = 'manual') => set({ open: true, reason }),
+  show: () => set({ open: true }),
   hide: () => set({ open: false }),
 }))

@@ -1,81 +1,75 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useSettings } from '@/state/settings'
 import { focusEditor } from '@/components/editor/editorFocus'
+import type { Health } from '@/lib/health'
+import { useHealth } from '@/state/health'
 import { SettingsDialog, useSettingsDialog } from './SettingsDialog'
 
 vi.mock('@/components/editor/editorFocus', () => ({ focusEditor: vi.fn(), registerEditor: vi.fn(() => () => {}) }))
 
+const allGood: Health = {
+  piston: { ok: true, languages: { cpp: true, java: true, python: true } },
+  claude: { signedIn: true },
+  folders: [
+    { name: 'solutions', ok: true },
+    { name: 'notes', ok: true },
+  ],
+}
+
+function serve(health: Health | 'down') {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => (health === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : new Response(JSON.stringify(health)))),
+  )
+}
+
 beforeEach(() => {
-  useSettings.setState({ apiKey: '', runner: 'judge0' })
-  useSettingsDialog.setState({ open: false, reason: 'manual' })
+  useSettingsDialog.setState({ open: false })
+  useHealth.setState({ health: null, status: 'idle' })
 })
 
-test('closed by default, show() opens it', async () => {
+afterEach(() => vi.unstubAllGlobals())
+
+test('closed by default; show() opens it and runs the check', async () => {
+  serve(allGood)
   render(<SettingsDialog />)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   useSettingsDialog.getState().show()
-  expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  const checks = await screen.findByRole('list', { name: 'Setup checks' })
+  expect(within(checks).getByText('Signed in.')).toBeInTheDocument()
+  expect(within(checks).getByText('Running, with every language installed.')).toBeInTheDocument()
+  expect(within(checks).getByText('solutions, notes: all writable.')).toBeInTheDocument()
 })
 
-test('saves trimmed key to settings and closes', async () => {
+test('says what is wrong and how to fix it', async () => {
+  serve({
+    piston: { ok: true, languages: { cpp: true, java: false, python: true }, problem: 'Java isn’t installed yet. Run ./start.sh.' },
+    claude: { signedIn: false, problem: 'Claude isn’t signed in. Run claude setup-token.' },
+    folders: [{ name: 'notes', ok: false, problem: 'The notes folder isn’t writable.' }],
+  })
   useSettingsDialog.getState().show()
   render(<SettingsDialog />)
-  await userEvent.type(screen.getByLabelText('RapidAPI key'), '  abc123  ')
-  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  expect(useSettings.getState().apiKey).toBe('abc123')
+  expect(await screen.findByText('Java isn’t installed yet. Run ./start.sh.')).toBeInTheDocument()
+  expect(screen.getByText('Java missing')).toBeInTheDocument()
+  expect(screen.getByText('Claude isn’t signed in. Run claude setup-token.')).toBeInTheDocument()
+  expect(screen.getByText('The notes folder isn’t writable.')).toBeInTheDocument()
+})
+
+test('the server being down is said plainly', async () => {
+  serve('down')
+  useSettingsDialog.getState().show()
+  render(<SettingsDialog />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t reach the editor server')
+})
+
+test('Check again re-runs the check; closing returns focus to the editor', async () => {
+  serve(allGood)
+  useSettingsDialog.getState().show()
+  render(<SettingsDialog />)
+  await screen.findByRole('list', { name: 'Setup checks' })
+  await userEvent.click(screen.getByRole('button', { name: /check again/i }))
+  expect(fetch).toHaveBeenCalledTimes(2)
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }))
   expect(useSettingsDialog.getState().open).toBe(false)
-})
-
-test('prefills the saved key', () => {
-  useSettings.setState({ apiKey: 'saved' })
-  useSettingsDialog.getState().show()
-  render(<SettingsDialog />)
-  expect(screen.getByLabelText('RapidAPI key')).toHaveValue('saved')
-})
-
-test('reason no_key shows explanation and link to RapidAPI Judge0 CE', () => {
-  useSettingsDialog.getState().show('no_key')
-  render(<SettingsDialog />)
-  expect(screen.getByText(/add your rapidapi key to run code/i)).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /judge0 ce on rapidapi/i })).toHaveAttribute(
-    'href',
-    'https://rapidapi.com/judge0-official/api/judge0-ce',
-  )
-})
-
-test('key input is type=password with show/hide toggle', async () => {
-  useSettingsDialog.getState().show()
-  render(<SettingsDialog />)
-  const input = screen.getByLabelText('RapidAPI key')
-  expect(input).toHaveAttribute('type', 'password')
-  await userEvent.click(screen.getByRole('button', { name: 'Show key' }))
-  expect(input).toHaveAttribute('type', 'text')
-  await userEvent.click(screen.getByRole('button', { name: 'Hide key' }))
-  expect(input).toHaveAttribute('type', 'password')
-})
-
-test('choosing Local (Piston) hides the key field and saves the runner', async () => {
-  useSettingsDialog.getState().show()
-  render(<SettingsDialog />)
-  await userEvent.click(screen.getByRole('radio', { name: /local \(piston\)/i }))
-  expect(screen.queryByLabelText('RapidAPI key')).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  expect(useSettings.getState().runner).toBe('piston')
-})
-
-test('Piston selected shows how to start it', () => {
-  useSettings.setState({ runner: 'piston' })
-  useSettingsDialog.getState().show()
-  render(<SettingsDialog />)
-  expect(screen.getByRole('radio', { name: /local \(piston\)/i })).toBeChecked()
-  expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument()
-})
-
-test('closing settings returns the cursor to the editor', async () => {
-  vi.mocked(focusEditor).mockClear()
-  useSettingsDialog.getState().show()
-  render(<SettingsDialog />)
-  await userEvent.keyboard('{Escape}')
-  await vi.waitFor(() => expect(focusEditor).toHaveBeenCalled())
+  expect(focusEditor).toHaveBeenCalled()
 })

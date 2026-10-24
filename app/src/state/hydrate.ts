@@ -1,5 +1,6 @@
 import { fetchDiskFiles } from '@/lib/diskStore'
 import { loadWorkspace, type CodeFile } from '@/lib/storage'
+import { adoptDiskFiles } from './autosave'
 import { useWorkspace } from './workspace'
 
 /**
@@ -33,7 +34,7 @@ export async function hydrateFromDisk(fetchImpl: typeof fetch = fetch): Promise<
 }
 
 /**
- * Re-reads the solutions folder after Claude changed files: updates edited files, adds new ones and
+ * Re-reads the solutions folder after Claude, or something outside the editor, changed files: updates edited files, adds new ones and
  * drops deleted ones, keeping ids (and so tabs) by name. Unchanged files keep their object identity.
  */
 export async function refreshFromDisk(fetchImpl: typeof fetch = fetch): Promise<void> {
@@ -50,8 +51,11 @@ export async function refreshFromDisk(fetchImpl: typeof fetch = fetch): Promise<
     if (!existing) return { id: crypto.randomUUID(), name, content }
     return existing.content === content ? existing : { ...existing, content }
   })
+  // Nothing changed (often the case: the change was the editor's own save).
+  if (files.length === current.length && files.every((f, i) => f === current[i])) return
   const ids = new Set(files.map((f) => f.id))
   const nextOpen = openIds.filter((id) => ids.has(id))
   const nextActive = activeId !== null && ids.has(activeId) ? activeId : (nextOpen[0] ?? null)
   useWorkspace.setState({ files, openIds: nextOpen, activeId: nextActive })
+  adoptDiskFiles(files)
 }

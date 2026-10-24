@@ -14,14 +14,23 @@ link; plain `docker compose up -d` works too.) That starts everything, and it al
 - **editor**: the editor itself, which also saves your files and talks to Claude
   Code. Your edits to `app/` show up live without rebuilding.
 - **piston**: runs your code ([Piston](https://github.com/engineer-man/piston), free,
-  no API key).
+  no API key). It's pinned to one version, with a small patch (`piston/api-v2.js`) so
+  **Stop** really ends a running program.
 - **piston-setup**: installs C++, Java and Python into Piston. The first run takes a
   few minutes (`docker compose logs -f piston-setup` shows progress); after that it
   only checks and exits.
 
-The Claude panel uses your Claude Code login from `~/.claude`, so log in once with
-`claude` on this machine. To stop everything: `docker compose down`. After changing
+The Claude panel signs in with a token from your Claude subscription. The first time,
+`./start.sh` asks for it: run `claude setup-token` in another terminal and paste what it
+prints. It's saved in `.env`, which git ignores. The editor never sees the rest of your
+`~/.claude` folder. To stop everything: `docker compose down`. After changing
 `package.json` or the Dockerfile: `docker compose up -d --build`.
+
+**Something not working?** The ⚙️ button in the left bar opens **Setup**. It checks that
+Piston is running with C++, Java and Python, that Claude is signed in, and that your folders
+can be saved to, and says how to fix whatever isn't. The editor also checks this when it opens
+and warns you if something needs attention. **Copy diagnostics** copies the check plus the end
+of the log file (`logs/editor.log`), ready to paste into a bug report.
 
 Not using Docker for the editor? `docker compose up -d piston piston-setup`, then
 `cd app && npm install && npm run dev`.
@@ -31,14 +40,12 @@ Not using Docker for the editor? `docker compose up -d piston piston-setup`, the
 Every file in the editor is a real file in **`solutions/`** at the repo root (set
 `SOLUTIONS_DIR` to use another folder). Edits are written there half a second
 after you stop typing, so you can open, back up or commit them like any other
-code. If you change a file outside the editor (for example in VS Code), reload
-the page to see the change.
+code. Change a file outside the editor (in VS Code, with git, anything) and the editor
+shows the change straight away; the same goes for notes, problems and dry runs. Saving
+never leaves a half-written file behind, even if the power goes mid-save.
 
 The browser also keeps a backup copy, plus your open tabs, theme and settings,
 in localStorage for `http://localhost:5199`. The port is fixed for that reason.
-
-You can switch to Judge0 on RapidAPI (paid, needs an API key) in Settings (⚙️ in
-the left bar).
 
 ## Giving your program input
 
@@ -46,8 +53,6 @@ Programs run like they do in the VS Code terminal. When your code reads with `ci
 `Scanner`), the Output tab shows what it printed so far and waits: type the answer and press Enter,
 and the program carries on. What you typed stays in the output in purple. **Stop** ends a program
 that's stuck waiting or looping; a run can last up to 2 minutes.
-
-This needs Piston (the default). With Judge0 a program runs in one go and gets no input.
 
 ## Shortcuts
 
@@ -139,8 +144,14 @@ as JSON files in **`playground/`**; the code editor stays as you left it while y
 ## Ask Claude
 
 Click the ✦ button in the left bar (or ⌘/Ctrl + K → "Ask Claude") to chat with a Claude
-agent built for this editor. It runs on this machine with your existing Claude Code login
+agent built for this editor. It runs on this machine with your Claude subscription
 (no API key), and every message includes the file you have open with its latest code.
+
+Claude's reply runs on the server, not in the page. If the connection drops, or you reload
+or close the page, the reply carries on, and the page picks it up again where it left off.
+**Stop** ends it. A change Claude proposed can still be applied after it stopped waiting for
+your answer: the card shows **Apply anyway**, which applies it only if the code it changes is
+still there.
 
 It can only act through these tools:
 

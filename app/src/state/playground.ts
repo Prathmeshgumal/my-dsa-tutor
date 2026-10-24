@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { DryRun } from '@/lib/dryRun'
 import { exampleDryRun } from '@/lib/dryRunExample'
+import { parseSaved } from '@/lib/formats'
 import { useSettings } from './settings'
 
 /** Dry-run visualizations shown in the Playground; saved as JSON files in playground/ (via /api/playground). */
@@ -77,7 +78,7 @@ export const usePlayground = create<PlaygroundState>()((set, get) => {
         const files = (await res.json()) as { name: string; content: string }[]
         const saved = files.flatMap((f) => {
           try {
-            const run = JSON.parse(f.content) as DryRun
+            const run = parseSaved<DryRun>('dryRun', f.content)
             return Array.isArray(run.steps) && typeof run.id === 'string' ? [run] : []
           } catch {
             return []

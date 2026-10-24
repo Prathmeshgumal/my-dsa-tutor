@@ -14,6 +14,8 @@ import type { RunResult } from '@/lib/runner/types'
 const runResult: RunResult = { status: 'success', statusText: 'Accepted', stdout: '1', stderr: '', compileOutput: '', timeMs: 3, memoryKb: 100 }
 
 const chat = () => useAiChat.getState()
+const change = { type: 'edit_file', name: 'main.cpp', oldText: 'a', newText: 'b' } as const
+const approvalEvent = { type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: '', change } as const
 const quiet = { beforeSend: async () => {}, afterEdits: async () => {} }
 
 function fakeStream(events: ChatEvent[]) {
@@ -220,24 +222,37 @@ describe('agent tools', () => {
   test('a proposed change waits for approval while Claude waits, and expires when the reply ends', async () => {
     let finish!: () => void
     const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void) => {
-      onEvent({ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: 'why' })
+      onEvent({ ...approvalEvent, explanation: 'why' })
       await new Promise<void>((r) => (finish = r))
     })
     const pending = chat().send('fix it', { stream, ...quiet })
     await vi.waitFor(() => expect(finish).toBeDefined())
     expect(activeChat(chat())!.messages[1].approvals).toEqual([
-      { id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: 'why', state: 'pending' },
+      { id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: 'why', change, state: 'pending' },
     ])
     finish()
     await pending
     expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('expired')
   })
 
-  test('answering a proposal saves the editor first, posts the decision and marks it', async () => {
-    await chat().send('fix it', {
-      stream: fakeStream([{ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: '' }]),
-      ...quiet,
+  /** Sends a message whose reply proposes a change and keeps waiting; returns a function that ends the reply. */
+  async function proposeAndWait() {
+    let finish!: () => void
+    const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent) => void) => {
+      onEvent(approvalEvent)
+      await new Promise<void>((r) => (finish = r))
     })
+    const pending = chat().send('fix it', { stream, ...quiet })
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    return async () => {
+      finish()
+      await pending
+    }
+  }
+  const approval = () => activeChat(chat())!.messages[1].approvals![0]
+
+  test('answering while Claude waits saves the editor first, then tells Claude', async () => {
+    const end = await proposeAndWait()
     const order: string[] = []
     const post = vi.fn(async (url: string, init: RequestInit) => {
       order.push(`post ${url} ${init.body}`)
@@ -245,16 +260,94 @@ describe('agent tools', () => {
     })
     await chat().answerApproval('p1', true, { post, beforeAnswer: async () => void order.push('save') })
     expect(order).toEqual(['save', 'post /api/claude/approval {"id":"p1","approved":true}'])
-    expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('approved')
+    expect(approval().state).toBe('approved')
+    await end()
+    expect(approval().state).toBe('approved')
   })
 
-  test('a proposal the server no longer waits for is marked expired', async () => {
-    await chat().send('fix it', {
-      stream: fakeStream([{ type: 'approval', id: 'p1', kind: 'edit', file: 'main.cpp', before: 'a', after: 'b', explanation: '' }]),
-      ...quiet,
+  test('after Claude stopped waiting, applying sends the change itself and shows what it touched', async () => {
+    await chat().send('fix it', { stream: fakeStream([approvalEvent]), ...quiet })
+    expect(approval().state).toBe('expired')
+    const effects = [{ type: 'file_changed', file: 'main.cpp' }]
+    const post = vi.fn(async () => new Response(JSON.stringify({ text: 'Applied', effects })))
+    const afterApply = vi.fn(async () => {})
+    await chat().answerApproval('p1', true, { post, beforeAnswer: async () => {}, afterApply })
+    expect(post).toHaveBeenCalledOnce()
+    const [url, init] = post.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/claude/apply')
+    expect(JSON.parse(init.body as string)).toEqual({ change })
+    expect(approval()).toMatchObject({ state: 'approved' })
+    expect(afterApply).toHaveBeenCalledWith(effects)
+  })
+
+  test('if the server was restarted while Claude waited, approving still applies the change', async () => {
+    const end = await proposeAndWait()
+    const post = vi.fn(async (url: string) =>
+      url === '/api/claude/approval' ? new Response(null, { status: 404 }) : new Response(JSON.stringify({ text: 'ok', effects: [] })),
+    )
+    await chat().answerApproval('p1', true, { post, beforeAnswer: async () => {}, afterApply: async () => {} })
+    expect(post.mock.calls.map((c) => (c as unknown as [string])[0])).toEqual(['/api/claude/approval', '/api/claude/apply'])
+    expect(approval().state).toBe('approved')
+    await end()
+  })
+
+  test('a change that no longer fits stays open, with the reason', async () => {
+    await chat().send('fix it', { stream: fakeStream([approvalEvent]), ...quiet })
+    const post = async () => new Response(JSON.stringify({ error: 'main.cpp changed while waiting for approval; read it again.' }), { status: 409 })
+    await chat().answerApproval('p1', true, { post, beforeAnswer: async () => {} })
+    expect(approval()).toMatchObject({ state: 'expired', error: 'main.cpp changed while waiting for approval; read it again.' })
+  })
+
+  test('dismissing a proposal Claude stopped waiting for sends nothing', async () => {
+    await chat().send('fix it', { stream: fakeStream([approvalEvent]), ...quiet })
+    const post = vi.fn()
+    await chat().answerApproval('p1', false, { post, beforeAnswer: async () => {} })
+    expect(post).not.toHaveBeenCalled()
+    expect(approval().state).toBe('rejected')
+  })
+
+  test('remembers how far a running reply got, and forgets it when the reply ends', async () => {
+    let finish!: () => void
+    const stream = vi.fn(async (_r: unknown, onEvent: (e: ChatEvent, id?: number) => void) => {
+      onEvent({ type: 'turn', turnId: 't1' }, 1)
+      onEvent({ type: 'text', text: 'Hi' }, 2)
+      await new Promise<void>((r) => (finish = r))
     })
-    await chat().answerApproval('p1', true, { post: async () => new Response(null, { status: 404 }), beforeAnswer: async () => {} })
-    expect(activeChat(chat())!.messages[1].approvals![0].state).toBe('expired')
+    const pending = chat().send('hello', { stream, ...quiet })
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    const replyId = activeChat(chat())!.messages[1].id
+    expect(activeChat(chat())!.turn).toEqual({ id: 't1', replyId, seen: 2 })
+    finish()
+    await pending
+    expect(activeChat(chat())!.turn).toBeUndefined()
+  })
+
+  test('after a reload, a reply that was still running picks up where the page left off', async () => {
+    useAiChat.setState({
+      chats: [
+        {
+          id: 'c1',
+          title: 'q',
+          sessionId: 's1',
+          updatedAt: 1,
+          turn: { id: 't1', replyId: 'r1', seen: 4 },
+          messages: [
+            { id: 'u1', role: 'user', text: 'q', tools: [] },
+            { id: 'r1', role: 'assistant', text: 'Half', tools: [] },
+          ],
+        },
+      ],
+      activeChatId: 'c1',
+    })
+    const resume = vi.fn(async (_id: string, _seen: number, onEvent: (e: ChatEvent, id?: number) => void) => {
+      onEvent({ type: 'text', text: ' done.' }, 5)
+      onEvent({ type: 'done' }, 6)
+    })
+    await chat().resume({ resume })
+    expect(resume.mock.calls[0].slice(0, 2)).toEqual(['t1', 4])
+    expect(activeChat(chat())!.messages[1].text).toBe('Half done.')
+    expect(activeChat(chat())!.turn).toBeUndefined()
+    expect(chat().status).toBe('idle')
   })
 
   test('runs by Claude appear in the output panel', async () => {

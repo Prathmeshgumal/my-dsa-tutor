@@ -1,27 +1,17 @@
 import { toast } from 'sonner'
 import { create } from 'zustand'
 import { languageFromFilename } from '@/lib/languages'
-import { createJudge0RapidApiRunner } from '@/lib/runner/judge0'
 import { startSession, type Session, type SocketLike } from '@/lib/runner/interactive'
 import { createPistonRunner } from '@/lib/runner/piston'
 import { RunnerError, type CodeRunner, type RunResult } from '@/lib/runner/types'
-import { useSettings, type RunnerKind } from './settings'
-import { useSettingsDialog } from './settingsDialog'
+import { useSettings } from './settings'
 import { useWorkspace } from './workspace'
 
-export type Connection = 'no_key' | 'connected' | 'failed'
+export type Connection = 'connected' | 'failed'
 
-interface RunnerSettings {
-  runner: RunnerKind
-  apiKey: string
-}
-
-export function createRunner({ runner, apiKey }: RunnerSettings): CodeRunner {
-  return runner === 'piston' ? createPistonRunner() : createJudge0RapidApiRunner({ apiKey })
-}
-
-export function initialConnection({ runner, apiKey }: RunnerSettings): Connection {
-  return runner === 'judge0' && !apiKey ? 'no_key' : 'connected'
+/** Runs code in one go (tests, dry-run checks), through the /piston proxy. */
+export function createRunner(): CodeRunner {
+  return createPistonRunner()
 }
 
 /** One piece of the terminal: what the program printed, or what you typed. */
@@ -55,7 +45,7 @@ interface RunState {
   lastStdin: string
   /**
    * Runs the open file. With Piston it runs like a terminal: output streams in and the program waits
-   * for what you type (sendInput). A runner passed in, or Judge0, runs it in one go with no input.
+   * for what you type (sendInput). A runner passed in runs it in one go with no input.
    */
   runActiveFile(runner?: CodeRunner): Promise<void>
   /** Types a line into the running program (Enter included). */
@@ -70,7 +60,7 @@ export const useRun = create<RunState>()((set, get) => ({
   state: 'idle',
   result: null,
   error: null,
-  connection: initialConnection(useSettings.getState()),
+  connection: 'connected',
   lastFile: null,
   lastStdin: '',
   phase: null,
@@ -100,17 +90,9 @@ export const useRun = create<RunState>()((set, get) => ({
     // The result (or error) is about to land in the output panel, so make sure it is visible.
     useSettings.getState().setOutputOpen(true)
 
-    const settings = useSettings.getState()
-    if (settings.runner === 'judge0' && !settings.apiKey) {
-      const error = new RunnerError('no_key', 'Add your RapidAPI key in Settings to run code.')
-      set({ state: 'error', result: null, error, connection: 'no_key' })
-      useSettingsDialog.getState().show('no_key')
-      return
-    }
-
     set({ state: 'running', error: null, lastFile: file.name, lastStdin: '', terminal: [], phase: 'compiling' })
 
-    if (!runner && settings.runner === 'piston') {
+    if (!runner) {
       await new Promise<void>((resolve) => {
         session = startSession({
           language,
@@ -146,7 +128,7 @@ export const useRun = create<RunState>()((set, get) => ({
     }
 
     try {
-      const result = await (runner ?? createRunner(settings)).run({
+      const result = await runner.run({
         language,
         source: file.content,
         stdin: '',
@@ -159,8 +141,3 @@ export const useRun = create<RunState>()((set, get) => ({
     }
   },
 }))
-
-// A new key or runner means the old connection state no longer applies.
-useSettings.subscribe((s, prev) => {
-  if (s.apiKey !== prev.apiKey || s.runner !== prev.runner) useRun.setState({ connection: initialConnection(s) })
-})

@@ -79,9 +79,10 @@ export const useNotes = create<NotesState>()((set, get) => {
       set({ status: 'loading' })
       try {
         const res = await request(API)
-        const notes = ((await res.json()) as Note[]).sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { numeric: true }),
-        )
+        const notes = ((await res.json()) as Note[])
+          // Keep what is being typed; disk hasn't seen it yet.
+          .map((n) => (pending && n.name === pending.name ? { ...n, content: pending.content } : n))
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
         const active = notes.some((n) => n.name === get().activeName) ? get().activeName : (notes[0]?.name ?? null)
         set({ notes, activeName: active, status: 'ready' })
       } catch {

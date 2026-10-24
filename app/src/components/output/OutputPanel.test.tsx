@@ -113,10 +113,10 @@ test('Errors tab count is 0 on success', () => {
 test('runner error shows message inline', () => {
   useRun.setState({
     state: 'error',
-    error: new RunnerError('quota', 'Daily Judge0 quota used up. Try again tomorrow.'),
+    error: new RunnerError('network', 'Couldn’t reach Piston — start it with “docker compose up -d”.'),
   })
   render(<OutputPanel />)
-  expect(screen.getByRole('alert')).toHaveTextContent('Daily Judge0 quota used up. Try again tomorrow.')
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t reach Piston')
 })
 
 test('the output panel has no layout buttons (they live in the status bar)', () => {

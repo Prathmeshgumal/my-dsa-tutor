@@ -1,6 +1,9 @@
 // Dev-server bridge to the editor's Claude agent (Claude Agent SDK, using the existing Claude Code login).
 //   POST /api/claude/chat      { message, sessionId, context } → one turn, streamed as server-sent events
+//   GET  /api/claude/turns/:id?after=n                         → the same turn's events after the nth (reconnect)
+//   POST /api/claude/turns/:id/stop                            → stops the turn
 //   POST /api/claude/approval  { id, approved }                → the user's answer to a proposed change
+//   POST /api/claude/apply     { change }                      → applies a proposal Claude stopped waiting for
 // The agent can only use the editor tools in ./editorTools.ts: Claude Code's own tools, the user's
 // settings, CLAUDE.md, plugins and MCP servers are all switched off.
 import { createSdkMcpServer, query, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -19,7 +22,10 @@ import {
 import { languageFromFilename } from '../src/lib/languages.ts'
 import { createPistonRunner } from '../src/lib/runner/piston.ts'
 import type { CodeRunner } from '../src/lib/runner/types.ts'
+import { applyChange, changeSchema, ToolError } from './changes.ts'
 import { createEditorTools, toSdkTools, TOOL_NAMES, type ApprovalRequest } from './editorTools.ts'
+import type { Logger } from './log.ts'
+import { createTurns, type Turns } from './turns.ts'
 
 export type { ChatEvent, EditorContext }
 
@@ -29,6 +35,8 @@ export type QueryFn = (params: { prompt: string | AsyncIterable<SDKUserMessage>;
 
 const ROUTE = '/api/claude/chat'
 const APPROVAL_ROUTE = '/api/claude/approval'
+const APPLY_ROUTE = '/api/claude/apply'
+const TURN_ROUTE = /^\/api\/claude\/turns\/([\w-]+)(\/stop)?$/
 
 const SYSTEM_PROMPT = `You are the coding assistant inside a small browser editor where a student practises data structures and algorithms in C++, Java and Python.
 
@@ -273,6 +281,9 @@ interface MiddlewareOptions {
   /** Runs code for the run_code tool. */
   runner?: CodeRunner
   approvals?: Approvals
+  turns?: Turns
+  /** Where failed replies are recorded. */
+  logger?: Logger
 }
 
 export function createClaudeChatMiddleware({
@@ -283,10 +294,48 @@ export function createClaudeChatMiddleware({
   queryImpl = query,
   runner = createPistonRunner({ baseUrl: `${process.env.PISTON_URL ?? 'http://127.0.0.1:2000'}/api/v2` }),
   approvals = createApprovals(),
+  turns = createTurns(),
+  logger,
 }: MiddlewareOptions): Middleware {
   return (req, res, next) => {
-    const route = (req.url ?? '').split('?')[0]
-    if (req.method !== 'POST' || (route !== ROUTE && route !== APPROVAL_ROUTE)) return next()
+    const [route, query = ''] = (req.url ?? '').split('?')
+    const turnRoute = TURN_ROUTE.exec(route)
+    if (turnRoute) {
+      const [, id, stop] = turnRoute
+      if (stop && req.method === 'POST') {
+        res.statusCode = turns.stop(id) ? 204 : 404
+        res.end()
+        return
+      }
+      if (!stop && req.method === 'GET') {
+        const after = Number(new URLSearchParams(query).get('after') ?? 0)
+        if (turns.watch(id, Number.isFinite(after) ? after : 0, res)) return
+        res.statusCode = 404
+        res.end(JSON.stringify({ error: 'That reply is no longer available (the editor may have restarted).' }))
+        return
+      }
+      return next()
+    }
+    if (req.method !== 'POST' || (route !== ROUTE && route !== APPROVAL_ROUTE && route !== APPLY_ROUTE)) return next()
+    if (route === APPLY_ROUTE) {
+      void (async () => {
+        const parsed = changeSchema.safeParse((await readBody(req))?.change)
+        res.setHeader('Content-Type', 'application/json')
+        if (!parsed.success) {
+          res.statusCode = 400
+          res.end(JSON.stringify({ error: 'That isn’t a change the editor can apply.' }))
+          return
+        }
+        try {
+          res.end(JSON.stringify(await applyChange({ dir: cwd, notesDir, problemsDir }, parsed.data)))
+        } catch (e) {
+          // The change no longer fits: the file changed since, or is already there.
+          res.statusCode = e instanceof ToolError ? 409 : 500
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }))
+        }
+      })()
+      return
+    }
     if (route === APPROVAL_ROUTE) {
       void (async () => {
         const body = await readBody(req)
@@ -313,38 +362,41 @@ export function createClaudeChatMiddleware({
         return
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
-      const send = (event: ChatEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`)
-
-      const abortController = new AbortController()
-      res.on('close', () => abortController.abort())
-
       const context = parseContext(body.context)
-      const tools = createEditorTools({
-        dir: cwd,
-        notesDir,
-        playgroundDir,
-        problemsDir,
-        context,
-        runner,
-        requestApproval: (change) => approvals.request(send, abortController.signal, change),
-        onRun: (file, result, stdin) => send({ type: 'run', file, result, stdin }),
-        onFileChanged: (file) => send({ type: 'file_changed', file }),
-        onNoteChanged: (note) => send({ type: 'note_changed', note }),
-        onVisualization: (run) => send({ type: 'visualization', run }),
-        onProblemChanged: (slug, open) => send({ type: 'problem_changed', slug, open }),
-      })
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined
 
-      const toEvents = createEventMapper()
-      let sessionSent = false
-      try {
+      const runTurn = async (sendEvent: (e: ChatEvent) => void, signal: AbortSignal) => {
+        const send = (e: ChatEvent) => {
+          if (e.type === 'error') logger?.log('error', 'Claude reply failed', e.message)
+          sendEvent(e)
+        }
+        const abortController = new AbortController()
+        signal.addEventListener('abort', () => abortController.abort())
+
+        const tools = createEditorTools({
+          dir: cwd,
+          notesDir,
+          playgroundDir,
+          problemsDir,
+          context,
+          runner,
+          requestApproval: (change) => approvals.request(send, abortController.signal, change),
+          onRun: (file, result, stdin) => send({ type: 'run', file, result, stdin }),
+          onFileChanged: (file) => send({ type: 'file_changed', file }),
+          onNoteChanged: (note) => send({ type: 'note_changed', note }),
+          onVisualization: (run) => send({ type: 'visualization', run }),
+          onProblemChanged: (slug, open) => send({ type: 'problem_changed', slug, open }),
+        })
+
+        const toEvents = createEventMapper()
+        let sessionSent = false
         const messages = queryImpl({
           prompt: images.length
             ? withImages(buildPrompt(message || 'Have a look at this image.', context), images)
             : buildPrompt(message, context),
           options: {
             cwd,
-            resume: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+            resume: sessionId,
             abortController,
             includePartialMessages: true,
             systemPrompt: SYSTEM_PROMPT,
@@ -359,17 +411,22 @@ export function createClaudeChatMiddleware({
             maxTurns: 30,
           },
         })
-        for await (const message of messages) {
-          if (!sessionSent && 'session_id' in message && message.session_id) {
-            send({ type: 'session', sessionId: message.session_id })
-            sessionSent = true
+        try {
+          for await (const message of messages) {
+            if (!sessionSent && 'session_id' in message && message.session_id) {
+              send({ type: 'session', sessionId: message.session_id })
+              sessionSent = true
+            }
+            for (const event of toEvents(message)) send(event)
           }
-          for (const event of toEvents(message)) send(event)
+        } catch (e) {
+          if (!signal.aborted) logger?.log('error', 'Claude reply failed', e)
+          throw e
         }
-      } catch (e) {
-        if (!abortController.signal.aborted) send({ type: 'error', message: e instanceof Error ? e.message : String(e) })
       }
-      res.end()
+
+      // The reply runs on its own: closing the page doesn't stop it, and the page can reconnect to it.
+      turns.watch(turns.start(runTurn), 0, res)
     })()
   }
 }

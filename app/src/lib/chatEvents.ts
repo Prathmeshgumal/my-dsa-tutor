@@ -1,4 +1,5 @@
 // Shared between the dev server (server/claudeChat.ts) and the browser.
+import type { Change } from './changes.ts'
 import type { DryRun } from './dryRun.ts'
 import type { RunResult } from './runner/types.ts'
 
@@ -7,13 +8,25 @@ export type ApprovalKind = 'edit' | 'create' | 'edit_note' | 'create_note' | 'cr
 
 /** One server-sent event from POST /api/claude/chat. */
 export type ChatEvent =
+  /** First event of every reply: its id, for reconnecting (GET /api/claude/turns/:id) and Stop. */
+  | { type: 'turn'; turnId: string }
   | { type: 'session'; sessionId: string }
   | { type: 'text'; text: string }
   | { type: 'tool'; name: string; detail: string }
   /** Claude is writing a tool call's input (can take a minute for a big dry run or note). */
   | { type: 'tool_progress'; name: string; chars: number }
   /** Claude wants to change a file and is waiting for the user's yes/no (POST /api/claude/approval). */
-  | { type: 'approval'; id: string; kind: ApprovalKind; file: string; before: string; after: string; explanation: string }
+  | {
+      type: 'approval'
+      id: string
+      kind: ApprovalKind
+      file: string
+      before: string
+      after: string
+      explanation: string
+      /** What gets written, so it can still be applied after Claude stops waiting (POST /api/claude/apply). */
+      change: Change
+    }
   /** Claude ran code; the editor shows it in the output panel. */
   | { type: 'run'; file: string; result: RunResult; stdin?: string }
   /** An approved change was written to disk; the editor reloads its files. */

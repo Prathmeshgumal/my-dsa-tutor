@@ -121,8 +121,8 @@ export function CommandMenu() {
               {outputPosition === 'right' ? <PanelBottom /> : <PanelRight />}
               {outputPosition === 'right' ? 'Move output to the bottom' : 'Move output to the right'}
             </CommandItem>
-            <CommandItem value="Open settings" onSelect={run(() => useSettingsDialog.getState().show())}>
-              <Settings /> Open settings
+            <CommandItem value="Check setup" onSelect={run(() => useSettingsDialog.getState().show())}>
+              <Settings /> Check setup
             </CommandItem>
           </CommandGroup>
         </CommandList>

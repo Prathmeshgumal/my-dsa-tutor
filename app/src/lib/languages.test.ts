@@ -7,9 +7,9 @@ import {
 } from './languages'
 
 test('ids and extensions', () => {
-  expect(LANGUAGES.cpp).toMatchObject({ judge0Id: 54, ext: '.cpp', monaco: 'cpp' })
-  expect(LANGUAGES.java).toMatchObject({ judge0Id: 62, ext: '.java' })
-  expect(LANGUAGES.python).toMatchObject({ judge0Id: 71, ext: '.py' })
+  expect(LANGUAGES.cpp).toMatchObject({ ext: '.cpp', monaco: 'cpp' })
+  expect(LANGUAGES.java).toMatchObject({ ext: '.java' })
+  expect(LANGUAGES.python).toMatchObject({ ext: '.py' })
 })
 
 test('piston language names and fixed file names', () => {

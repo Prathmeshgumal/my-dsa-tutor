@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
 import { createClaudeChatMiddleware } from './server/claudeChat.ts'
+import { createFolderEventsMiddleware } from './server/folderEvents.ts'
+import { createHealthMiddleware } from './server/healthApi.ts'
+import { createLogger, createLogMiddleware } from './server/log.ts'
 import { createProblemsMiddleware } from './server/problemsApi.ts'
+import { createSameSiteGuard, fromAnotherSite } from './server/sameSite.ts'
 import { createNotesMiddleware, createPlaygroundMiddleware, createSolutionsMiddleware } from './server/solutionsApi.ts'
 
 // The editor's files live as real files in <repo>/solutions (override with SOLUTIONS_DIR).
@@ -17,16 +21,37 @@ const playgroundDir = process.env.PLAYGROUND_DIR ?? path.resolve(import.meta.dir
 // Practice problems (description, tests, solution) live in <repo>/problems, one folder each (override with PROBLEMS_DIR).
 const problemsDir = process.env.PROBLEMS_DIR ?? path.resolve(import.meta.dirname, '../problems')
 
+const pistonUrl = process.env.PISTON_URL ?? 'http://127.0.0.1:2000'
+
+// The editor's log file lives in <repo>/logs (override with LOGS_DIR).
+const logsDir = process.env.LOGS_DIR ?? path.resolve(import.meta.dirname, '../logs')
+
 function solutionsApi(): Plugin {
   return {
     name: 'solutions-api',
     configureServer(server) {
+      // First: other websites open in your browser may not use any of the routes below.
+      server.middlewares.use(createSameSiteGuard())
+      const logger = createLogger(logsDir)
+      process.on('unhandledRejection', (reason) => logger.log('error', 'Unhandled error in the server', reason))
+      server.middlewares.use(createLogMiddleware(logger))
+      server.middlewares.use(
+        createHealthMiddleware({
+          pistonUrl,
+          folders: { solutions: solutionsDir, notes: notesDir, playground: playgroundDir, problems: problemsDir },
+        }),
+      )
+      server.middlewares.use(
+        createFolderEventsMiddleware({
+          folders: { files: solutionsDir, notes: notesDir, playground: playgroundDir, problems: problemsDir },
+        }),
+      )
       server.middlewares.use(createSolutionsMiddleware(solutionsDir))
       server.middlewares.use(createNotesMiddleware(notesDir))
       server.middlewares.use(createPlaygroundMiddleware(playgroundDir))
       server.middlewares.use(createProblemsMiddleware(problemsDir))
       // Claude runs in the solutions folder, so it sees the same files the editor shows.
-      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir, notesDir, playgroundDir, problemsDir }))
+      server.middlewares.use(createClaudeChatMiddleware({ cwd: solutionsDir, notesDir, playgroundDir, problemsDir, logger }))
     },
   }
 }
@@ -42,9 +67,15 @@ export default defineConfig({
     proxy: {
       // ws: interactive runs talk to Piston over a WebSocket (/piston/connect).
       '/piston': {
-        target: process.env.PISTON_URL ?? 'http://127.0.0.1:2000',
+        target: pistonUrl,
         rewrite: (p) => p.replace(/^\/piston/, '/api/v2'),
         ws: true,
+        // WebSocket upgrades skip the middleware above, so the same-site check is repeated here.
+        configure: (proxy) => {
+          proxy.on('proxyReqWs', (_proxyReq, req, socket) => {
+            if (fromAnotherSite(req)) socket.destroy()
+          })
+        },
       },
     },
   },

@@ -4,7 +4,6 @@ export interface Language {
   id: LanguageId
   label: 'C++' | 'Java' | 'Python'
   ext: '.cpp' | '.java' | '.py'
-  judge0Id: 54 | 62 | 71
   monaco: 'cpp' | 'java' | 'python'
   /** Piston runtime name and the file name to submit (Piston's g++ wrapper appends .cpp itself). */
   piston: { language: 'c++' | 'java' | 'python'; fileName: string }
@@ -17,7 +16,6 @@ export const LANGUAGES: Record<LanguageId, Language> = {
     id: 'cpp',
     label: 'C++',
     ext: '.cpp',
-    judge0Id: 54,
     monaco: 'cpp',
     piston: { language: 'c++', fileName: 'main' },
     compilerLabel: 'C++ · GCC',
@@ -34,7 +32,6 @@ int main() {
     id: 'java',
     label: 'Java',
     ext: '.java',
-    judge0Id: 62,
     monaco: 'java',
     piston: { language: 'java', fileName: 'Main.java' },
     compilerLabel: 'Java · OpenJDK',
@@ -51,7 +48,6 @@ public class Main {
     id: 'python',
     label: 'Python',
     ext: '.py',
-    judge0Id: 71,
     monaco: 'python',
     piston: { language: 'python', fileName: 'main.py' },
     compilerLabel: 'Python 3',

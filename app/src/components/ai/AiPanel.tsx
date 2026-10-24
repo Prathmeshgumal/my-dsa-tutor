@@ -69,7 +69,7 @@ function ToolList({ tools }: { tools: ToolActivity[] }) {
 const DECIDED: Record<Exclude<Approval['state'], 'pending'>, { text: string; className: string; icon: typeof Check }> = {
   approved: { text: 'Applied', className: 'text-emerald-600 dark:text-emerald-400', icon: Check },
   rejected: { text: 'Rejected', className: 'text-muted-foreground', icon: X },
-  expired: { text: 'No longer waiting', className: 'text-muted-foreground', icon: Clock },
+  expired: { text: 'Claude stopped waiting', className: 'text-muted-foreground', icon: Clock },
 }
 
 function DiffLines({ text, sign }: { text: string; sign: '-' | '+' }) {
@@ -142,6 +142,11 @@ function ApprovalCard({ approval }: { approval: Approval }) {
           </div>
         </div>
       )}
+      {approval.error && (
+        <p role="alert" className="px-2.5 pb-2 text-[12px] text-red-600 dark:text-red-400">
+          Couldn’t apply it: {approval.error}
+        </p>
+      )}
       {approval.state === 'pending' && (
         <div className="flex justify-end gap-2 px-2.5 pb-2.5">
           <Button size="sm" variant="ghost" onClick={() => void useAiChat.getState().answerApproval(approval.id, false)}>
@@ -149,6 +154,18 @@ function ApprovalCard({ approval }: { approval: Approval }) {
           </Button>
           <Button size="sm" onClick={() => void useAiChat.getState().answerApproval(approval.id, true)}>
             <Check /> Apply change
+          </Button>
+        </div>
+      )}
+      {/* Claude has moved on, but the change can still be applied as it stands. */}
+      {approval.state === 'expired' && approval.change && (
+        <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5">
+          <span className="mr-auto text-[12px] text-muted-foreground">You can still apply it.</span>
+          <Button size="sm" variant="ghost" onClick={() => void useAiChat.getState().answerApproval(approval.id, false)}>
+            Dismiss
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => void useAiChat.getState().answerApproval(approval.id, true)}>
+            <Check /> Apply anyway
           </Button>
         </div>
       )}

@@ -7,7 +7,11 @@ import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { AppShell } from '@/components/shell/AppShell'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
+import { healthy } from '@/lib/health'
+import { useAiChat } from '@/state/aiChat'
 import { startAutosave } from '@/state/autosave'
+import { startFolderSync } from '@/state/folderSync'
+import { useHealth } from '@/state/health'
 import { hydrateFromDisk } from '@/state/hydrate'
 import { useProblems } from '@/state/problems'
 import { useRun } from '@/state/run'
@@ -37,6 +41,26 @@ export default function App() {
     void useProblems.getState().load()
   }, [])
 
+  // A reply Claude was still writing when the page was closed or reloaded carries on where it was.
+  useEffect(() => {
+    void useAiChat.getState().resume()
+  }, [])
+
+  // If something the editor needs isn't working, say so up front instead of failing later.
+  useEffect(() => {
+    void useHealth
+      .getState()
+      .check()
+      .then((health) => {
+        if (health && !healthy(health)) {
+          toast.warning('Part of the setup needs attention.', {
+            action: { label: 'Show me', onClick: () => useSettingsDialog.getState().show() },
+            duration: 10_000,
+          })
+        }
+      })
+  }, [])
+
   // Load files from the solutions folder, then keep it in sync. Falls back to browser-only storage.
   useEffect(() => {
     let stop: (() => void) | undefined
@@ -44,7 +68,13 @@ export default function App() {
     void hydrateFromDisk().then(({ ok, synced }) => {
       if (cancelled) return
       if (!ok) toast.warning('Couldn’t reach the files folder — saving in this browser only.')
-      stop = startAutosave(ok ? { disk: { synced } } : {})
+      const stopAutosave = startAutosave(ok ? { disk: { synced } } : {})
+      // Edits made outside the editor (VS Code, git) show up without a reload.
+      const stopSync = ok ? startFolderSync() : () => {}
+      stop = () => {
+        stopSync()
+        stopAutosave()
+      }
     })
     return () => {
       cancelled = true

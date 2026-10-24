@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Clock, Cpu, KeyRound, Loader2, Square, Terminal } from 'lucide-react'
+import { AlertCircle, Clock, Cpu, Loader2, Square, Terminal } from 'lucide-react'
 import { GlowBorder } from '@/components/glow/GlowBorder'
 import { Kbd } from '@/components/Kbd'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { shortcut } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { useRun, type TerminalChunk } from '@/state/run'
-import { useSettingsDialog } from '@/state/settingsDialog'
 import { badgeFor, ToneBadge } from './ResultBadge'
 
 function formatMemory(kb: number): string {
@@ -186,11 +185,6 @@ export function OutputPanel() {
               <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
               {error.message}
             </div>
-            {(error.kind === 'no_key' || error.kind === 'auth') && (
-              <Button size="sm" variant="outline" onClick={() => useSettingsDialog.getState().show()}>
-                <KeyRound /> Open settings
-              </Button>
-            )}
           </Placeholder>
         )}
 

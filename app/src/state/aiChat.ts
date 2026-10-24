@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { EDIT_TOOLS, type ApprovalKind, type ChatEvent, type ChatRequest, type LastRun } from '@/lib/chatEvents'
-import { streamChat } from '@/lib/claudeClient'
+import type { Change, ChangeEffect } from '@/lib/changes'
+import { EDIT_TOOLS, type ApprovalKind, type ChatRequest, type LastRun } from '@/lib/chatEvents'
+import { resumeChat, streamChat, type OnChatEvent } from '@/lib/claudeClient'
 import { flushAutosave } from './autosave'
 import { refreshFromDisk } from './hydrate'
 import type { Attachment } from '@/lib/images'
@@ -25,8 +26,14 @@ export interface Approval {
   before: string
   after: string
   explanation: string
-  /** expired = Claude stopped waiting (reply stopped, or the page was reloaded). */
+  /**
+   * expired = Claude stopped waiting (reply stopped, page reloaded, server restarted). It can still be
+   * applied, if it has its change (chats saved before that was kept don't).
+   */
   state: 'pending' | 'approved' | 'rejected' | 'expired'
+  change?: Change
+  /** Why applying it later didn't work (e.g. the file changed since). */
+  error?: string
 }
 
 export interface ChatMessage {
@@ -50,13 +57,11 @@ interface AnswerDeps {
   post?: (url: string, init: RequestInit) => Promise<Response>
   /** Save typing first, so Claude's change applies to the latest code. */
   beforeAnswer?: () => Promise<void>
+  /** Show what a change applied later touched. */
+  afterApply?: (effects: ChangeEffect[]) => Promise<void>
 }
 
-type StreamFn = (
-  request: ChatRequest,
-  onEvent: (event: ChatEvent) => void,
-  opts?: { signal?: AbortSignal },
-) => Promise<void>
+type StreamFn = (request: ChatRequest, onEvent: OnChatEvent, opts?: { signal?: AbortSignal }) => Promise<void>
 
 /** Seams for tests; the defaults talk to the dev server and the editor. */
 interface SendDeps {
@@ -78,6 +83,8 @@ export interface Chat {
   updatedAt: number
   /** The practice problem this chat is about (started while it was open). */
   problemSlug?: string | null
+  /** The reply Claude is still working on: its id, and how many of its events this page has shown. */
+  turn?: { id: string; replyId: string; seen: number }
 }
 
 interface AiChatState {
@@ -89,6 +96,8 @@ interface AiChatState {
   streamingChatId: string | null
   status: 'idle' | 'streaming'
   send(text: string, deps?: SendDeps): Promise<void>
+  /** Reconnects to a reply that was still running when the page was closed or reloaded. */
+  resume(deps?: { resume?: typeof resumeChat }): Promise<void>
   stop(): void
   newChat(): void
   selectChat(id: string): void
@@ -149,18 +158,103 @@ function lastRun(): LastRun {
   return null
 }
 
-function setApprovalState(chats: Chat[], id: string, state: Approval['state']): Chat[] {
+function patchApproval(chats: Chat[], id: string, patch: Partial<Approval>): Chat[] {
   return chats.map((c) => ({
     ...c,
     messages: c.messages.map((m) =>
-      m.approvals?.some((a) => a.id === id) ? { ...m, approvals: m.approvals.map((a) => (a.id === id ? { ...a, state } : a)) } : m,
+      m.approvals?.some((a) => a.id === id) ? { ...m, approvals: m.approvals.map((a) => (a.id === id ? { ...a, ...patch } : a)) } : m,
     ),
   }))
 }
 
+function findApproval(chats: Chat[], id: string): Approval | undefined {
+  for (const c of chats) for (const m of c.messages) for (const a of m.approvals ?? []) if (a.id === id) return a
+  return undefined
+}
+
+/** Reloads what a change applied later touched (the chat's events do this while Claude is replying). */
+async function showEffects(effects: ChangeEffect[]): Promise<void> {
+  for (const e of effects) {
+    if (e.type === 'file_changed') await refreshFromDisk()
+    else if (e.type === 'note_changed') await useNotes.getState().load()
+    else {
+      await useProblems.getState().load()
+      if (e.open) await useProblems.getState().open(e.slug)
+    }
+  }
+}
+
 export const useAiChat = create<AiChatState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      /**
+       * Shows a reply as its events arrive, in the chat that asked (even if the user switched away or
+       * deleted it), and remembers how far it got so a reloaded page can reconnect to it (resume).
+       */
+      const follow = async (
+        chatId: string,
+        replyId: string,
+        connect: (onEvent: OnChatEvent, signal: AbortSignal) => Promise<void>,
+        { before = async () => {}, afterEdits = refreshFromDisk }: { before?: () => Promise<void>; afterEdits?: () => Promise<void> } = {},
+      ) => {
+        const patchChat = (patch: (c: Chat) => Partial<Chat>) =>
+          set((s) => ({ chats: s.chats.map((c) => (c.id === chatId ? { ...c, ...patch(c) } : c)) }))
+        const patchReply = (patch: (m: ChatMessage) => Partial<ChatMessage>) =>
+          patchChat((c) => ({ messages: c.messages.map((m) => (m.id === replyId ? { ...m, ...patch(m) } : m)) }))
+
+        controller = new AbortController()
+        const { signal } = controller
+        let edited = false
+        try {
+          await before()
+          await connect((event, id) => {
+            if (event.type === 'turn') patchChat(() => ({ turn: { id: event.turnId, replyId, seen: id ?? 1 } }))
+            else if (event.type === 'session') patchChat(() => ({ sessionId: event.sessionId }))
+            else if (event.type === 'text') patchReply((m) => ({ text: m.text + event.text }))
+            else if (event.type === 'tool_progress') patchReply(() => ({ progress: { name: event.name, chars: event.chars } }))
+            else if (event.type === 'tool') {
+              if (EDIT_TOOLS.has(event.name)) edited = true
+              patchReply((m) => ({ tools: [...m.tools, { name: event.name, detail: event.detail }], progress: undefined }))
+            } else if (event.type === 'approval') {
+              const { type: _, ...change } = event
+              patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
+            } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result, event.stdin)
+            else if (event.type === 'file_changed') void afterEdits()
+            else if (event.type === 'note_changed') void useNotes.getState().load()
+            else if (event.type === 'problem_changed') {
+              const { slug, open } = event
+              // The chat that set up a problem is about that problem (so it stays in view when the problem opens).
+              if (open) patchChat((c) => (c.problemSlug ? {} : { problemSlug: slug }))
+              void useProblems
+                .getState()
+                .load()
+                .then(() => {
+                  if (open) return useProblems.getState().open(slug)
+                })
+            }
+            else if (event.type === 'visualization') {
+              const { run } = event
+              usePlayground.getState().add(run)
+              patchReply((m) => ({ visualizations: [...(m.visualizations ?? []), { id: run.id, title: run.title, steps: run.steps.length }] }))
+            }
+            else if (event.type === 'error') patchReply(() => ({ error: event.message }))
+            if (event.type !== 'turn' && typeof id === 'number') patchChat((c) => (c.turn ? { turn: { ...c.turn, seen: id } } : {}))
+          }, signal)
+          if (edited) await afterEdits()
+        } finally {
+          controller = null
+          // Claude has stopped waiting for any proposal it didn't get an answer to.
+          patchReply((m) => ({
+            approvals: m.approvals?.map((a) => (a.state === 'pending' ? { ...a, state: 'expired' } : a)),
+            progress: undefined,
+            ...(signal.aborted ? { stopped: true } : {}),
+          }))
+          patchChat(() => ({ turn: undefined }))
+          set({ status: 'idle', streamingChatId: null })
+        }
+      }
+
+      return {
       chats: [],
       activeChatId: null,
       streamingChatId: null,
@@ -201,68 +295,31 @@ export const useAiChat = create<AiChatState>()(
             chats: [updated, ...s.chats.filter((c) => c.id !== chatId)],
           }
         })
-        // Events always land in the chat that asked, even if the user has switched away or deleted it.
-        const patchChat = (patch: (c: Chat) => Partial<Chat>) =>
-          set((s) => ({ chats: s.chats.map((c) => (c.id === chatId ? { ...c, ...patch(c) } : c)) }))
-        const patchReply = (patch: (m: ChatMessage) => Partial<ChatMessage>) =>
-          patchChat((c) => ({ messages: c.messages.map((m) => (m.id === replyId ? { ...m, ...patch(m) } : m)) }))
+        await follow(
+          chatId,
+          replyId,
+          (onEvent, signal) =>
+            stream(
+              {
+                message,
+                sessionId: existing?.sessionId ?? null,
+                context: editorContext(),
+                ...(attachments.length ? { images: attachments.map((a) => a.image) } : {}),
+              },
+              onEvent,
+              { signal },
+            ),
+          { before: beforeSend, afterEdits },
+        )
+      },
 
-        controller = new AbortController()
-        const { signal } = controller
-        let edited = false
-        try {
-          await beforeSend()
-          await stream(
-            {
-              message,
-              sessionId: existing?.sessionId ?? null,
-              context: editorContext(),
-              ...(attachments.length ? { images: attachments.map((a) => a.image) } : {}),
-            },
-            (event) => {
-              if (event.type === 'session') patchChat(() => ({ sessionId: event.sessionId }))
-              else if (event.type === 'text') patchReply((m) => ({ text: m.text + event.text }))
-              else if (event.type === 'tool_progress') patchReply(() => ({ progress: { name: event.name, chars: event.chars } }))
-              else if (event.type === 'tool') {
-                if (EDIT_TOOLS.has(event.name)) edited = true
-                patchReply((m) => ({ tools: [...m.tools, { name: event.name, detail: event.detail }], progress: undefined }))
-              } else if (event.type === 'approval') {
-                const { type: _, ...change } = event
-                patchReply((m) => ({ approvals: [...(m.approvals ?? []), { ...change, state: 'pending' }] }))
-              } else if (event.type === 'run') useRun.getState().showRun(event.file, event.result, event.stdin)
-              else if (event.type === 'file_changed') void afterEdits()
-              else if (event.type === 'note_changed') void useNotes.getState().load()
-              else if (event.type === 'problem_changed') {
-                const { slug, open } = event
-                // The chat that set up a problem is about that problem (so it stays in view when the problem opens).
-                if (open) patchChat((c) => (c.problemSlug ? {} : { problemSlug: slug }))
-                void useProblems
-                  .getState()
-                  .load()
-                  .then(() => {
-                    if (open) return useProblems.getState().open(slug)
-                  })
-              }
-              else if (event.type === 'visualization') {
-                const { run } = event
-                usePlayground.getState().add(run)
-                patchReply((m) => ({ visualizations: [...(m.visualizations ?? []), { id: run.id, title: run.title, steps: run.steps.length }] }))
-              }
-              else if (event.type === 'error') patchReply(() => ({ error: event.message }))
-            },
-            { signal },
-          )
-          if (edited) await afterEdits()
-        } finally {
-          controller = null
-          // Claude has stopped waiting for any proposal it didn't get an answer to.
-          patchReply((m) => ({
-            approvals: m.approvals?.map((a) => (a.state === 'pending' ? { ...a, state: 'expired' } : a)),
-            progress: undefined,
-            ...(signal.aborted ? { stopped: true } : {}),
-          }))
-          set({ status: 'idle', streamingChatId: null })
-        }
+      async resume({ resume = resumeChat } = {}) {
+        if (get().status === 'streaming') return
+        const chat = get().chats.find((c) => c.turn)
+        if (!chat?.turn) return
+        const { id, replyId, seen } = chat.turn
+        set({ status: 'streaming', streamingChatId: chat.id })
+        await follow(chat.id, replyId, (onEvent, signal) => resume(id, seen, onEvent, { signal }))
       },
 
       stop() {
@@ -277,20 +334,38 @@ export const useAiChat = create<AiChatState>()(
         if (get().chats.some((c) => c.id === id)) set({ activeChatId: id })
       },
 
-      async answerApproval(id, approved, { post = (url: string, init: RequestInit) => fetch(url, init), beforeAnswer = saveEverything } = {}) {
+      async answerApproval(
+        id,
+        approved,
+        { post = (url: string, init: RequestInit) => fetch(url, init), beforeAnswer = saveEverything, afterApply = showEffects } = {},
+      ) {
         await beforeAnswer()
-        let found = false
-        try {
-          const res = await post('/api/claude/approval', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, approved }),
-          })
-          found = res.ok
-        } catch {
-          found = false
+        const patch = (p: Partial<Approval>) => {
+          set((s) => ({ chats: patchApproval(s.chats, id, p) }))
         }
-        set((s) => ({ chats: setApprovalState(s.chats, id, found ? (approved ? 'approved' : 'rejected') : 'expired') }))
+        const approval = findApproval(get().chats, id)
+        const send = (url: string, body: unknown) =>
+          post(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        // While Claude is waiting, it applies the change itself and hears the answer.
+        if (approval?.state === 'pending') {
+          const answered = await send('/api/claude/approval', { id, approved }).then(
+            (res) => res.ok,
+            () => false,
+          )
+          if (answered) return patch({ state: approved ? 'approved' : 'rejected' })
+        }
+        // Claude stopped waiting: a rejection just dismisses it; an approval applies it here.
+        if (!approved) return patch({ state: 'rejected', error: undefined })
+        if (!approval?.change) return patch({ state: 'expired' })
+        try {
+          const res = await send('/api/claude/apply', { change: approval.change })
+          const body = (await res.json()) as { effects?: ChangeEffect[]; error?: string }
+          if (!res.ok) return patch({ state: 'expired', error: body.error ?? `HTTP ${res.status}` })
+          patch({ state: 'approved', error: undefined })
+          await afterApply(body.effects ?? [])
+        } catch {
+          patch({ state: 'expired', error: 'Couldn’t reach the editor server. Is it running?' })
+        }
       },
 
       followProblem(slug) {
@@ -306,7 +381,8 @@ export const useAiChat = create<AiChatState>()(
           return { chats, activeChatId: s.activeChatId === id ? (chats[0]?.id ?? null) : s.activeChatId }
         })
       },
-    }),
+    }
+    },
     {
       name: 'dsa-editor:ai',
       version: 1,

@@ -18,7 +18,7 @@ export interface RunResult {
   memoryKb: number | null
 }
 
-export type RunnerErrorKind = 'no_key' | 'auth' | 'quota' | 'network' | 'http'
+export type RunnerErrorKind = 'network' | 'http'
 
 export class RunnerError extends Error {
   readonly kind: RunnerErrorKind

@@ -148,7 +148,16 @@ describe('changing files (always asks first)', () => {
   test('edit_file asks with the exact before/after, then applies it', async () => {
     const { tools, approvals, deps } = setup()
     const result = await tools.edit_file({ name: 'sort.cpp', old_text: 'int a = 1;', new_text: 'int a = 2;', explanation: 'fix value' })
-    expect(approvals).toEqual([{ kind: 'edit', file: 'sort.cpp', before: 'int a = 1;', after: 'int a = 2;', explanation: 'fix value' }])
+    expect(approvals).toEqual([
+      {
+        kind: 'edit',
+        file: 'sort.cpp',
+        before: 'int a = 1;',
+        after: 'int a = 2;',
+        explanation: 'fix value',
+        change: { type: 'edit_file', name: 'sort.cpp', oldText: 'int a = 1;', newText: 'int a = 2;' },
+      },
+    ])
     expect(await readFile(path.join(dir, 'sort.cpp'), 'utf8')).toContain('int a = 2;')
     expect(result.isError).toBeFalsy()
     expect(deps.onFileChanged).toHaveBeenCalledWith('sort.cpp')
@@ -233,7 +242,7 @@ describe('visualizations', () => {
     expect(run).toMatchObject({ title: 'Dry run of sort.cpp', file: 'sort.cpp', language: 'cpp', input: '3 1 2', steps })
     expect(run.code).toContain('int a = 1;')
     const saved = JSON.parse(await readFile(path.join(playgroundDir, `${run.id}.json`), 'utf8'))
-    expect(saved).toEqual(run)
+    expect(saved).toEqual({ ...run, formatVersion: 1 })
     expect(result.text).toContain('Playground')
   })
 

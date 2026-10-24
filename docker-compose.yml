@@ -2,7 +2,9 @@
 services:
   # Runs submitted code: https://github.com/engineer-man/piston
   piston:
-    image: ghcr.io/engineer-man/piston
+    # Pinned, so an upstream update can't change how code runs. piston/api-v2.js is patched against this
+    # exact version: re-copy it if you change the image.
+    image: ghcr.io/engineer-man/piston@sha256:2f66b7456189c4d713aa986d98eccd0b6ee16d26c7ec5f21b30e942756fd127a
     container_name: dsa-piston
     restart: unless-stopped
     privileged: true # Piston needs this to sandbox submitted code
@@ -14,6 +16,8 @@ services:
       - "127.0.0.1:2000:2000"
     volumes:
       - piston-packages:/piston/packages
+      # Makes Stop (and closing the tab) end the program instead of leaving it running until its time limit.
+      - ./piston/api-v2.js:/piston_api/src/api/v2.js:ro
     tmpfs:
       - /piston/jobs:exec,uid=1000,gid=1000,mode=711
 
@@ -43,6 +47,9 @@ services:
       NOTES_DIR: /workspace/notes
       PLAYGROUND_DIR: /workspace/playground
       PROBLEMS_DIR: /workspace/problems
+      LOGS_DIR: /workspace/logs
+      # Your Claude login, made with `claude setup-token` and saved in .env by ./start.sh.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     ports:
       - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
     volumes:
@@ -52,9 +59,12 @@ services:
       - ./notes:/workspace/notes
       - ./playground:/workspace/playground
       - ./problems:/workspace/problems
-      # Your Claude Code login, so the Claude panel works without an API key.
-      - ${HOME}/.claude:/home/node/.claude
+      # The editor's log file (Setup → Copy diagnostics includes its end).
+      - ./logs:/workspace/logs
+      # Claude's own folder for this editor's chats. Your ~/.claude stays private to you.
+      - claude-home:/home/node/.claude
 
 volumes:
   piston-packages:
   editor-node-modules:
+  claude-home:
