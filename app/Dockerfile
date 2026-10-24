@@ -8,7 +8,11 @@ USER node
 # Made here so the claude-home volume mounted on it belongs to node, not root.
 RUN mkdir -p /home/node/.claude
 
+# Every package's package.json first, so npm ci installs them all and the install is reused until they change.
 COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node packages/core/package.json packages/core/
+COPY --chown=node:node packages/server/package.json packages/server/
+COPY --chown=node:node packages/web/package.json packages/web/
 RUN npm ci --no-audit --no-fund
 
 COPY --chown=node:node . .
