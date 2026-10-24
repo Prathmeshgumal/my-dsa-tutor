@@ -4,24 +4,38 @@ import { useSettings } from '@/state/settings'
 
 export const SIDE_PANEL = { default: 380, min: 300, max: 900, step: 20 }
 
-const clamp = (w: number) => Math.round(Math.min(SIDE_PANEL.max, Math.max(SIDE_PANEL.min, w)))
+interface Limits {
+  default: number
+  min: number
+  max: number
+  step: number
+}
 
-/** Drag handle on the left edge of the right-hand panel (Claude / Notes). Width is remembered. */
-export function SidePanelResizer() {
-  const width = useSettings((s) => s.sidePanelWidth)
+interface EdgeResizerProps {
+  label: string
+  /** Which edge of its panel the handle sits on. Dragging away from the panel makes it wider. */
+  edge: 'left' | 'right'
+  width: number
+  limits: Limits
+  onResize(width: number): void
+}
+
+/** Drag handle on one edge of a panel. Arrow keys nudge it, double-click resets it. */
+export function EdgeResizer({ label, edge, width, limits, onResize }: EdgeResizerProps) {
   const drag = useRef<{ startX: number; startWidth: number } | null>(null)
   const cleanup = useRef<() => void>(() => {})
 
   useEffect(() => () => cleanup.current(), [])
 
-  const setWidth = (w: number) => useSettings.getState().setSidePanelWidth(clamp(w))
+  const setWidth = (w: number) => onResize(Math.round(Math.min(limits.max, Math.max(limits.min, w))))
+  // A handle on the right edge grows the panel as it moves right; one on the left, as it moves left.
+  const outward = edge === 'right' ? 1 : -1
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault()
-    drag.current = { startX: e.clientX, startWidth: useSettings.getState().sidePanelWidth }
-    // The panel is on the right, so moving the pointer left makes it wider.
+    drag.current = { startX: e.clientX, startWidth: width }
     const move = (ev: PointerEvent) => {
-      if (drag.current) setWidth(drag.current.startWidth + (drag.current.startX - ev.clientX))
+      if (drag.current) setWidth(drag.current.startWidth + outward * (ev.clientX - drag.current.startX))
     }
     const up = () => cleanup.current()
     cleanup.current = () => {
@@ -41,26 +55,41 @@ export function SidePanelResizer() {
   return (
     <div
       role="separator"
-      aria-label="Resize panel"
+      aria-label={label}
       aria-orientation="vertical"
-      aria-valuemin={SIDE_PANEL.min}
-      aria-valuemax={SIDE_PANEL.max}
+      aria-valuemin={limits.min}
+      aria-valuemax={limits.max}
       aria-valuenow={width}
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       onPointerDown={onPointerDown}
-      onDoubleClick={() => setWidth(SIDE_PANEL.default)}
+      onDoubleClick={() => setWidth(limits.default)}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') setWidth(width + SIDE_PANEL.step)
-        else if (e.key === 'ArrowRight') setWidth(width - SIDE_PANEL.step)
+        if (e.key === 'ArrowRight') setWidth(width + outward * limits.step)
+        else if (e.key === 'ArrowLeft') setWidth(width - outward * limits.step)
         else return
         e.preventDefault()
       }}
       className={cn(
-        'absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize outline-none',
+        'absolute inset-y-0 z-10 w-[6px] cursor-col-resize outline-none',
+        edge === 'left' ? '-left-[3px]' : '-right-[3px]',
         'after:absolute after:inset-y-0 after:left-[2px] after:w-[2px] after:transition-colors',
         'hover:after:bg-violet-500/50 focus-visible:after:bg-violet-500 active:after:bg-violet-500',
       )}
+    />
+  )
+}
+
+/** Drag handle on the left edge of the right-hand panel (Claude). Width is remembered. */
+export function SidePanelResizer() {
+  const width = useSettings((s) => s.sidePanelWidth)
+  return (
+    <EdgeResizer
+      label="Resize panel"
+      edge="left"
+      width={width}
+      limits={SIDE_PANEL}
+      onResize={(w) => useSettings.getState().setSidePanelWidth(w)}
     />
   )
 }

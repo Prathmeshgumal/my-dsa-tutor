@@ -16,6 +16,8 @@ interface SettingsState {
   aiOpen: boolean
   /** Width in px of the right-hand panel (Claude). */
   sidePanelWidth: number
+  /** Width in px of the list on the left, the same for every section. */
+  listWidth: number
   section: Section
   /** Each section's list, unless you hid it. */
   listOpen: Record<Section, boolean>
@@ -29,6 +31,7 @@ interface SettingsState {
   setOutputOpen(open: boolean): void
   setAiOpen(open: boolean): void
   setSidePanelWidth(width: number): void
+  setListWidth(width: number): void
   setSection(section: Section): void
   /** The left-bar button for a section: switches to it, or if it's already showing, hides/shows its list. */
   pressSection(section: Section): void
@@ -45,6 +48,7 @@ export const useSettings = create<SettingsState>()(
       outputOpen: true,
       aiOpen: false,
       sidePanelWidth: 380,
+      listWidth: 240,
       section: 'code',
       listOpen: ALL_LISTS_OPEN,
       foldedForClaude: false,
@@ -55,6 +59,7 @@ export const useSettings = create<SettingsState>()(
       setOutputOpen: (outputOpen) => set({ outputOpen }),
       setAiOpen: (aiOpen) => set(aiOpen ? { aiOpen, foldedForClaude: true } : { aiOpen }),
       setSidePanelWidth: (sidePanelWidth) => set({ sidePanelWidth }),
+      setListWidth: (listWidth) => set({ listWidth }),
       setSection: (section) => set({ section }),
       pressSection: (section) =>
         set((s) => {

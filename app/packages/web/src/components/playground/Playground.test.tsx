@@ -113,7 +113,7 @@ test('with nothing yet, explains how to get one and offers the example', async (
 
 test('the code and the drawing can be resized with a drag handle', () => {
   render(<Playground />)
-  expect(screen.getAllByRole('separator')).toHaveLength(1)
+  expect(screen.getAllByRole('separator').map((s) => s.getAttribute('aria-label') ?? '')).toEqual(['Resize list', ''])
 })
 
 test('variables are drawn as buckets: name on top, value inside', () => {

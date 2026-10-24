@@ -9,6 +9,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { useSettings } from '@/state/settings'
+import { EdgeResizer } from './SidePanelResizer'
+
+export const LIST_PANE = { default: 240, min: 180, max: 480, step: 20 }
 
 const Query = createContext('')
 
@@ -32,6 +36,7 @@ interface ListPaneProps {
 /** The list on the left of every section: title, count, New, search, and the same rows everywhere. */
 export function ListPane({ title, count, onNew, newLabel = 'New', search, empty, children, footer }: ListPaneProps) {
   const [query, setQuery] = useState('')
+  const width = useSettings((s) => s.listWidth)
   const rows = Children.toArray(children)
   const titles = rows.flatMap((r) =>
     isValidElement<{ title?: unknown }>(r) && typeof r.props.title === 'string' ? [r.props.title] : [],
@@ -39,7 +44,7 @@ export function ListPane({ title, count, onNew, newLabel = 'New', search, empty,
   const noMatch = query.trim() !== '' && titles.length > 0 && !titles.some((t) => matches(t, query))
 
   return (
-    <section aria-label={title} className="flex w-60 shrink-0 flex-col border-r">
+    <section aria-label={title} style={{ width }} className="relative flex shrink-0 flex-col border-r">
       <div className="flex h-[38px] shrink-0 items-center gap-2 border-b pr-1.5 pl-3">
         <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{title}</span>
         {count !== undefined && <span className="text-[11px] text-muted-foreground/70 tabular-nums">{count}</span>}
@@ -77,6 +82,13 @@ export function ListPane({ title, count, onNew, newLabel = 'New', search, empty,
         )}
         {footer}
       </ScrollArea>
+      <EdgeResizer
+        label="Resize list"
+        edge="right"
+        width={width}
+        limits={LIST_PANE}
+        onResize={(w) => useSettings.getState().setListWidth(w)}
+      />
     </section>
   )
 }

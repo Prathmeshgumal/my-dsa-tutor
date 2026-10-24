@@ -201,7 +201,7 @@ test('hidden output: the editor takes the whole area and the output slot is gone
   useSettings.setState({ outputOpen: false })
   renderShell()
   expect(screen.queryByText('OUTPUT')).not.toBeInTheDocument()
-  expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+  expect(screen.queryAllByRole('separator').filter((s) => s.getAttribute('aria-label') !== 'Resize list')).toHaveLength(0)
   expect(screen.getByText('EDITOR')).toBeInTheDocument()
 })
 

@@ -1,6 +1,7 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ListPane, ListRow } from './ListPane'
+import { useSettings } from '@/state/settings'
+import { LIST_PANE, ListPane, ListRow } from './ListPane'
 
 const opened: string[] = []
 const deleted: string[] = []
@@ -72,4 +73,41 @@ test('a row’s actions are in its menu', async () => {
   await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
   expect(deleted).toEqual(['Banana'])
   expect(opened).toEqual([])
+})
+
+describe('the list can be made wider or narrower', () => {
+  beforeEach(() => useSettings.setState({ listWidth: LIST_PANE.default }))
+  const handle = () => screen.getByRole('separator', { name: 'Resize list' })
+  const pane = () => screen.getByRole('region', { name: 'Fruits' })
+
+  test('dragging its right edge to the right widens it, and the width is remembered', () => {
+    render(<Fruits names={['Apple']} />)
+    expect(pane()).toHaveStyle({ width: `${LIST_PANE.default}px` })
+    fireEvent.pointerDown(handle(), { clientX: 240, pointerId: 1 })
+    fireEvent.pointerMove(window, { clientX: 320, pointerId: 1 })
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.default + 80)
+    expect(pane()).toHaveStyle({ width: `${LIST_PANE.default + 80}px` })
+  })
+
+  test('it stays between the minimum and maximum, and double-click resets it', () => {
+    render(<Fruits names={['Apple']} />)
+    fireEvent.pointerDown(handle(), { clientX: 240, pointerId: 1 })
+    fireEvent.pointerMove(window, { clientX: -1000, pointerId: 1 })
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.min)
+    fireEvent.pointerMove(window, { clientX: 3000, pointerId: 1 })
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.max)
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    fireEvent.doubleClick(handle())
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.default)
+  })
+
+  test('arrow keys resize: right is wider, left is narrower', () => {
+    render(<Fruits names={['Apple']} />)
+    fireEvent.keyDown(handle(), { key: 'ArrowRight' })
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.default + LIST_PANE.step)
+    fireEvent.keyDown(handle(), { key: 'ArrowLeft' })
+    fireEvent.keyDown(handle(), { key: 'ArrowLeft' })
+    expect(useSettings.getState().listWidth).toBe(LIST_PANE.default - LIST_PANE.step)
+  })
 })
