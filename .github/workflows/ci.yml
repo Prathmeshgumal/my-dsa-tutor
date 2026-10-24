@@ -1,8 +1,10 @@
 # Checks every push and pull request: types, lint, unit tests, build and the browser tests.
 name: CI
 
+# Pushes to main, and pull requests (which cover pushes to their branch), so nothing runs twice.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
