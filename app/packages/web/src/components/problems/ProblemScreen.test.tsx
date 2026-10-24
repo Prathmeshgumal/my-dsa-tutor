@@ -181,13 +181,14 @@ const withProblem = (extra: Partial<ProblemEntry['problem']>) =>
     fetchImpl: ((url: string) => json(url === '/api/problems' ? [{ ...entry, problem: { ...entry.problem, ...extra } }] : [])) as typeof fetch,
   })
 
-test('a LeetCode problem has an LC icon that opens the question in a new tab', async () => {
+test('a LeetCode problem has LeetCode’s logo, which opens the question in a new tab', async () => {
   withProblem({ link: 'https://leetcode.com/problems/two-sum/' })
   renderScreen()
   const link = await screen.findByRole('link', { name: 'Open on LeetCode' })
   expect(link).toHaveAttribute('href', 'https://leetcode.com/problems/two-sum/')
   expect(link).toHaveAttribute('target', '_blank')
-  expect(link).toHaveTextContent('LC')
+  expect(link.querySelector('svg[data-icon="leetcode"]')).not.toBeNull()
+  expect(link).not.toHaveTextContent('LC')
   for (const name of ['Add link', 'Edit', 'Remove link']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
 })
 

@@ -19,6 +19,7 @@ import { Markdown } from '@/components/ai/Markdown'
 import { registerGlowThemes } from '@/components/editor/monacoThemes'
 import { useResolvedTheme } from '@/components/theme/ThemeProvider'
 import { ListPane, ListRow } from '@/components/shell/ListPane'
+import { LeetCodeIcon } from './LeetCodeIcon'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -129,7 +130,7 @@ function ProblemList() {
   )
 }
 
-/** An icon that opens the question on the site it came from: "LC" for LeetCode, else the site's name. Claude adds the
+/** An icon that opens the question on the site it came from: LeetCode's logo, else the site's name. Claude adds the
  * link when it knows where the question is from. Only web addresses become links, so a saved "javascript:" can't run. */
 function QuestionLink({ link }: { link: string | undefined }) {
   if (!link || !isWebLink(link)) return null
@@ -147,7 +148,7 @@ function QuestionLink({ link }: { link: string | undefined }) {
       )}
     >
       {site === 'LeetCode' ? (
-        'LC'
+        <LeetCodeIcon className="size-3.5" />
       ) : (
         <>
           {site} <ExternalLink className="size-3" aria-hidden />
