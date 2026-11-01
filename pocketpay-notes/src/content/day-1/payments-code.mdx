@@ -1,0 +1,560 @@
+export const meta = {"title": "The payments API in Python, line by line", "description": "Block 3 build. A walkthrough of PocketPay's payments code: the new tables, the state machines, how a payment joins the ledger's transaction, the two-step idempotency key logic, the FastAPI app, and the tests that send 20 requests at once.", "section": "Day 1: payments backend", "order": 3.5, "label": "3b. Payments code walkthrough"};
+
+<Callout title="Read this first">
+	This page assumes the [payments concept page](/day-1/payments), the [HTTP API page](/day-1/http-api) and the [ledger code walkthrough](/day-1/ledger-code). The design (claim a key, then pay) is explained there; this page shows the code that does it.
+</Callout>
+
+## What we built
+
+Block 3 added six files to `backend/` and changed one:
+
+```text
+backend/
+├── migrations/
+│   └── 002_payments.sql     NEW  users, merchants, cards, payments, idempotency_keys
+├── pocketpay/
+│   ├── ledger.py            CHANGED  post() and transfer() can join a caller's transaction
+│   ├── states.py            NEW  the payment and card state machines
+│   ├── payments.py          NEW  PaymentService: claim the key, then pay
+│   ├── cards.py             NEW  CardService: pause, resume, block
+│   ├── api.py               NEW  the FastAPI app: routes, dependencies, lifespan
+│   └── seed.py              NEW  demo data: Riya, ₹500, a card, the canteen
+└── tests/
+    ├── test_states.py       NEW  every allowed and forbidden move
+    └── test_api.py          NEW  the API over HTTP, including 20 requests at once
+```
+
+A request goes through the layers in this order. Each layer knows only about the one below it:
+
+```text
+HTTP request ─▶ api.py (FastAPI: parse, validate, who is it?) ─▶ payments.py (keys, money, payment row)
+                                                                    └─▶ ledger.py (journal entry) ─▶ Postgres
+```
+
+## File 1: the tables (002_payments.sql)
+
+Four tables describe the world PocketPay works in, and one table remembers requests.
+
+- **users.** Each user has a `wallet_account_id`: the ledger account holding their rupees. It's `UNIQUE`, so two users can never share a wallet. `coins_account_id` is empty for now; reward coins come in Block 4.
+- **merchants.** Each merchant has an `account_id`: the ledger account "owed to this merchant". A payment moves money from the user's wallet to here.
+- **cards.** A `status` with a `CHECK (status IN ('active', 'paused', 'blocked'))`. The state machine in Python decides which changes are allowed; the `CHECK` is a backstop in case a bug ever bypasses it.
+- **payments.** The amount (`CHECK (amount > 0)`), the status (seven allowed values), and `entry_id`, the journal entry that moved the money. `entry_id` is `UNIQUE`: one movement of money can never belong to two payments.
+
+The new idea is `idempotency_keys`:
+
+```sql
+CREATE TABLE idempotency_keys (
+    user_id       BIGINT NOT NULL REFERENCES users(id),
+    key           TEXT   NOT NULL CHECK (length(key) BETWEEN 1 AND 255),
+    request_hash  TEXT   NOT NULL,                       -- fingerprint of the request
+    status        TEXT   NOT NULL DEFAULT 'started' CHECK (status IN ('started', 'finished')),
+    owner         UUID   NOT NULL,                       -- which request is working on it
+    locked_at     TIMESTAMPTZ NOT NULL DEFAULT now(),    -- since when
+    response_code INTEGER,                               -- the saved answer...
+    response_body JSONB,                                 -- ...filled in when finished
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, key),
+    CHECK ((status = 'finished') = (response_code IS NOT NULL AND response_body IS NOT NULL))
+);
+```
+
+Two lines do most of the work:
+
+- `PRIMARY KEY (user_id, key)` is the uniqueness rule that makes exactly one request win the claim.
+- The last `CHECK` says "finished if and only if an answer is saved". A row can't claim to be finished with no answer, and it can't carry an answer while still `started`.
+
+The answer body is stored as `jsonb`, Postgres's binary JSON type. One thing to know about it: jsonb "does not preserve white space, does not preserve the order of object keys".[^json] So a replayed answer has the same fields and values as the original, but they may come back in a different order. JSON clients don't care about order, so this is fine.
+
+## File 2: the state machines (states.py)
+
+A state machine here is just a dictionary. The key is "(current status, event)", the value is the new status:
+
+```python
+PAYMENT_MOVES: dict[tuple[PaymentStatus, PaymentEvent], PaymentStatus] = {
+    (P.CREATED, PE.CHECKS_PASS): P.PROCESSING,
+    (P.CREATED, PE.RISK_HOLD): P.HELD,
+    (P.HELD, PE.APPROVED): P.PROCESSING,
+    (P.HELD, PE.REJECTED): P.FAILED,
+    (P.PROCESSING, PE.BANK_SUCCESS): P.SUCCEEDED,
+    (P.PROCESSING, PE.BANK_FAILURE): P.FAILED,
+    (P.SUCCEEDED, PE.REFUND_PART): P.PARTIALLY_REFUNDED,
+    (P.SUCCEEDED, PE.REFUND_ALL): P.REFUNDED,
+    (P.PARTIALLY_REFUNDED, PE.REFUND_PART): P.PARTIALLY_REFUNDED,
+    (P.PARTIALLY_REFUNDED, PE.REFUND_REST): P.REFUNDED,
+}
+```
+
+If a pair isn't in the dictionary, the move isn't allowed. One small function looks the pair up and turns a missing key into our own error:
+
+```python
+def _move[S, E](moves: dict[tuple[S, E], S], current: S, event: E) -> S:
+    try:
+        return moves[(current, event)]
+    except KeyError:
+        raise InvalidTransition(f"can't {event} from {current}") from None
+```
+
+`[S, E]` makes it generic (Python 3.12 syntax), so the same function serves payments and cards. `from None` hides the internal `KeyError` from the error message, because the real problem is the forbidden move, not a dictionary lookup.
+
+The statuses are `StrEnum`s, enums whose members are also strings, so `PaymentStatus.PROCESSING == "processing"` is true. That's handy: a status read from Postgres comes back as a plain string, and `next_card_status("active", "pause")` still works.
+
+There are no `failed` or `refunded` rows on the left side of the table, so those statuses are final. The same goes for a `blocked` card. A test checks this directly.
+
+## File 3: the ledger joins a transaction (ledger.py)
+
+In Block 2, `ledger.post()` always borrowed its own connection and ran its own transaction. That's a problem now. A payment must move the money, insert the payment row and save the answer on the key **in one transaction**. If the ledger committed its own transaction first and the server then crashed, money would have moved with no payment row and no saved answer, and a retry would pay again.
+
+So `post()` and `transfer()` gained an optional `conn` argument:
+
+```python
+async def post(self, description, postings, reverses=None, conn=None) -> int:
+    if conn is not None:
+        # Join the caller's transaction. Check it really is in one, or our locks would be released straight away.
+        if conn.info.transaction_status != psycopg.pq.TransactionStatus.INTRANS:
+            raise LedgerError("post(conn=...) needs a connection that is already inside a transaction")
+        return await _post(conn, description, postings, reverses)
+    async with self.pool.connection() as own, own.transaction():
+        return await _post(own, description, postings, reverses)
+```
+
+The body of the old `post()` (lock accounts, check balance, insert entry and postings) moved into a module function `_post(conn, ...)`. Both paths run the exact same rules. The only difference is who owns the transaction. The guard on `transaction_status` stops a caller passing a connection that is *not* in a transaction. If that happened, each statement would commit on its own, and the account locks that protect balances would be released after one statement instead of lasting until the end.
+
+## File 4: the payment service (payments.py)
+
+This is the heart of Block 3. Pick up the [two steps](/day-1/payments#making-the-check-race-proof-let-postgres-decide) from the concept page: claim the key, then pay.
+
+### The request and the fingerprint
+
+```python
+class PaymentRequest(BaseModel):
+    merchant_id: int = Field(gt=0)
+    amount: int = Field(gt=0, description="In paise: ₹40 is 4000.")
+
+def request_hash(method: str, path: str, body: PaymentRequest) -> str:
+    data = json.dumps({"method": method, "path": path, "body": body.model_dump(mode="json")}, sort_keys=True)
+    return hashlib.sha256(data.encode()).hexdigest()
+```
+
+`Field(gt=0)` means "greater than 0". Pydantic rejects a zero or negative amount before our code runs.[^pydantic] The fingerprint is a SHA-256 hash of the method, path and body turned into JSON with `sort_keys=True`. Sorting matters: `{"amount": 4000, "merchant_id": 1}` and `{"merchant_id": 1, "amount": 4000}` are the same request and must hash the same.
+
+### Answers as values: Reply and Refused
+
+```python
+@dataclass(frozen=True)
+class Reply:
+    status_code: int
+    body: dict[str, Any]
+
+class Refused(Exception):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.reply = Reply(status_code, {"detail": detail})
+```
+
+The service never touches HTTP objects. It returns a `Reply`, a status code plus a body, and that's what gets saved on the key. `Refused` is for business refusals such as "not enough money": raising it undoes the payment work, and its `reply` is still saved as the answer.
+
+### create(): the outline
+
+```python
+async def create(self, user_id: int, key: str, body: PaymentRequest) -> Reply:
+    fingerprint = request_hash("POST", "/payments", body)
+    claim = await self._claim(user_id, key, fingerprint)
+    if isinstance(claim, Reply):
+        return claim                                   # a repeat: saved answer, 409 or 422
+    try:
+        return await self._pay(user_id, key, owner=claim, body=body)
+    except Exception:
+        await self._release(user_id, key, owner=claim)  # unexpected error: give the key back
+        raise
+```
+
+`_claim` returns one of two things: a `Reply`, meaning "this request doesn't get to pay, send this back", or a UUID, meaning "you own the key, here's your owner ID". The `try`/`except Exception` only catches *unexpected* errors. `_pay` handles refusals itself. After releasing the key, `raise` sends the error on, and FastAPI turns it into a 500.
+
+### Step A: \_claim()
+
+Here's the first half, slightly shortened:
+
+```python
+owner = uuid.uuid4()
+for _ in range(3):
+    async with self.pool.connection() as conn:
+        cur = await conn.execute(
+            """INSERT INTO idempotency_keys (user_id, key, request_hash, owner) VALUES (%s, %s, %s, %s)
+               ON CONFLICT (user_id, key) DO NOTHING RETURNING owner""",
+            (user_id, key, fingerprint, owner),
+        )
+        if await cur.fetchone() is not None:
+            return owner              # we inserted it: this request does the paying
+```
+
+There's no `conn.transaction()` here on purpose. psycopg starts a transaction on the first statement, and when the `pool.connection()` block ends, the pool commits it.[^pool] So the claim is committed the moment this block finishes, and every other request can see it.
+
+`ON CONFLICT ... DO NOTHING RETURNING owner` returns a row only if this INSERT actually inserted.[^insert] If two requests run this at the same instant, Postgres makes the second wait for the first to commit, then reports the conflict to it.[^unique] Exactly one request gets a row back.
+
+If we didn't get a row, someone else owns the key. Read their row:
+
+```python
+        cur = await conn.execute(
+            """SELECT request_hash, status, response_code, response_body,
+                      locked_at < now() - make_interval(secs => %s) AS stale
+                 FROM idempotency_keys WHERE user_id = %s AND key = %s""",
+            (STALE_AFTER_SECONDS, user_id, key),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            continue                  # given up a moment ago; try to claim it again
+        saved_hash, status, code, saved_body, stale = row
+
+        if saved_hash != fingerprint:
+            return Reply(422, {"detail": "this Idempotency-Key was already used for a different request"})
+        if status == "finished":
+            return Reply(code, saved_body)
+        if not stale:
+            return Reply(409, {"detail": "a request with this Idempotency-Key is still being processed"})
+```
+
+The checks run in a deliberate order:
+
+1. **Fingerprint first.** A key reused with a different body is refused whatever state its row is in.
+2. **Finished:** send back the saved answer. psycopg turns the `jsonb` column back into a Python dict.
+3. **Still running and fresh:** 409.
+
+`stale` is worked out by Postgres, using the database's clock (`now()`) rather than the server's. With several API servers, their clocks might disagree, but they all share one database clock.
+
+`row is None` can happen in one narrow case: the owning request hit an unexpected error and released (deleted) the key between our INSERT and our SELECT. Then the key is free again, so the loop goes round and tries the INSERT once more. That's why the loop exists. Three tries is plenty.
+
+The last case is a stale row, `started` more than 60 seconds ago. Its request most likely crashed. Take the key over:
+
+```python
+        cur = await conn.execute(
+            """UPDATE idempotency_keys SET owner = %s, locked_at = now()
+                WHERE user_id = %s AND key = %s AND status = 'started'
+                  AND locked_at < now() - make_interval(secs => %s)
+            RETURNING owner""",
+            (owner, user_id, key, STALE_AFTER_SECONDS),
+        )
+        if await cur.fetchone() is not None:
+            return owner
+```
+
+The `WHERE` repeats the "started and stale" conditions, so the UPDATE only changes the row if it's *still* abandoned. If two retries try to take over at once, the second UPDATE waits for the first. Under Read Committed, it then re-checks its `WHERE` against the updated row,[^iso] sees a fresh `locked_at`, matches nothing, and returns no row.
+
+### Step B: \_pay()
+
+```python
+async with self.pool.connection() as conn, conn.transaction():
+    cur = await conn.execute(
+        "SELECT owner, status FROM idempotency_keys WHERE user_id = %s AND key = %s FOR UPDATE",
+        (user_id, key),
+    )
+    row = await cur.fetchone()
+    if row is None or row[0] != owner or row[1] != "started":
+        return Reply(409, {"detail": "a request with this Idempotency-Key is still being processed"})
+```
+
+This time there *is* a `conn.transaction()`: everything in step B commits together or not at all. The first statement locks our key row with `FOR UPDATE`. That stops other transactions from updating or locking the row "until the current transaction ends".[^lock] So a takeover UPDATE from step A has to wait until this payment is done. Then we check that the owner is still us. If a takeover already happened, it isn't, and we leave without touching any money.
+
+Next, the money, inside a savepoint:
+
+```python
+    try:
+        async with conn.transaction():
+            reply = await self._move_money(conn, user_id, body)
+    except Refused as refused:
+        reply = refused.reply
+```
+
+A `conn.transaction()` inside another one doesn't start a new transaction. psycopg makes it a **savepoint**: a marker inside the outer transaction that can be rolled back to on its own.[^tx] If `_move_money` raises `Refused`, say after the ledger already locked the wallet and found too little money, only the work since the savepoint is undone. The outer transaction, with our key lock, carries on. That's how a refusal can still be saved.
+
+Finally, save the answer and commit:
+
+```python
+    await conn.execute(
+        """UPDATE idempotency_keys SET status = 'finished', response_code = %s, response_body = %s
+            WHERE user_id = %s AND key = %s""",
+        (reply.status_code, Jsonb(reply.body), user_id, key),
+    )
+# leaving the block commits: money, payment row and saved answer, together
+```
+
+`Jsonb(...)` wraps the dict. psycopg needs that wrapper to know a Python dict should be sent as JSON.[^jsonb] When the `async with` block ends with no error, psycopg commits.
+
+### \_move_money()
+
+```python
+cur = await conn.execute("SELECT name, account_id FROM merchants WHERE id = %s", (body.merchant_id,))
+merchant = await cur.fetchone()
+if merchant is None:
+    raise Refused(422, f"there is no merchant {body.merchant_id}")
+...
+try:
+    entry_id = await self.ledger.transfer(wallet, merchant_account, body.amount, f"payment to {merchant_name}", conn=conn)
+except InsufficientFunds:
+    raise Refused(422, "not enough money in the wallet") from None
+
+status = next_payment_status(PaymentStatus.CREATED, PaymentEvent.CHECKS_PASS)   # -> processing
+cur = await conn.execute(
+    """INSERT INTO payments (user_id, merchant_id, amount, status, entry_id) VALUES (%s, %s, %s, %s, %s)
+       RETURNING id, created_at""",
+    (user_id, body.merchant_id, body.amount, status, entry_id),
+)
+```
+
+`conn=conn` is the change from File 3: the ledger posts its journal entry inside *our* transaction. The status comes from the state machine rather than being typed in as `"processing"`, so even the very first status follows the rules. The function returns `Reply(201, {...})` with the new payment's id, merchant, amount, status and time.
+
+### \_release()
+
+```python
+"DELETE FROM idempotency_keys WHERE user_id = %s AND key = %s AND owner = %s AND status = 'started'"
+```
+
+Only called after an unexpected error. The `owner` and `status` conditions make sure we delete only a key that is still ours and unfinished, never someone else's or a saved answer.
+
+## File 5: cards (cards.py)
+
+The card service is a short version of the same ideas:
+
+```python
+async with self.pool.connection() as conn, conn.transaction():
+    cur = await conn.execute(
+        "SELECT status FROM cards WHERE id = %s AND user_id = %s FOR UPDATE", (card_id, user_id)
+    )
+    row = await cur.fetchone()
+    if row is None:
+        raise CardNotFound(card_id)
+    new_status = next_card_status(CardStatus(row[0]), event)
+    await conn.execute("UPDATE cards SET status = %s WHERE id = %s", (new_status, card_id))
+```
+
+Lock the row, ask the state machine, write the answer. Without `FOR UPDATE`, "pause" and "block" arriving together could both read `active`, and whichever wrote last would win. With it, the second waits, reads the first's result, and the state machine judges the real current status. `AND user_id = %s` means Riya can't touch another user's card: it looks exactly like a card that doesn't exist.
+
+## File 6: the FastAPI app (api.py)
+
+### Services and the lifespan
+
+```python
+@dataclass(frozen=True)
+class Services:
+    pool: AsyncConnectionPool
+    ledger: Ledger
+    payments: PaymentService
+    cards: CardService
+
+def create_app(pool: AsyncConnectionPool | None = None) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if pool is not None:
+            yield                      # the caller's pool: the caller will close it
+            return
+        own_pool = await make_pool(os.environ["DATABASE_URL"], max_size=10)   # shortened
+        _wire(app, own_pool)
+        try:
+            yield                      # the app serves requests while we're paused here
+        finally:
+            await own_pool.close()
+    ...
+```
+
+`Services` holds one of each service, created once and shared by every request. It lives on `app.state`.
+
+The lifespan is FastAPI's place for startup and shutdown work: code before the `yield` runs "before the application starts taking requests", and code after it runs "after the application finishes handling requests".[^lifespan] That answers the question from the connections page: **here is where the pool gets closed** when the server stops.
+
+`create_app(pool=...)` exists for the tests. They pass in a pool they manage, and the app leaves it alone. This follows the rule from the connections page: whoever creates the pool closes it. It also matters because the test HTTP client doesn't run lifespan code at all: "It is not in the scope of HTTPX to trigger ASGI lifespan events of your app."[^httpx] So the app wires the passed-in pool immediately, outside the lifespan.
+
+At the bottom of the file, `app = create_app()` is what Uvicorn loads when you run `uvicorn pocketpay.api:app`.
+
+### Dependencies: who's asking, and with which key
+
+```python
+async def current_user(services: ServicesDep, x_user_id: Annotated[int | None, Header()] = None) -> User:
+    """A STAND-IN, NOT SECURITY: anyone can send any X-User-Id."""
+    if x_user_id is None:
+        raise HTTPException(400, "send your user ID in the X-User-Id header")
+    ...look the user up; 400 if there's no such user...
+
+def idempotency_key(idempotency_key: Annotated[str | None, Header()] = None) -> str:
+    if idempotency_key is None:
+        raise HTTPException(400, "send an Idempotency-Key header (a new random UUID for each payment)")
+    key = idempotency_key.strip()
+    if len(key) >= 2 and key[0] == key[-1] == '"':
+        key = key[1:-1]
+    if not 1 <= len(key) <= 255:
+        raise HTTPException(400, "the Idempotency-Key must be 1 to 255 characters")
+    return key
+```
+
+A dependency is a function FastAPI calls for you before your route runs, passing its result in.[^deps] Raising `HTTPException` inside one stops the request right there.
+
+`Header()` reads a request header. Python names can't contain `-`, so FastAPI converts "the parameter names characters from underscore (`_`) to hyphen (`-`)".[^header] `x_user_id` reads `X-User-Id`, and `idempotency_key` reads `Idempotency-Key`. HTTP header names are case-insensitive, so the capitals don't matter.
+
+**`X-User-Id` is a placeholder, not security.** Anyone could send any number. Real authentication replaces it in a later block. Until then, it lets us build and test everything else.
+
+The quote-stripping is there because the IETF draft writes the key as a quoted string, `Idempotency-Key: "8e03978e-..."`.[^ietf] We accept it with or without the quotes, and a test checks that both forms count as the same key.
+
+### The routes
+
+```python
+@router.post("/payments", status_code=201)
+async def create_payment(body: PaymentRequest, user: UserDep,
+                         key: Annotated[str, Depends(idempotency_key)], services: ServicesDep) -> JSONResponse:
+    reply = await services.payments.create(user.id, key, body)
+    return JSONResponse(status_code=reply.status_code, content=reply.body)
+```
+
+Look at what each parameter means to FastAPI. `body: PaymentRequest` is a Pydantic model, so it's read from the JSON body and validated (a bad body gets 422 before our code runs). `user` and `key` come from the dependencies above, and `services` from `app.state`. The route itself is two lines. It returns a `JSONResponse` because the *service* chooses the status code: 201, a replayed code, 409 or 422.
+
+The other routes:
+
+| Route | Does | Errors |
+|---|---|---|
+| `GET /wallet` | the user's balance in paise | 400 without a valid `X-User-Id` |
+| `POST /payments` | pay a merchant, once per key | 400 no key, 409 busy, 422 refused or different body |
+| `GET /payments/{payment_id}` | one of your payments | 404 if missing *or someone else's* |
+| `GET /cards/{card_id}` | a card's status | 404 |
+| `POST /cards/{card_id}/{event}` | `pause`, `resume` or `block` | 404, 409 forbidden move, 422 unknown event |
+
+In `POST /cards/{card_id}/{event}`, `event` is typed as the `CardEvent` enum, so FastAPI accepts only `pause`, `resume` or `block` and answers 422 to anything else. `InvalidTransition` becomes **409 Conflict**: the request clashes with the card's current state.
+
+## File 7: demo data (seed.py)
+
+`seed()` creates three ledger accounts (cash at the partner bank, Riya's wallet, owed to the canteen), the user, merchant and card rows, and a ₹500 top-up posted as a balanced entry: debit cash, credit Riya's wallet. The tests call the same function, so the demo and the tests start from the same world.
+
+## File 8: the tests
+
+`test_states.py` tries **every** (status, event) pair: the pairs in the table must give their listed result, and every other pair must raise `InvalidTransition`.
+
+`test_api.py` calls the app over real HTTP, in memory:
+
+```python
+@pytest.fixture
+async def client(ledger: Ledger):
+    app = create_app(pool=ledger.pool)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://pocketpay") as c:
+        yield c
+```
+
+`ASGITransport` lets the client "call directly into an async Python web application using the ASGI protocol".[^httpx] Requests and responses are real HTTP messages to FastAPI, but no network port is opened.
+
+The checkpoint test:
+
+```python
+async def test_twenty_retries_at_once_make_exactly_one_payment(client, ledger, demo):
+    key = str(uuid.uuid4())
+    replies = await asyncio.gather(*(pay(client, demo["user_id"], key, demo["merchant_id"], 40_00) for _ in range(20)))
+
+    codes = [r.status_code for r in replies]
+    assert set(codes) <= {201, 409}
+    assert await count_payments(ledger) == 1
+    assert await balance(client, demo["user_id"]) == 460_00   # charged once
+```
+
+`asyncio.gather` starts all 20 requests at once.[^tasks] The test doesn't insist on exactly one 201. If the first request finishes before a late copy even arrives, that copy gets the *saved* 201, which is also correct. What it does insist on is the thing that matters: one payment row and ₹460 left. In 15 runs in a row we always saw 1 × 201 and 19 × 409.
+
+The other tests each pin down one row of the [situations table](/day-1/payments#what-a-repeat-gets-back):
+
+- a new key means a new payment
+- same key, different body → 422
+- not enough money → 422, saved, and replayed
+- unknown merchant → 422
+- missing key or user → 400, negative amount → 422, and **no key row was created** for any of them
+- quoted key = same key
+- a key planted two minutes ago is taken over
+- a fresh `started` key → 409
+- card pause, resume, block, then a forbidden resume → 409
+
+The ledger tests also gained two: `post(conn=...)` without a transaction raises `LedgerError`, and a `post` inside a caller's transaction is rolled back with it.
+
+All 27 tests pass, and `ruff` is clean.
+
+## Try it yourself
+
+With Postgres up (`docker compose up -d` in the project root):
+
+```bash
+cd backend
+set -a; . ../.env; set +a                    # load DATABASE_URL
+uv run python -m pocketpay.db                # create the new tables
+uv run python -m pocketpay.seed              # Riya is user 1 with ₹500, card 1; the canteen is merchant 1
+uv run uvicorn pocketpay.api:app --reload    # serve on http://127.0.0.1:8000
+```
+
+The IDs printed by the seed may differ if you've seeded before. In a second terminal:
+
+```bash
+KEY=$(uuidgen)
+
+# Pay ₹40 (4000 paise)
+curl -i -X POST localhost:8000/payments \
+  -H 'X-User-Id: 1' -H "Idempotency-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"merchant_id": 1, "amount": 4000}'
+
+# Send it again: same answer, same payment id, no second charge
+# Change the amount and send it with the same key: 422
+
+curl localhost:8000/wallet -H 'X-User-Id: 1'          # {"user_id":1,"balance":46000}
+
+# 20 at once with a fresh key, then count the status codes
+KEY=$(uuidgen); for i in $(seq 20); do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/payments \
+    -H 'X-User-Id: 1' -H "Idempotency-Key: $KEY" -H 'Content-Type: application/json' \
+    -d '{"merchant_id": 1, "amount": 4000}' &
+done; wait
+
+curl -X POST localhost:8000/cards/1/block -H 'X-User-Id: 1'    # {"id":1,"status":"blocked"}
+curl -X POST localhost:8000/cards/1/resume -H 'X-User-Id: 1'   # 409: can't resume from blocked
+```
+
+When we ran the 20 parallel requests against a real Uvicorn server, we got one `201` and nineteen `409`s, and exactly one new payment row. FastAPI also serves interactive docs for every route at `http://127.0.0.1:8000/docs`.
+
+## Check yourself
+
+<details>
+<summary>Why does _claim() not use conn.transaction(), while _pay() does?</summary>
+
+The claim is one INSERT that should commit right away, and the pool commits when the `pool.connection()` block ends. Step B has several statements that must all succeed or fail together, so it needs an explicit transaction.
+
+</details>
+
+<details>
+<summary>Why did ledger.post() need a conn argument?</summary>
+
+So the journal entry goes into the payment's transaction. If the ledger committed on its own and the server crashed before the payment row and saved answer were committed, money would have moved with no record of the request, and a retry would pay again.
+
+</details>
+
+<details>
+<summary>The ledger finds too little money after it has locked Riya's wallet. What gets undone, and what gets saved?</summary>
+
+Raising `Refused` rolls back to the savepoint, undoing the ledger's work (and nothing was written yet). The outer transaction still holds the key lock, saves the 422 on the key as `finished`, and commits.
+
+</details>
+
+<details>
+<summary>Why is "stale" worked out with Postgres's now() rather than Python's clock?</summary>
+
+Several API servers might run at once, and their clocks can disagree. They all share one database, so using its clock gives every server the same answer.
+
+</details>
+
+<details>
+<summary>Why does the tests' client fixture pass a pool to create_app()?</summary>
+
+The test HTTP client doesn't run the app's lifespan, so the app would never open a pool by itself. Passing one in also keeps the tests in charge of their own pool (and its fresh schema), which they close themselves.
+
+</details>
+
+[^json]: PostgreSQL 18 documentation, *8.14 JSON Types*. [postgresql.org](https://www.postgresql.org/docs/18/datatype-json.html)
+[^pydantic]: Pydantic docs, *Fields* (numeric constraints such as `gt`). [docs.pydantic.dev](https://docs.pydantic.dev/latest/concepts/fields/)
+[^tx]: psycopg 3 docs, *Transactions management*: "internal transaction blocks are implemented using SAVEPOINT". [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/transactions.html)
+[^pool]: psycopg 3 docs, *Connection pools*: at the end of the `connection()` block the transaction is committed (or rolled back on error) and the connection returns to the pool. [psycopg.org](https://www.psycopg.org/psycopg3/docs/advanced/pool.html)
+[^insert]: PostgreSQL 18 documentation, *INSERT* (ON CONFLICT, RETURNING). [postgresql.org](https://www.postgresql.org/docs/18/sql-insert.html)
+[^unique]: PostgreSQL 18 documentation, *Index Uniqueness Checks*. [postgresql.org](https://www.postgresql.org/docs/18/index-unique-checks.html)
+[^iso]: PostgreSQL 18 documentation, *13.2.1 Read Committed Isolation Level*. [postgresql.org](https://www.postgresql.org/docs/18/transaction-iso.html)
+[^lock]: PostgreSQL 18 documentation, *13.3.2 Row-Level Locks* (FOR UPDATE). [postgresql.org](https://www.postgresql.org/docs/18/explicit-locking.html)
+[^jsonb]: psycopg 3 docs, *Adapting basic Python types*, JSON adaptation (`Json` and `Jsonb` wrappers). [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/adapt.html)
+[^lifespan]: FastAPI docs, *Lifespan Events*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/advanced/events/)
+[^httpx]: HTTPX docs, *Transports*, ASGI Transport. [python-httpx.org](https://www.python-httpx.org/advanced/transports/)
+[^deps]: FastAPI docs, *Dependencies*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/tutorial/dependencies/)
+[^header]: FastAPI docs, *Header Parameters*, "Automatic conversion". [fastapi.tiangolo.com](https://fastapi.tiangolo.com/tutorial/header-params/)
+[^ietf]: IETF HTTPAPI working group, *The Idempotency-Key HTTP Header Field*, draft-ietf-httpapi-idempotency-key-header-08 (Internet-Draft). [datatracker.ietf.org](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-08)
+[^tasks]: Python docs, *Coroutines and Tasks*: `asyncio.gather` runs awaitables concurrently. [docs.python.org](https://docs.python.org/3/library/asyncio-task.html)

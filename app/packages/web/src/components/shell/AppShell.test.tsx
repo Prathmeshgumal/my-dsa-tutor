@@ -88,6 +88,13 @@ test('the left bar: five sections, then Claude, then Setup', () => {
   expect(rail().getByRole('button', { name: 'Claude' })).toHaveAttribute('aria-pressed', 'false')
 })
 
+test('the left bar links to the PocketPay notes site in a new tab', () => {
+  renderShell()
+  const link = rail().getByRole('link', { name: 'PocketPay notes' })
+  expect(link).toHaveAttribute('href', 'http://localhost:5200')
+  expect(link).toHaveAttribute('target', '_blank')
+})
+
 test('Notes opens as a section, and Claude can sit beside it', async () => {
   renderShell()
   await userEvent.click(rail().getByRole('button', { name: 'Notes' }))

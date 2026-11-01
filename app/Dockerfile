@@ -9,7 +9,9 @@ COPY packages/core/package.json packages/core/
 COPY packages/web/package.json packages/web/
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npm run build
+# Where the PocketPay notes container listens, for the left bar's link (docker-compose.yml passes it).
+ARG NOTES_PORT=5200
+RUN VITE_NOTES_PORT=$NOTES_PORT npm run build
 
 FROM python:3.14.7-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:0.12.19 /uv /usr/local/bin/uv

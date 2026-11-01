@@ -1,0 +1,105 @@
+export const meta = {"title": "Async Python, from scratch", "description": "What async and await actually do, why PocketPay uses them for the database and LLM calls, and the one mistake that cancels all the benefit.", "section": "Day 1: payments backend", "order": 2.4, "label": "2b. Async Python"};
+
+## Why this matters
+
+PocketPay's API will spend most of its time **waiting**. When Riya pays, the code sends SQL to Postgres and waits for the answer. When the support agent answers a question, it sends a prompt to an LLM API and waits, often for whole seconds. Measured against how fast a computer works, all that waiting is enormous.
+
+The question this page answers is: **what should the program do while it waits?** Async Python's answer is to work on someone else's request in the meantime. It's why the ledger code uses `async` and `await` everywhere, and why Block 3's FastAPI endpoints will too.
+
+## The problem: waiting while holding the thread
+
+A **thread** is one line of execution: the program doing one thing after another. Ordinary Python code holds its thread for the whole of a request, including the time it spends waiting for the database. Nobody else can use the thread during that wait.
+
+Picture three requests arriving at once: Riya pays, Arjun checks his balance, and the AI agent asks the LLM something. One at a time, each request has to wait for the previous one to finish completely. That includes all of the previous one's waiting.
+
+Then switch to the async tab:
+
+<AsyncTimeline />
+
+## The event loop: one thread that never sits idle
+
+Async Python is built on `asyncio`, which the Python docs describe as "a library to write concurrent code using the async/await syntax".[^asyncio] At its centre is the **event loop**, which "runs asynchronous tasks and callbacks" and performs network input and output.[^loop]
+
+The rule that makes it work is simple. The docs put it like this: an event loop runs in one thread, and "while a Task is running in the event loop, no other Tasks can run in the same thread. When a Task executes an await expression, the running Task gets suspended, and the event loop executes the next Task."[^dev]
+
+So `await` means: **"I'm about to wait. Let someone else use the thread until my answer arrives."** When the database replies, the loop picks the suspended task up again exactly where it left off.
+
+Notice what async does *not* do. It doesn't make one request faster, and it doesn't run two pieces of Python at the same instant. The thread still does one thing at a time. What it removes is the idle time, by overlapping the *waits*. That's why it suits programs that mostly wait on databases and networks, which the Python docs call IO-bound code.[^asyncio]
+
+## The syntax: async def, await, gather
+
+```python
+async def balance(self, account_id: int) -> int:     # a coroutine function
+    async with self.pool.connection() as conn:        # borrowing a connection may wait
+        cur = await conn.execute("SELECT ...", (account_id,))   # wait for Postgres
+        row = await cur.fetchone()
+        ...
+```
+
+- **`async def`** defines a *coroutine function*. Calling it doesn't run it: `ledger.balance(7)` just gives you a coroutine object. The Python docs say so plainly: "simply calling a coroutine will not schedule it to be executed".[^tasks]
+- **`await`** runs a coroutine and waits for its result, letting the loop serve others meanwhile. You can only use `await` inside an `async def`.
+- **`async with`** is a `with` block whose entering and leaving can wait. In our code, that's borrowing a pool connection, and `BEGIN`/`COMMIT` for a transaction.
+- **`asyncio.gather(a, b, c)`** runs several coroutines concurrently and gives back their results as a list, in order.[^tasks] Our 1,000-transfer test uses it to start all the transfers at once.
+- **`asyncio.run(main())`** starts the event loop and runs a top-level coroutine. `python -m pocketpay.db` does this.
+
+The most common beginner bug is forgetting `await`. If you write `balance = ledger.balance(7)`, then `balance` is a coroutine object, not a number, and nothing ran at all.
+
+## The one mistake that cancels the benefit: blocking the loop
+
+Everything relies on tasks reaching an `await` regularly, so the loop can switch. If code inside an `async def` waits *without* `await`, the whole thread freezes, and every other request freezes with it. Examples are `time.sleep(1)`, a synchronous database driver, or a long calculation. The Python docs give the example directly: if a function does one second of CPU-heavy work, "all concurrent asyncio Tasks and IO operations would be delayed by 1 second".[^dev]
+
+So in async code:
+
+- Use async libraries for anything that waits. We use psycopg's async API (`AsyncConnectionPool`, `await conn.execute`), and later an async HTTP client for LLM calls.
+- Never call `time.sleep`; use `await asyncio.sleep`.
+- Hand long CPU-heavy work to a thread or process. The docs point to `loop.run_in_executor()` for this.[^dev]
+
+FastAPI has a safety net worth knowing for Block 3. If you declare an endpoint with plain `def` instead of `async def`, FastAPI runs it "in an external threadpool that is then awaited, instead of being called directly (as it would block the server)".[^fastapi] So a plain `def` endpoint is safe but uses a thread. An `async def` endpoint must never block.
+
+## Async doesn't remove the need for locks
+
+You might think: if only one task runs at a time, can two payments still collide? Yes, they can, and the ledger tests prove it.
+
+The race we protect against isn't between Python tasks. It's in the **database**. With a pool of 20 connections, up to 20 transfers are inside Postgres at once, on 20 separate connections. While one transfer waits for its `SELECT` result, another task can send its own `SELECT` for the same wallet. Both read ₹50, and both decide there's enough money.
+
+We tested it. With `FOR UPDATE` removed from the async ledger, 3 out of 5 runs of the 1,000-transfer test ended with a negative wallet, for example `assert -29170 >= 0`. With the lock back, every run passes. Async changes how Python waits. It doesn't change what Postgres needs to keep money safe.
+
+## How PocketPay uses async
+
+- **The ledger** (`pocketpay/ledger.py`): every method is `async def`, using psycopg's `AsyncConnectionPool`. The [code walkthrough](/day-1/ledger-code) goes through it line by line.
+- **The tests** run as async functions through the AnyIO pytest plugin, the same approach FastAPI's own docs use for async tests.[^fastapi-tests]
+- **Block 3:** FastAPI endpoints are `async def` and `await` the ledger.
+- **Blocks 7–11:** LLM and tool calls are awaited, so one slow LLM response doesn't hold up every other user.
+
+## Check yourself
+
+<details>
+<summary>Does async make a single payment faster?</summary>
+
+No. One payment still waits just as long for Postgres. Async lets the program serve other requests during that wait, so many requests finish sooner in total.
+</details>
+
+<details>
+<summary>What's wrong with `result = ledger.transfer(a, b, 100, "x")` inside an async function?</summary>
+
+It's missing `await`. Calling a coroutine function only creates a coroutine object. The transfer never runs, and `result` isn't an entry ID.
+</details>
+
+<details>
+<summary>Someone puts `time.sleep(2)` inside an async FastAPI endpoint. What happens?</summary>
+
+The event loop's thread is blocked for 2 seconds, so every other request on that thread stalls too. Use `await asyncio.sleep(2)`. Or, if it's truly blocking work, run it in an executor or make the endpoint a plain `def`, which FastAPI runs in a threadpool.
+</details>
+
+<details>
+<summary>Only one task runs at a time. So why do we still need FOR UPDATE?</summary>
+
+Because the race is inside Postgres, across many connections. While one task awaits its query, another task's query for the same account can run. Without the row lock, both can read the same old balance.
+</details>
+
+[^asyncio]: Python docs, *asyncio — Asynchronous I/O*. [docs.python.org](https://docs.python.org/3/library/asyncio.html)
+[^loop]: Python docs, *Event Loop*. [docs.python.org](https://docs.python.org/3/library/asyncio-eventloop.html)
+[^dev]: Python docs, *Developing with asyncio* (concurrency and multithreading; running blocking code). [docs.python.org](https://docs.python.org/3/library/asyncio-dev.html)
+[^tasks]: Python docs, *Coroutines and Tasks* (calling a coroutine doesn't schedule it; `asyncio.gather`). [docs.python.org](https://docs.python.org/3/library/asyncio-task.html)
+[^fastapi]: FastAPI docs, *Concurrency and async / await*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/async/)
+[^fastapi-tests]: FastAPI docs, *Async Tests* (`pytest.mark.anyio`). [fastapi.tiangolo.com](https://fastapi.tiangolo.com/advanced/async-tests/)

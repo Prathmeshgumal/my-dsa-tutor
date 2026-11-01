@@ -8,3 +8,4 @@ dist
 logs/
 # What you had open, your chats and settings (kept by the editor)
 /state/
+*.tsbuildinfo

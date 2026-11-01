@@ -1,0 +1,129 @@
+export const meta = {"title": "How a wallet keeps track of money", "description": "Read this before Block 2. Accounts, transactions and ledgers from scratch, then where a wallet's real money sits: PPIs and escrow accounts.", "section": "Day 1: payments backend", "order": 1.8, "label": "2a. How a wallet tracks money"};
+
+## Why this matters
+
+Imagine PocketPay has been live for a month. Riya opens the app, sees ₹160, and messages support: "I added ₹200. Where did the rest go?"
+
+To answer her, someone has to say exactly which money came in, which went out, and when. Now imagine the same question asked about every user at once. The regulator asks it, and so does the bank that holds the money, which wants to compare its numbers with ours. If our records can't answer it, we have a serious problem.
+
+This page and the next are about keeping records that can always answer that question. Before any code, we need five ideas: **account**, **transaction**, **ledger**, **wallet** and **escrow account**. Each one builds on the one before it, so it's worth reading them in order.
+
+## Account: a bucket for one balance
+
+An **account** is a separate bucket of money whose balance you want to know. The easiest example is your own savings account. It's money a bank holds for you, kept apart from everyone else's and marked as yours.
+
+In PocketPay, every balance we care about gets its own account. Riya's wallet is one. Arjun's wallet is another. The money we owe the canteen for what it sold today is a third. Modern Treasury describes an account the same way: a separate pool of value, one for each balance you want to track.[^mt1]
+
+## Transaction: money moving between buckets
+
+When Riya pays the canteen ₹40, two accounts change at the same moment. Riya's goes down by ₹40, and what we owe the canteen goes up by ₹40. That single event is a **transaction**, and each change inside it is called an **entry**.
+
+| Transaction | Account | Entry |
+|---|---|---|
+| Riya pays the canteen ₹40 | Riya's wallet | −₹40 |
+| | Owed to the canteen | +₹40 |
+
+Look at what this shows. The ₹40 didn't appear from nowhere, and it didn't vanish. It left one account and arrived in another, and you can see both sides. That's why every transaction has **at least two entries**: one shows where the money came from, and one shows where it went.[^mt1] This is the idea behind the name "double-entry", which the next page builds on.
+
+## Ledger: the list of every transaction
+
+Now let's line up a few transactions in the order they happened. There's one new column, **Cash at bank**: it counts the real rupees that came in when people added money. We'll see where those rupees physically sit further down.
+
+| # | When | What happened | Cash at bank | Riya's wallet | Arjun's wallet | Owed to the canteen |
+|---|---|---|---|---|---|---|
+| 1 | 30 Oct, 09:02 | Arjun adds ₹500 | +₹500 | | +₹500 | |
+| 2 | 30 Oct, 09:10 | Riya adds ₹200 | +₹200 | +₹200 | | |
+| 3 | 30 Oct, 13:15 | Riya pays the canteen ₹40 | | −₹40 | | +₹40 |
+| | | **Balance (add up the column)** | **₹700** | **₹160** | **₹500** | **₹40** |
+
+This list is a **ledger**: a log of every event that changed money, each one stamped with its time.[^mt1] Three things about it matter a lot.
+
+**The balances aren't stored anywhere.** They're worked out by adding up each column. So when Riya asks "why ₹160?", the answer is right there in her column: +₹200, then −₹40.
+
+**Rows are never edited or deleted.** Say row 3 was a mistake. We don't rub it out. We add a row 4 that moves the ₹40 back, so anyone reading later can see both the mistake and the fix. Overwriting a stored balance is simpler to build. But keeping the full list and working out balances from it is more accurate, and it makes mistakes far easier to find.[^mt1]
+
+**The two sides match.** We hold ₹700 of real money (Cash at bank). We owe ₹160 + ₹500 + ₹40 = ₹700 to Riya, Arjun and the canteen. Every rupee we hold belongs to someone in the ledger. Keep this in mind; it comes back at the end of the page.
+
+Here's Riya's column on its own, roughly as she'd see it in the app. Add a few lines and watch the balance get worked out:
+
+<LedgerNotebook />
+
+## Where is the real money?
+
+So far the ledger is just numbers in PocketPay's database. But Riya handed over ₹200 of real money. Where is it?
+
+To answer that, compare the two ways an app can let Riya pay.
+
+**Paying straight from her bank account.** This is what the [UPI primer](/day-1/upi-primer) covered. Riya's ₹40 moves from her bank to the canteen's bank. The app sends the request, but it never holds any of the money, so it has no balance of hers to keep track of. Her bank keeps that record.
+
+**Paying from a wallet.** Riya first moves money *into* the app, then spends from it whenever she likes. It's a bit like topping up a metro card and tapping it later. Now the app is holding Riya's money, so the app has to keep the ledger: the one above.
+
+PocketPay is the second kind. Switch between the tabs to compare:
+
+<BankVsWallet />
+
+## Wallet: what RBI calls a PPI
+
+The Reserve Bank of India (RBI) regulates payments in India. Its name for "pay in first, spend later" is a **prepaid payment instrument**, or **PPI**. RBI defines a PPI as something you use to buy goods and services, and a few other things, using the value already stored in it.[^rbi-ppi] A PPI can be a wallet inside an app or a card.[^rbi-wallet]
+
+A wallet holds the public's money, so RBI doesn't let just anyone run one. A bank needs RBI's approval, and any other company needs RBI's authorisation.[^rbi-who] When these notes say "wallet company", they mean that second kind: a company that isn't a bank but has RBI's permission to run a wallet.
+
+PocketPay plays the part of a wallet company in this project. Since it's a learning project, it has no real authorisation.
+
+## Escrow account: where a wallet keeps the money
+
+That leaves one problem. A bank can hold your money because it's a bank. PocketPay isn't one. So when Riya adds ₹200, where does it go?
+
+RBI's answer is that a wallet company that isn't a bank must keep its users' money in an **escrow account** at a bank (RBI says "a scheduled commercial bank").[^rbi-escrow] Put simply, it's a bank account that holds the users' money, but the company isn't free to spend what's in it. RBI's rules decide what can go in and out:
+
+- **In:** money users add to their wallets, refunds, and a few other items on RBI's list.
+- **Out:** payments to the shops where users spent their wallet money, and a few other items on the list.
+
+Anything that isn't on the list can't be paid from the escrow account. The company's own rent and salaries aren't on it, so they have to come out of the company's own money. The bank also has to agree to use the money in the escrow account only for the purposes RBI lists.[^rbi-escrow]
+
+One more rule ties this whole page together. **At the end of every day, the escrow account must hold at least the total of all wallet balances plus everything owed to shops.** The company must check this daily and report any shortfall to RBI immediately.[^rbi-escrow]
+
+Look back at the ledger table. Cash at bank was ₹700, and Riya's ₹160 + Arjun's ₹500 + the canteen's ₹40 also come to ₹700. That's exactly this check. The bank can see the ₹700 in the escrow account, but it has no idea how much of it is Riya's. **Only PocketPay's ledger knows.** If the ledger is wrong, nobody can say whose money is whose.
+
+Try it below, starting from Arjun's ₹500. Notice that when Riya pays the canteen inside the app, the escrow balance doesn't change at all; only the ledger does. Real money leaves the escrow account only when PocketPay sends the canteen what it's owed.
+
+<EscrowBox />
+
+The amounts and account names above are our own example. The rules about what can go in and out, and the daily check, are RBI's.
+
+## Recap
+
+- An **account** is a bucket for one balance you want to track.
+- A **transaction** is one event that moves money between accounts. It always has at least two entries: where the money came from, and where it went.
+- A **ledger** is the list of every transaction, in time order. Balances are worked out from it, and rows are only ever added, never changed.
+- A **wallet** (RBI's term: PPI) holds money people put in first and spend later. Only banks, or companies RBI authorises, can run one.
+- A wallet company that isn't a bank keeps users' money in an **escrow account** at a bank. Only certain money can go in and out, and every day the balance must cover everything owed to users and shops.
+- The bank sees one total. **The ledger is the only record of whose money it is.**
+
+Next comes the [double-entry ledger](/day-1/ledger). It replaces our + and − with a stricter pair of words, debit and credit, so the ledger can check itself.
+
+## Check yourself
+
+<details>
+<summary>Riya pays the canteen ₹40 from her PocketPay wallet. Does any money leave the escrow account?</summary>
+
+No. Riya's money and the canteen's money are in the same escrow account. Only the ledger changes: Riya −₹40, owed to the canteen +₹40. Money leaves the escrow account later, when PocketPay sends the canteen what it's owed.
+</details>
+
+<details>
+<summary>The bank says the escrow account holds ₹700. How does PocketPay know how much of that is Riya's?</summary>
+
+From its own ledger. Add up Riya's column. The bank only sees the total.
+</details>
+
+<details>
+<summary>Riya's balance looks wrong. Should support fix it by editing her balance?</summary>
+
+No. Balances aren't stored; they're worked out from the ledger. Find the wrong row, then add a new row that corrects it. The history stays complete.
+</details>
+
+[^mt1]: Modern Treasury, *Accounting For Developers, Part I: The Fundamentals*. It defines an account, a transaction with at least two entries, and a ledger ("a timestamped log of events that have a monetary impact"), and recommends computing balances from immutable transactions. [moderntreasury.com](https://www.moderntreasury.com/journal/accounting-for-developers-part-i)
+[^rbi-ppi]: RBI, *Master Directions on Prepaid Payment Instruments, 2021*, para 2.8 (definition of a PPI). [rbi.org.in](https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=12156)
+[^rbi-wallet]: Same RBI Master Directions, para 11.4 (PPIs issued as wallets, and as cards).
+[^rbi-who]: Same RBI Master Directions: para 1.7 (no one may run a PPI system without RBI approval or authorisation), para 3.1 (banks need approval), paras 4.1–4.2 (non-banks need authorisation and must be companies incorporated in India).
+[^rbi-escrow]: Same RBI Master Directions, para 12.3: the escrow account at a scheduled commercial bank; the list of allowed credits and debits; the end-of-day rule that the balance must not be lower than "the value of outstanding PPIs and payments due to merchants"; daily monitoring and reporting shortfalls to RBI; and the bank using the money only for the purposes in the Directions.

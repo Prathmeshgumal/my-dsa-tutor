@@ -1,0 +1,206 @@
+export const meta = {"title": "Paying exactly once: the idempotent payments API", "description": "Block 3. Why a double tap can charge Riya twice, how an idempotency key stops it even when 20 copies of a request arrive at once, what happens when the server crashes halfway, and the state machines that keep payments and cards honest.", "section": "Day 1: payments backend", "order": 3, "label": "3. Idempotent payments API"};
+
+## Why this matters
+
+Riya is at the canteen. She taps Pay for her ₹40 lunch. Nothing seems to happen, because the school Wi-Fi is slow, so she taps again. Or she taps once, and her phone's request reaches PocketPay, the payment goes through, but the answer is lost on the way back; her app, never hearing "done", sends the request again.
+
+In both cases PocketPay receives the same payment request twice. If it simply does what each request says, Riya pays ₹80 for one lunch. The [HTTP page](/day-1/http-api) already told us why this is easy to get wrong: `POST` is not idempotent, so sending it twice asks for two payments.
+
+Block 3's job is to make "pay the canteen ₹40" happen **exactly once**, however many times the request arrives, and at whatever moment. Its checkpoint is blunt: send the same payment request **20 times at the same moment**, and exactly one payment must come out. This page explains how PocketPay does that. The [code walkthrough](/day-1/payments-code) then goes through the code line by line.
+
+## Why "check first, then pay" isn't enough
+
+The obvious idea is: before paying, look for an identical payment made in the last few seconds, and if there is one, don't pay again. It fails in two ways.
+
+First, "identical" is the wrong test. Riya might *really* buy two ₹40 lunches, one for a friend. Two separate, intentional payments look exactly like one payment sent twice.
+
+Second, and worse, it breaks under timing. Two copies of the request can arrive a few milliseconds apart. Copy one looks, finds nothing, and starts paying. Copy two looks before copy one has saved anything, also finds nothing, and also pays. Both checks passed, and Riya is charged twice. This is the same kind of race the ledger page showed for balances: checking and acting are two separate steps, and other requests can slip in between.
+
+So we need two things: a way to tell "the same request again" from "a new request that happens to look the same", and a check that can't be raced.
+
+## The idea: the client names each payment
+
+The answer used across the payments industry is an **idempotency key**. The client makes up a random ID for each payment it means to make, once, and sends it with every attempt at that payment in a header called `Idempotency-Key`. A new tap on a new lunch gets a new key. A retry of the same payment reuses the old key.
+
+Now "is this the same request?" has an exact answer: same key, same request. Stripe's API works this way. It saves "the status code and body of the first request made with a given idempotency key", and retries with the same key "return the saved response". It suggests keys be random UUIDs, up to 255 characters long, and it compares each retry's parameters with the original and errors if they differ.[^stripe] The IETF, which writes internet standards, has a draft standard for the same header. It recommends a UUID or similar random value, and says what to answer when things go wrong: **400** if the key is missing, **409** if a request with that key is still being processed, and **422** if the key is reused with a different request body.[^ietf] That document is still an Internet-Draft, not a finished standard, but PocketPay follows its status codes.
+
+PocketPay scopes keys to the user. The key's row is identified by the pair (user, key), so two different users who happened to choose the same key could never collide.
+
+## When the answer gets lost
+
+The most important case deserves a slow walk-through. Riya taps Pay. Her request reaches PocketPay, and the server does everything right: it locks her wallet, moves ₹40 and commits. Then the reply, "201, payment #812", is lost on the school Wi-Fi. Her phone shows a spinner, then nothing.
+
+### Why the app sends the request again
+
+From the phone, a missing reply could mean three quite different things, and they all look the same:
+
+<NoReply />
+
+The app has to do *something*. Each choice it could make goes wrong in at least one case, except the last:
+
+| What the app does | Cases 1 and 2 (nothing paid) | Case 3 (paid ₹40) |
+|---|---|---|
+| Shows "Payment failed" | correct | wrong: Riya was charged, thinks she wasn't, and pays again by hand |
+| Shows "Paid" | wrong: the canteen wasn't paid | correct |
+| **Asks the server again** | the server pays now | the server must *not* pay again |
+
+Asking again is the only choice that can be right every time, but only if the server can tell "the same payment, asked again" from "a new payment". Without that, case 3 charges Riya twice.
+
+The HTTP standard itself is careful here. Methods like `PUT` are idempotent, so "the request can be repeated automatically if a communication failure occurs before the client is able to read the server's response". `POST` isn't, and the rule for it is: "A client SHOULD NOT automatically retry a request with a non-idempotent method unless it has some means to know that the request semantics are actually idempotent, regardless of the method, or some means to detect that the original request was never applied."[^rfc9110] The idempotency key is that "means to know": it makes a payment `POST` safe to repeat.
+
+### Why a lock doesn't help
+
+The ledger already locks Riya's wallet while it moves money. Doesn't that stop the second payment? Step through it:
+
+<Sequence name="lostReplyNoKey" />
+
+**A lock makes requests take turns. It doesn't make the second one skip.** Try 2 either finds the wallet free, or waits for try 1 to finish. Either way it then finds ₹460, which is enough, and pays. Try 2 is a perfectly valid request on its own; it looks exactly like Riya buying a second lunch. Without a key, the server has nothing to tell the two apart.
+
+### With a key
+
+Now the same story, with the app sending `Idempotency-Key: k-81f3`:
+
+<Sequence name="lostReplyWithKey" />
+
+The retry carries the same key, so the server recognises it, finds the payment already done, and sends back the saved answer. Retrying became safe.
+
+### Why would the retry carry the same key?
+
+Because the **app** is written that way. Riya never makes an HTTP request herself; she taps buttons, and the app's code builds and sends the requests. A well-built app makes one key **per payment Riya means to make**, when the pay screen opens, and reuses it for everything that happens on that screen. A new key appears only when a new pay screen opens for a new payment.
+
+Pick a situation to see which requests reach PocketPay:
+
+<PayScreens />
+
+Notice what Riya actually does in each story. Usually she presses nothing extra: the app resends on its own after a timeout. A "Check again" button appears only when the app gives up retrying by itself. The HTTP standard says a client "SHOULD NOT automatically retry a failed automatic retry",[^rfc9110] so after one silent retry, handing the decision to Riya is reasonable. And the app doesn't say "failed", because it doesn't know that.
+
+The server can't enforce any of this; it can only trust the key. It's an agreement between the two sides:
+
+- **The app's job:** one key per intended payment, reused on every retry of it.
+- **PocketPay's job:** handle each key at most once, and give every retry the saved answer.
+
+That's why PocketPay refuses a payment with no key (400). An app that forgets the key finds out straight away, instead of quietly losing its protection.
+
+### Why not just GET the payment's status?
+
+A natural idea: when the reply is lost, don't resend; ask "did my payment go through?" with a `GET`. On its own, it doesn't work, for three reasons.
+
+1. **The app has nothing to ask about.** The payment ID (#812) was inside the reply that got lost. To ask anything, the app must have given the payment its own name *before* sending it. That app-made name is an idempotency key.
+2. **"Not found" means "not found yet".** A request can be slow, stuck in a network queue, or half-way through the server. Step through what happens:
+
+<Sequence name="getStatusRace" />
+
+3. **A double tap never triggers a check.** Two fast taps send two POSTs at once. No reply was lost, so the app never thinks to ask, and both arrive.
+
+Reasons 2 and 3 can only be fixed on the server: it must refuse to process the same key twice, whenever the copies arrive. Once it does, a resent POST already answers the status question:
+
+| A resent POST with `k-81f3` arrives… | PocketPay answers |
+|---|---|
+| after the first one finished | the saved result: that's the "status check" |
+| while the first one is still running | 409, ask again shortly |
+| when the first one never arrived | does the payment, once |
+
+So a resent POST means "do this payment if you haven't, and tell me how it ended", in one step, with no gap between checking and acting. A "look up a payment by my key" GET could still be a useful *extra* endpoint, for example for a list of pending payments. But it only works safely because the key and the server's check already exist.
+
+## Making the check race-proof: let Postgres decide
+
+The key alone doesn't stop the race. Two copies of a request with the same key, arriving together, could still both "look up the key, find nothing, and pay". The fix is to stop *looking up* the key and instead **insert** it, and let the database's uniqueness rule pick the winner.
+
+The `idempotency_keys` table has (user, key) as its primary key, so Postgres will never store two rows for the same pair. Every request starts by trying to insert its key, with `ON CONFLICT DO NOTHING`, which "simply avoids inserting a row as its alternative action" when the row already exists.[^insert] The `RETURNING` clause then tells the request whether it won, because it returns "only rows that were successfully inserted or updated".[^insert] A row back means "the key is yours; you do the paying". No row means someone else got there first.
+
+What about two inserts at the very same moment? Postgres's documentation describes exactly this case: "If a conflicting row has been inserted by an as-yet-uncommitted transaction, the would-be inserter must wait to see if that transaction commits."[^unique] So the second request waits, the first commits, and the second then finds the conflict. There's no moment where both can win. Step through it:
+
+<Sequence name="claimRace" />
+
+This is why PocketPay splits a payment request into **two steps, each in its own transaction**:
+
+- **Step A, claim.** Insert the key as `started`, and commit immediately. Committing right away matters: it makes the claim visible to every other request at once, and it means the claim is never held hostage by a slow payment.
+- **Step B, pay.** In one transaction: lock the key row, move the money with the ledger, insert the payment row, and save the answer on the key as `finished`. One commit makes all of that real together, or none of it.
+
+## What a repeat gets back
+
+Once the key exists, every later request with the same key gets an answer based on the row. Pick a situation:
+
+<KeyLifecycle />
+
+Two of those situations are design choices worth spelling out.
+
+**Refusals are saved; bad requests are not.** If Riya hasn't got enough money, the request did claim the key and the payment really was attempted, so the 422 refusal is saved on the key like a success. A retry gets the same 422. That's Stripe's approach too: it saves the result once "execution of an endpoint begins", and doesn't save requests that "fail validation", because no work started.[^stripe] In PocketPay, a negative amount or a missing header is stopped by FastAPI before any key is claimed, so the client can fix the request and send it again with the same key.
+
+**The fingerprint.** Each key row stores a hash of the request: its method, path and JSON body. If a request arrives with a known key but a different body, say ₹40 the first time and ₹400 the second, the hashes differ and the request gets 422. The IETF draft calls this an idempotency fingerprint, "generated from request payload data".[^ietf] Without it, a buggy app reusing a key could get back an old payment and believe a new one went through.
+
+## When the server crashes halfway
+
+A payment server must assume it can die at any moment: a crash, a deploy, a power cut. What happens to a key then?
+
+If the crash comes **before step B commits**, step B's transaction never happened. Postgres rolls back any transaction a closed connection leaves open, so no money moved and no payment exists. But the key row from step A *was* committed, and it's stuck at `started`. Without a way out, every retry would get 409 forever.
+
+So each key row also records an **owner**, a random ID for the request that claimed it, and **locked_at**, when it did. If a retry finds a row that has been `started` for more than 60 seconds, it assumes the original request is dead and takes the key over, writing its own owner ID. Sixty seconds is our choice: far longer than a real payment takes, short enough that a stuck user can try again within a minute.
+
+Taking over is only safe if the old request can't wake up and pay too. Two details make sure of it. Step B begins by locking the key row and checking that the owner is still itself; if the key was taken over, the owner won't match, and it stops before touching any money. And because step B holds that lock for the whole payment, a takeover attempt has to wait until a still-running step B finishes. When it then re-checks its condition, Postgres re-evaluates the `WHERE` clause against the row as it now is,[^iso] finds the key `finished`, and changes nothing.
+
+If something unexpected breaks step B without crashing the server, such as a bug or a dropped database connection, step B's transaction rolls back and the request **releases** its key (deletes the row) before answering 500. A retry can then start fresh at once instead of waiting a minute.
+
+## State machines: what a payment and a card may become
+
+Block 3 also builds the two state machines from the [architecture page](/start/architecture). A payment's `status` and a card's `status` can only change through the moves listed in `pocketpay/states.py`. Anything else raises an error. Try some moves that shouldn't work:
+
+<StateMachines />
+
+In Block 3, a new payment goes straight from `created` to `processing` in the same transaction that moves the money, because all its checks have passed. It stays `processing` until the bank confirms it (Block 4). Cards can be paused, resumed and blocked through the API, and blocking is final. The table's `CHECK` constraint backs this up in the database: even a bug that skipped the state machine couldn't store a status like `"exploded"`.
+
+## Did it work? The checkpoint
+
+The test suite sends the same payment request 20 times at once with `asyncio.gather`. We ran it 15 times in a row. Every run gave the same result: one request got **201 Created**, nineteen got **409 Conflict**, exactly **one** payment row existed, and Riya's wallet went from ₹500 to ₹460, once. A retry afterwards got the saved 201 with the same payment ID.
+
+We then did it for real: ran the API with Uvicorn on port 8000 and fired 20 `curl` requests at it in parallel, all with the same key. Again: `1 × 201`, `19 × 409`, one payment in the database, ₹460 left. Retrying with the same key and amount ₹90 instead of ₹40 got **422**: "this Idempotency-Key was already used for a different request".
+
+## Common misunderstandings
+
+- **"The key prevents duplicate payments in general."** It prevents *the same request* being processed twice. Two taps that each made their own key are two payments. That's correct: the app is responsible for reusing a key only when it retries.
+- **"409 means the payment failed."** It means "the first copy of this request is still being processed; ask again shortly". The payment may well succeed.
+- **"We could keep the keys in memory instead."** Several copies of the API may run at once, and any of them can restart. Only the database is shared by all of them and survives a restart.
+
+## Recap
+
+- Retries are normal: double taps, lost responses, app retries. A payment API must turn many copies of a request into one payment.
+- When a reply is lost, the app **can't tell** "not paid" from "paid, answer lost", so asking again is its only safe move.
+- A **lock** only makes requests take turns; the second one still pays. A **GET** status check can't close the gap either.
+- The client sends an **Idempotency-Key**, unique per intended payment (one per pay screen), with every attempt.
+- PocketPay claims the key by **inserting** it; Postgres's uniqueness rule makes exactly one request win, even at the same instant.
+- **Step A** claims and commits; **step B** pays and saves the answer in one transaction.
+- Repeats get the **saved answer** (finished), **409** (still running) or **422** (different body). Refusals are saved; invalid requests aren't.
+- A key stuck by a crash is **taken over** after 60 seconds; the owner check stops the old request from paying too.
+- Payment and card **state machines** allow only listed moves.
+
+## Check yourself
+
+1. Riya buys two lunches for ₹40, one after the other. Her app sends two requests with two different keys. How many payments are made?
+2. Why does step A commit straight away, instead of claiming the key in the same transaction as the payment?
+3. A retry arrives 10 seconds after the first request crashed. What does it get, and what about 70 seconds after?
+4. A request with a negative amount comes in with key k-1. Then a correct request comes in with the same key k-1. Does the second one go through?
+5. Why does step B check the owner of the key row before moving money?
+6. Riya's reply is lost. Why can't her app just show "Payment failed"?
+7. The ledger locks Riya's wallet while it pays. Why doesn't that stop a resent request from paying again?
+8. The app GETs the payment's status after a lost reply and the server says "not found". Is it safe to send the payment again?
+
+<details>
+<summary>Answers</summary>
+
+1. Two. Different keys mean different intended payments.
+2. So the claim is visible to every other request immediately. If the claim waited for the whole payment to commit, other copies would be stuck waiting on it, and a crash would lose the claim along with the payment.
+3. At 10 seconds, 409: the key is `started` and not yet stale. At 70 seconds, the retry takes the key over and pays.
+4. Yes. The negative amount was rejected by FastAPI before any key was claimed, so k-1 was never used.
+5. A slow original request might still be alive after its key was taken over. The owner check (done while holding the row lock) makes sure only the current owner can pay.
+6. It doesn't know that. The payment may have gone through with only the reply lost; then "failed" is a lie, and Riya might pay again by hand.
+7. A lock only makes requests take turns. The resent request waits (or finds the wallet free), sees enough money, and pays. It looks exactly like a second lunch.
+8. No. "Not found" may only mean the first POST hasn't arrived yet. It's safe only because the server refuses to process the same key twice.
+
+</details>
+
+[^stripe]: Stripe API reference, *Idempotent requests*. [docs.stripe.com](https://docs.stripe.com/api/idempotent_requests)
+[^ietf]: IETF HTTPAPI working group, *The Idempotency-Key HTTP Header Field*, draft-ietf-httpapi-idempotency-key-header-08 (Internet-Draft). [datatracker.ietf.org](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header-08)
+[^rfc9110]: IETF, RFC 9110 *HTTP Semantics*, section 9.2.2 "Idempotent Methods". [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)
+[^insert]: PostgreSQL 18 documentation, *INSERT* (ON CONFLICT, RETURNING). [postgresql.org](https://www.postgresql.org/docs/18/sql-insert.html)
+[^unique]: PostgreSQL 18 documentation, *Index Uniqueness Checks*. [postgresql.org](https://www.postgresql.org/docs/18/index-unique-checks.html)
+[^iso]: PostgreSQL 18 documentation, *13.2.1 Read Committed Isolation Level*. [postgresql.org](https://www.postgresql.org/docs/18/transaction-iso.html)

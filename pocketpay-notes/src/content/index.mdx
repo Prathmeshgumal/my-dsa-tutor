@@ -1,0 +1,24 @@
+export const meta = {"title": "Two days to build PocketPay", "description": "The weekend plan. 13 blocks, about 21 hours, from a payments ledger to an AI agent that spends inside safe limits.", "section": "Weekend plan", "order": 0, "label": "The plan"};
+
+Saturday you build the payments backend. Sunday you put an AI agent on top that can only spend inside limits set in code. Each bar is as wide as the block takes, and each block gets its own notes page once we finish it.
+
+<WeekendPlan />
+
+## If you fall behind, cut in this order
+
+1. Block 12 build (fraud rules)
+2. Block 10 (LangGraph support agent)
+3. Block 4 bank callbacks
+4. Block 6 system design
+
+Never cut Blocks 2, 3, 8, 9 or 11: the ledger, idempotency, the MCP server, mandates and evals. If Saturday runs long, do Blocks 1 to 3 properly and move 4 to 6 to weekday evenings.
+
+## Rules that never bend
+
+- Store money as **integer paise**, never as floats.
+- Ledger postings are **append-only**. Fix a mistake with a reversal entry.
+- Every endpoint that moves money takes an **idempotency key**.
+- Kafka and callback consumers are **idempotent**, because delivery is at-least-once.
+- A DB write and its event go through the **outbox**. Never write and then publish.
+- Agent spending limits live **in the payment service**, not in the prompt.
+- API keys go in **`.env`**, which is never committed.

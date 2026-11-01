@@ -1,0 +1,7 @@
+:80 {
+	root * /srv
+	# The site routes in the browser, so every page path is served index.html.
+	try_files {path} /index.html
+	file_server
+	encode gzip
+}

@@ -1,0 +1,213 @@
+export const meta = {"title": "How an HTTP API works", "description": "Read this before Block 3. What an HTTP request and response really contain, what methods and status codes mean, and how Uvicorn and FastAPI turn a request into a call to our Python function.", "section": "Day 1: payments backend", "order": 2.8, "label": "3a. How an HTTP API works"};
+
+## Why this matters
+
+After Block 2, PocketPay's ledger works, but only from inside Python. The tests call `ledger.transfer(...)` directly because they run in the same program. Riya's phone can't do that. Her app is a different program, on a different device, possibly written in a different language. It needs a way to say "pay the canteen ₹40" to our program over the network, and to get an answer back.
+
+That's what an **API** is: a set of requests one program agrees to answer for others. PocketPay's will be an **HTTP API**, which means the requests and answers follow HTTP, the same protocol your browser uses to load web pages. In Block 3 you'll build its first and most important request, `POST /payments`. This page explains everything that request is made of, so that the code will read plainly.
+
+## The same picture as the database, with roles moved
+
+You've already seen this shape on the [Postgres page](/day-1/connecting-to-postgres): a server program listens on a port, and clients connect to it and send requests. HTTP works the same way. What changes is who plays which part:
+
+| | Talking to Postgres | Talking to PocketPay's API |
+| --- | --- | --- |
+| Client | our Python program | Riya's app (or curl, or a test) |
+| Server | `postgres`, port 5432 | our Python program, port 8000 by default |
+| Language | Postgres's own protocol | HTTP |
+| What's sent | SQL | a method, a path, headers, a JSON body |
+
+So our program is a client of Postgres *and* a server for apps. In Block 3 one program will do both: answer HTTP requests from the front, and talk to Postgres through the pool at the back.
+
+There's one big difference between the two. A Postgres connection is a **session**: it remembers your open transaction from one query to the next. HTTP deliberately doesn't. RFC 9110, which defines HTTP, calls it "a stateless application-level protocol", and explains that this means "each request message's semantics can be understood in isolation".[^semantics] Every HTTP request has to carry everything the server needs to understand it: who is asking, what they want, and the data. Nothing is remembered from the request before. Keep this in mind; it's why Block 3's Idempotency-Key travels on every request instead of being remembered by the server.
+
+## What a request and a response look like
+
+HTTP/1.1 messages are plain text with a fixed shape. RFC 9112 describes it as a start line, then zero or more header lines, then "an empty line indicating the end of the header section, and an optional message body".[^http11] For a request, the start line is the **method**, the **path** (RFC 9112 calls it the request target) and the HTTP version, separated by spaces. For a response, it's the version, a three-digit **status code** and a short phrase.[^http11]
+
+Here's a real exchange. We wrote a ten-line FastAPI app (shown [further down](#try-it-yourself)), ran it on our laptop, and sent it a payment with `curl -v`, which prints exactly what goes over the connection. Click the lines:
+
+<HttpAnatomy />
+
+The **headers** are labelled facts about the message, one per line, written as `Name: value`. Some are required: RFC 9112 says a client "MUST send a Host header field" in every HTTP/1.1 request.[^http11] Others describe the body, like `Content-Type: application/json`, which says the body is written in **JSON**, a text format for data made of objects (`{...}`), lists (`[...]`), strings, numbers, `true`, `false` and `null`.[^json] Riya's app will also send PocketPay-specific headers, such as the `Idempotency-Key` from the [architecture page](/start/architecture).
+
+## Methods: what kind of request is this?
+
+The method is the request's verb. RFC 9110 defines several; four are the ones you'll meet constantly:[^semantics]
+
+| Method | RFC 9110 says it requests that the server... | In PocketPay (our plan) |
+| --- | --- | --- |
+| GET | transfer "a current selected representation" of the target, i.e. send back what's there | `GET /accounts/7/balance` |
+| POST | "process the representation enclosed in the request", i.e. do something with what's sent | `POST /payments` |
+| PUT | create or replace the target's state with what's sent | not planned yet |
+| DELETE | remove the target | not planned: the ledger never deletes |
+
+Two properties of methods matter a lot in payments. A method is **safe** if its meaning is essentially read-only; GET, HEAD, OPTIONS and TRACE are safe. A method is **idempotent** if sending the same request several times has the same intended effect as sending it once; PUT, DELETE and all the safe methods are idempotent.[^semantics]
+
+Notice what's missing from that list: **POST is neither safe nor idempotent**. Sending `POST /payments` twice asks for two payments. That's exactly Riya's double tap at the canteen, and exactly why Block 3 adds an Idempotency-Key: it makes our `POST /payments` behave idempotently even though HTTP doesn't promise it.
+
+FastAPI's docs add a useful warning: the usual meanings (POST to create, GET to read, and so on) are conventions, and FastAPI "doesn't enforce any specific meaning".[^first] Nothing stops you writing a GET that moves money. Don't.
+
+## Status codes: how did it go?
+
+Every response starts with a three-digit number. The first digit says which of five groups it's in:[^semantics]
+
+| Group | RFC 9110's description | Means, in short |
+| --- | --- | --- |
+| 1xx | "The request was received, continuing process" | still working on it |
+| 2xx | "The request was successfully received, understood, and accepted" | it worked |
+| 3xx | "Further action needs to be taken in order to complete the request" | look elsewhere |
+| 4xx | "The request contains bad syntax or cannot be fulfilled" | the client got something wrong |
+| 5xx | "The server failed to fulfill an apparently valid request" | the server got something wrong |
+
+The split between 4xx and 5xx is the important one. A 4xx says "don't send that again unchanged; fix the request". A 5xx says "your request may have been fine; something broke on our side".
+
+These are the codes PocketPay will use, and what RFC 9110 (or RFC 6585 for 429) says each one means:
+
+| Code | Meaning | When PocketPay sends it (our plan, settled in Block 3) |
+| --- | --- | --- |
+| 200 OK | "the request has succeeded" | a balance was read |
+| 201 Created | the request "has resulted in one or more new resources being created" | a payment was created |
+| 404 Not Found | the server "did not find a current representation for the target resource" | no such account or payment |
+| 409 Conflict | the request "could not be completed due to a conflict with the current state" | the same Idempotency-Key is still being processed |
+| 422 Unprocessable Content | the server understands the request but "was unable to process the contained instructions" | the body failed validation, e.g. a negative amount |
+| 429 Too Many Requests | "the user has sent too many requests in a given amount of time" | rate limit (Block 4) |
+| 500 Internal Server Error | the server "encountered an unexpected condition" | a bug; never sent on purpose |
+
+The meanings come from RFC 9110[^semantics] and RFC 6585[^rfc6585]. The "when" column is our own design, the same one shown in the flowchart on the [architecture page](/start/architecture).
+
+## Who does what inside our program
+
+When a request arrives, three layers of software handle it before any PocketPay logic runs. It helps to know which is which.
+
+**Uvicorn** is the web server. It describes itself as "an ASGI web server implementation for Python".[^uvicorn] It's the program that listens on the port, reads the raw text of HTTP requests and writes responses back. It knows HTTP, and nothing about payments.
+
+**FastAPI** is the web framework. It runs inside Uvicorn. The two talk through **ASGI**, a standard that Uvicorn's docs describe as the "minimal low-level server/application interface for async frameworks" that Python had been missing.[^uvicorn] Because both sides follow it, the server and the framework can be separate projects. FastAPI's job is everything between "a request arrived" and "call the right Python function": it picks the function by method and path, reads and checks the body, and turns your return value into a JSON response.
+
+**Our functions** do the actual work: check the business rules, call the ledger, and return a result.
+
+Step through one payment request, from Riya's app to Postgres and back:
+
+<Sequence name="httpRequest" />
+
+When we ran our test app, Uvicorn's first log line was `Started server process [34154]`. That's the same idea as on the Postgres page: our API is one running process, with a process ID, waiting on a port.
+
+<Callout title="Common misunderstanding" tone="caution">
+"FastAPI is the server." Not quite. FastAPI is the framework that decides what to do with a request. Uvicorn is the server that receives it. You can see it in the response header from our test: `server: uvicorn`.
+</Callout>
+
+## FastAPI in code
+
+Here is the whole test app we used above. It's for learning only; PocketPay's real API is what you'll write in Block 3.
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+
+app = FastAPI()
+
+class PaymentIn(BaseModel):
+    to: str
+    amount: int = Field(gt=0)        # paise, must be above zero
+
+@app.get("/accounts/{account_id}/balance")
+async def get_balance(account_id: int):
+    return {"account_id": account_id, "balance": 25000}   # made-up number
+
+@app.post("/payments", status_code=201)
+async def create_payment(body: PaymentIn):
+    return {"id": 1, "to": body.to, "amount": body.amount, "status": "processing"}
+```
+
+Read it with FastAPI's own vocabulary.[^first]
+
+- `app = FastAPI()` creates the application, the object Uvicorn will run.
+- `@app.get("/accounts/{account_id}/balance")` is a **path operation decorator**. It tells FastAPI that the function below handles GET requests to that path. "Path" is the part of the URL from the first `/`, and "operation" means the HTTP method.
+- The function below it is the **path operation function**. Returning a dict is enough: FastAPI converts it to JSON.
+- `status_code=201` sets the status for success. Without it, FastAPI answers 200.
+
+Where each argument comes from is decided by its type. FastAPI's rule is: a name that appears in the path, like `{account_id}`, is a **path parameter**; a simple type like `int` or `str` that isn't in the path is a **query parameter** (the `?x=1` part of a URL); and a Pydantic model is the **request body**.[^body] So `account_id: int` comes from the URL, and `body: PaymentIn` comes from the JSON body.
+
+For a body, FastAPI does four things before calling your function: it reads the body as JSON, converts the types, validates the data, and "if the data is invalid, it will return a nice and clear error, indicating exactly where and what was the incorrect data".[^body] We saw this for real. A body with `"amount": -5` got 422 with `"loc":["body","amount"]` and `"msg":"Input should be greater than 0"`. A path like `/accounts/abc/balance` also got 422, with `"loc":["path","account_id"]`, because `abc` isn't an integer. And a path that matches nothing, `/nope`, got 404 with `{"detail":"Not Found"}`. In all three cases our function never ran.
+
+That's a real safety property, not just convenience. Bad input is stopped at the door, so the ledger only ever sees amounts that are whole numbers above zero.
+
+## Async endpoints and the pool
+
+Every path operation in PocketPay will be `async def`, for the reason explained on the [async page](/day-1/async-python): while one request waits for Postgres, the same thread can serve other requests. Our ledger is already async, so a path operation can `await ledger.post(...)` directly.
+
+That leaves one question from the Postgres page: who opens the pool, and who closes it? The answer is FastAPI's **lifespan**. You give FastAPI a function that runs code "once, before the application starts receiving requests", and code "once, after having handled possibly many requests", when it shuts down. FastAPI's docs name a database connection pool as a typical example.[^lifespan] The shape, from FastAPI's docs, is a function with one `yield` in the middle:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # before yield: runs once at startup
+    yield
+    # after yield: runs once at shutdown
+
+app = FastAPI(lifespan=lifespan)
+```
+
+In Block 3 you'll fill this in: open the pool before `yield`, close it after. That follows the rule from the Postgres page: whoever creates the pool closes it. Here, that's the app.
+
+The last piece is getting the shared `Ledger` into each path operation. FastAPI's answer is **dependency injection**: a path operation declares what it needs, and FastAPI provides it. FastAPI's docs list "Share database connections" as one of its main uses, and the tool is `Depends(...)`.[^deps] You'll use it in Block 3.
+
+## Try it yourself
+
+Save the test app above as `main.py` in an empty folder, then from that folder run:
+
+```bash
+uv run --no-project --with fastapi --with uvicorn uvicorn main:app --port 8000
+```
+
+`--no-project` keeps this separate from PocketPay; `uv` fetches FastAPI and Uvicorn just for this run. In another terminal:
+
+```bash
+curl -v http://127.0.0.1:8000/accounts/7/balance
+curl -v -X POST http://127.0.0.1:8000/payments \
+  -H 'Content-Type: application/json' -d '{"to":"canteen","amount":-5}'
+```
+
+Lines starting with `>` are what curl sent; lines starting with `<` are what came back. Then open http://127.0.0.1:8000/docs in a browser: FastAPI generates interactive documentation for your API automatically, and you can send requests from there too.[^first] Stop the server with Ctrl+C.
+
+## Recap
+
+- An **HTTP API** lets other programs, like Riya's app, make requests to ours over the network.
+- HTTP is **stateless**: every request carries everything needed to understand it.
+- A request is a **method**, a **path**, **headers**, a blank line and an optional **body**. A response is a **status code**, headers and a body.
+- **GET** reads; **POST** asks the server to process what's sent. POST is **not idempotent**, which is why payments need an Idempotency-Key.
+- Status codes: **2xx** worked, **4xx** the client's mistake, **5xx** the server's.
+- **Uvicorn** receives requests; **FastAPI** routes them to a function and checks the input with **Pydantic** (bad input gets 422 before our code runs); **our function** does the work.
+- The pool is opened and closed in FastAPI's **lifespan**, and shared with path operations through **dependency injection**.
+
+## Check yourself
+
+1. Riya's app sends `GET /accounts/7/balance` twice. Is that a problem? What about `POST /payments` twice?
+2. A request gets 422. Did our `create_payment` function run?
+3. Which program writes the response bytes back to Riya's app: Uvicorn or FastAPI?
+4. Why can't the server just remember Riya's Idempotency-Key from her previous request, the way a Postgres connection remembers an open transaction?
+5. Your payment code has a bug and raises an unexpected exception. Which group of status codes should the app see?
+
+<details>
+<summary>Answers</summary>
+
+1. GET twice is fine: GET is safe and idempotent, so it only reads. POST twice asks for two payments, which is the double-tap problem that Block 3 solves with an Idempotency-Key.
+2. No. FastAPI validated the body against the Pydantic model first, found it invalid, and answered 422 by itself.
+3. Uvicorn. FastAPI builds the response; Uvicorn, the web server, sends it.
+4. HTTP is stateless: each request must be understood on its own. So the key travels with every request, and the server stores keys in the database, not in a connection.
+5. 5xx (a 500). The request may have been fine; the server failed.
+
+</details>
+
+[^semantics]: IETF, RFC 9110, *HTTP Semantics*: abstract and 3.3 (stateless), 9.2.1–9.2.2 (safe and idempotent methods), 9.3 (methods), 15 (status codes). [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc9110.html)
+[^http11]: IETF, RFC 9112, *HTTP/1.1*: 2.1 (message format), 3 (request line), 3.2 (Host), 4 (status line). [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc9112.html)
+[^rfc6585]: IETF, RFC 6585, *Additional HTTP Status Codes*, section 4 (429 Too Many Requests). [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6585#section-4)
+[^json]: IETF, RFC 8259, *The JavaScript Object Notation (JSON) Data Interchange Format*. [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc8259.html)
+[^uvicorn]: Uvicorn documentation, home page. [uvicorn.dev](https://www.uvicorn.dev/)
+[^first]: FastAPI docs, *First Steps*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/tutorial/first-steps/)
+[^body]: FastAPI docs, *Request Body*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/tutorial/body/)
+[^lifespan]: FastAPI docs, *Lifespan Events*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/advanced/events/)
+[^deps]: FastAPI docs, *Dependencies*. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/tutorial/dependencies/)

@@ -1,0 +1,206 @@
+export const meta = {"title": "How a program talks to a database", "description": "What a database connection really is, what happens when you open one, why opening one is slow, and how a connection pool fixes that, with PocketPay's ledger code as the example.", "section": "Day 1: payments backend", "order": 2.3, "label": "Connecting to Postgres"};
+
+## Why this matters
+
+Every method in PocketPay's ledger starts with the same line:
+
+```python
+async with self.pool.connection() as conn:
+```
+
+If "pool" and "connection" are just words to you, the rest of the ledger code reads like a spell. This page explains the two words from the ground up: first the theory, then exactly how our code uses them. It's a good page to read before the [ledger code walkthrough](/day-1/ledger-code).
+
+You already have the right starting picture: a database is a server running on some port that stores structured data. We'll build on that one step at a time.
+
+## A database is a program you talk to
+
+Postgres isn't a file your code opens. It's a **program** that runs all the time, and other programs send it requests. The Postgres docs call this a client/server model. The **server** is a program called `postgres` that "manages the database files, accepts connections to the database from client applications, and performs database actions on behalf of the clients". A **client** is any program that wants to use the data: a command-line tool, a web server, a test suite.[^arch]
+
+So in PocketPay there are two sides. Our Python program is the client. The `postgres` program, running inside a Docker container on your laptop, is the server. Our code never touches the database files on disk. It sends the server SQL and gets answers back, and only the server reads and writes the files.
+
+That's also why the "port" part of your picture matters. A computer runs many programs that accept network requests, so each one listens at its own numbered **port**. Postgres listens on port 5432 by default.[^port] Our `docker-compose.yml` publishes that port with `ports: "5432:5432"`. Docker's docs describe publishing as setting up a forwarding rule from a port on your machine (the first number) to the port the container is listening on (the second).[^docker] That's how a program on your laptop reaches a server inside a container by asking for `localhost:5432`.
+
+<DbMap />
+
+Pick "One connection" and "A pool of 3" above, and watch the right-hand side. That's the next idea.
+
+## A connection is a conversation that stays open
+
+Before a client can send any SQL, it has to **connect**. Think of it like a phone call (that's an analogy, not how it's built): you dial once, say who you are, and then you can talk back and forth for as long as you like without dialling again. A database connection is the same. It's opened once, then carries many queries, until somebody hangs up.
+
+What makes Postgres connections interesting is what happens on the server side. The docs explain that to handle many clients at once, Postgres "starts ('forks') a new process for each connection". After that, "the client and the new server process communicate without intervention by the original postgres process".[^arch] In other words, every open connection has its own server process at the other end, working only for it. That's what the boxes on the right of the diagram above are.
+
+### What is a "server process"?
+
+Start with the word **process**. A program is a file on disk: instructions waiting to be run. A process is a program *while it is running*. The operating system gives each process its own memory and its own ID number, the **process ID** or PID. POSIX, the standard that Linux and macOS follow, defines a process as an address space (its own memory) with one or more threads running in it, plus the system resources they need, and a process ID as "the unique positive integer identifier representing a process during its lifetime".[^posix]
+
+You run processes all day. Your terminal is a process, and so is VS Code; a browser usually runs as several. Typing `uv run pytest` starts a new Python process, which ends when the tests finish. One program can also run as several processes at once: open two terminal windows running `python` and there are two Python processes, each with its own PID and its own memory. And a process can start another one; POSIX calls the new one a **child process**, created "by fork(), posix_spawn(), or posix_spawnp()".[^posix] That "fork" is the word Postgres used above.
+
+A **server process**, then, is a process on the database's side whose job is to serve one client connection. Postgres's glossary calls it a **backend**: a "process of an instance which acts on behalf of a client session and handles its requests".[^glossary] It holds your session's state, runs your SQL, takes your locks, and exits when your connection closes. It isn't a separate computer, and it isn't the whole database. It's one running copy of the `postgres` program, busy with just you.
+
+We can see these processes for real. `docker top` lists the processes running inside a container. Here's what our Postgres container showed before, during and after our program opened a pool of three connections:
+
+<ProcessList />
+
+Three kinds of process are in that list. The first line, plain `postgres`, is the main process; the glossary calls it the postmaster, "the very first process" of a running Postgres, which starts the others and "creates backend processes on demand".[^glossary] The next eight are helpers that run whether or not anyone is connected. For example, the background writer is "a separate server process" that writes changed data from memory to disk.[^bgwriter] The last three, which only exist while the pool is open, are the server processes for our three connections. Postgres's docs describe their titles as `postgres: user database host activity`, where the activity is, for example, `idle` (waiting for a client command) or `idle in transaction`.[^ps]
+
+Two words to keep apart. Postgres's own docs sometimes say "server process" for any of these processes, as in "the background writer" sentence above. On our pages, "server process" always means the one serving a single connection, a backend. And a **server** with no "process" after it usually means the machine (or container) that Postgres runs on.[^glossary]
+
+A connection is therefore also a **session**: it's the unit that Postgres keeps track of you by. Things you start on a connection belong to that connection. A transaction you open on it stays open on that connection only, and so do the row locks it takes. The protocol docs add that if a connection closes, the server "will roll back any open (incomplete) transaction before exiting".[^overview] Keep this in mind: it's why our ledger is careful to run a whole journal entry on one connection.
+
+## Telling the server where to go: the connection string
+
+To connect, the client needs an address and a login. Both are packed into one line of text called a **connection string**. Postgres's client library documents its shape as `postgresql://[userspec@][hostspec][/dbname][?paramspec]`, and accepts `postgres://` as well.[^uri] Here is the exact one PocketPay's tests use. Click its parts:
+
+<ConnString />
+
+Notice that the database name and the user are separate things. One Postgres server can hold many databases, and has its own list of users with their own passwords.
+
+## What actually happens when you connect
+
+Client and server talk in **messages** sent over the connection. The docs describe each message the same way: one byte saying what type of message it is, four bytes giving its length, then the contents.[^overview] You'll never write these by hand. That's the job of a **driver**: a library that turns your function calls into protocol messages and turns the replies back into Python values. Ours is psycopg.
+
+Opening a connection happens in a fixed order. The client opens the network connection and sends a startup message naming the user and the database it wants. The server makes the client prove who it is, and answers either with an error or with AuthenticationOk. It then sends a few settings, a key for cancelling queries, and finally **ReadyForQuery**.[^flow] Only now can SQL be sent. Each query gets its answer as messages too (for a SELECT: a description of the columns, one message per row, then CommandComplete), followed by another ReadyForQuery.[^flow] Step through the whole life of one connection:
+
+<Sequence name="connect" />
+
+ReadyForQuery carries one more useful detail: a letter that says where the session stands. `I` means idle, not in a transaction; `T` means inside a transaction; and `E` means inside a transaction that has failed, where "queries will be rejected until block is ended".[^formats] Postgres is always tracking, per connection, whether you're mid-transaction. psycopg exposes the same thing in Python, which we'll see in a moment.
+
+## Opening a connection is slow
+
+Look at how much of that sequence happened before any real work: a network connection, a startup message, a password check, a new server process starting up, settings sent back. psycopg's docs put it plainly: "the time to establish a new connection can be relatively long".[^pool]
+
+We measured it on our own laptop, with the Postgres container from `docker-compose.yml`. Opening a new connection took about **7 milliseconds** (the median of 20 tries, repeated three times: 6.2, 7.9 and 7.4 ms). Running `SELECT 1` on a connection that was already open took about **0.1 to 0.3 milliseconds**. So connecting cost roughly thirty times as much as the query itself, and that's with the server on the same machine. Your numbers will differ, but the gap is the point.
+
+There's a second cost, on the server. Each connection is a whole server process, and Postgres caps how many it allows at once with a setting called `max_connections`, which "is typically 100 connections" by default.[^maxconn] A program that opened a fresh connection for every request would be slow in calm times, and in a burst of traffic could run into that limit.
+
+## The fix: a connection pool
+
+The answer is to stop throwing connections away. A **connection pool** opens a few connections in advance, keeps them open, and lends them out. psycopg describes its pool as an object that manages a set of connections so that functions needing a connection can use them, because "keeping connections open can reduce latency".[^pool]
+
+The life of a request then looks like this. It asks the pool for a connection and gets one that's already open, with no startup and no password check. It runs its queries. When it's done, it gives the connection back, and the next request can use it straight away. If every connection is busy, the request waits in line until one is returned. Compare the two ways below, and try a pool of 1:
+
+<PoolDemo />
+
+A few details from psycopg's pool docs, because our code relies on them:
+
+- **Size.** The pool keeps between `min_size` and `max_size` connections. `min_size` defaults to 4. If `max_size` is left out, or equals `min_size`, the pool stays that size; if it's bigger, the pool can grow when it's busy.[^poolapi]
+- **Waiting has a limit.** A request waits at most `timeout` seconds (30 by default) for a free connection. After that it gets a `PoolTimeout` error: "The pool couldn't provide a connection in acceptable time."[^poolapi]
+- **Giving back is automatic.** You borrow with `async with pool.connection() as conn:`. When the block ends, the connection goes back to the pool. Any transaction still open is committed if the block finished normally, or rolled back if an exception escaped.[^pool]
+- **Broken connections are replaced.** If a connection stopped working, the pool replaces it with a new one rather than handing it out again.[^poolapi]
+
+<Callout title="Common misunderstanding" tone="caution">
+A pool doesn't make a query run faster. Once a query has started, it takes the same time whether its connection came from a pool or not. What a pool removes is the cost of *opening* connections, and what it limits is how many the program opens. A bigger pool isn't automatically better either: every pooled connection is a server process sitting in Postgres, even when idle.
+</Callout>
+
+## What the connection object gives you
+
+Once you hold a connection, psycopg gives you a small set of tools.[^usage]
+
+- `await conn.execute(sql, params)` sends one query. It's a shortcut that is "equivalent to creating a cursor, calling its execute() method, and returning it". A **cursor** is the object that holds the query's result.
+- `await cur.fetchone()` gives you the next row as a tuple, and `await cur.fetchall()` gives you all of them as a list.
+- Values never go into the SQL text. You write `%s` where each value goes and pass the values separately, which psycopg says gives "the correct conversion (no SQL injections!)".[^usage] psycopg 3 goes further and "sends the query and the parameters to the server separately".[^binding]
+- `conn.transaction()` wraps a block in a transaction: committed when the block ends, rolled back if an exception escapes.[^tx]
+
+One more behaviour matters for PocketPay, and it surprises almost everyone. By default, "any database operation will start a new transaction", even a plain SELECT, and that transaction stays open until you commit or roll back.[^tx] We saw this on our own database. We opened a pool of three connections and looked at Postgres's `pg_stat_activity` view, which has "one row per server process".[^activity] There were three server processes, all in the state `idle`, meaning "waiting for a new client command". Then we borrowed one connection and ran `SELECT 1`. psycopg reported the connection as `INTRANS`, and Postgres showed that one process as `idle in transaction`: "in a transaction, but is not currently executing a query".[^activity] After `pool.close()`, all three processes were gone.
+
+## How PocketPay's ledger uses all this
+
+Now the code reads plainly. There are three places to look.
+
+### 1. Making the pool once (db.py)
+
+```python
+async def make_pool(url: str, **kwargs) -> AsyncConnectionPool:
+    pool = AsyncConnectionPool(url, open=False, **kwargs)
+    await pool.open()
+    return pool
+```
+
+`url` is the connection string. The pool is created closed (`open=False`) and then opened with `await pool.open()`, because psycopg deprecates opening an async pool inside its constructor.[^pool] Opening is the moment the pool starts connecting, so this is where the slow part happens, once, at the start of the program. The pool is then handed to the `Ledger`, which keeps it as `self.pool`.
+
+### 2. Borrowing for each piece of work (ledger.py)
+
+Every `Ledger` method borrows a connection for as long as it needs one, and no longer:
+
+| Method | Borrows a connection for | Why that long |
+| --- | --- | --- |
+| `create_account` | one INSERT | the block ends after the insert, which commits it |
+| `balance` | two SELECTs | read the account's type, then sum its postings |
+| `reverse` | one SELECT, then hands over to `post` | read the original postings, give the connection back, then post the flipped entry |
+| `post` | the whole journal entry | locks, checks and inserts must all happen in one transaction, on one connection |
+
+The table explains itself once you remember that a transaction lives on one connection. `post()` opens its connection and its transaction together:
+
+```python
+async with self.pool.connection() as conn, conn.transaction():
+    # SELECT ... FOR UPDATE (locks), balance checks, INSERTs
+```
+
+Every lock, every check and every insert runs on that same `conn`, so they all belong to the same transaction. If any step raises an error, the transaction rolls back and nothing is saved. If `post()` borrowed a fresh connection for each statement, the locks would belong to one session and the inserts to another, and the "all or nothing" guarantee would be gone. (Why `conn.transaction()` comes before the first query, rather than after it, is the gotcha covered in the [walkthrough](/day-1/ledger-code).)
+
+`balance()` and `post()` share the helper `_balance(conn, ...)`, which takes a connection instead of borrowing its own. That lets `post()` run it inside its transaction, while it holds the locks, on the connection it already has.
+
+### 3. The tests: a single connection, and a pool of 20 (conftest.py)
+
+The test setup uses both styles. To create and later drop a private schema for each test, it opens a single plain connection with `psycopg.AsyncConnection.connect(url, autocommit=True)`. A pool would be pointless for one statement, and `autocommit=True` makes each statement take effect immediately, without the automatic transaction.[^tx] For the test itself it makes a pool with `max_size=20` and a `configure` function, which psycopg runs on every new connection the pool creates.[^pool] Ours points each connection at the test's schema.
+
+The 20 matters in the 1,000-transfer test. All 1,000 transfers start at once, but only 20 connections exist, so at most 20 transfers are inside Postgres at any moment, and the other 980 wait their turn at `async with self.pool.connection()`. That's the waiting from the pool diagram, at a larger scale. The migration runner, `python -m pocketpay.db`, does the opposite: it makes a pool of exactly one connection (`min_size=1, max_size=1`), since it runs its files one after another.
+
+From Block 3, the FastAPI app will follow the same pattern: open one pool when the app starts, let every request borrow from it, and close it when the app shuts down. That's our plan for Block 3, and we'll write it then.
+
+## See it for yourself
+
+With the Postgres container running, this shows every client connection and what it's doing:
+
+```bash
+docker compose exec postgres psql -U pocketpay -c \
+  "SELECT pid, state, application_name FROM pg_stat_activity WHERE backend_type = 'client backend'"
+```
+
+`pid` is the "process ID of this backend": the server process that belongs to that connection.[^activity] You'll see at least one row, for the `psql` you just used, since it's a client too. Run it while `uv run pytest` is going and you'll see the test pool's connections appear.
+
+## Recap
+
+- Postgres is a **server program**. Our Python code is a **client** that sends it SQL over the network, at port 5432.
+- A **connection** is a conversation that stays open. Each one has its own server process in Postgres, and it is the session that owns your transactions and locks.
+- A **connection string** says where the server is, which database, and who you are.
+- Opening a connection takes several steps: network connection, startup, password check, a new server process. On our laptop it cost about 30 times a small query.
+- A **pool** opens connections once and lends them out. Borrowing is quick, and when all are busy you wait. In psycopg, `async with pool.connection()` borrows a connection and gives it back afterwards, committing or rolling back on the way.
+- The ledger borrows one connection per method. `post()` keeps one connection for the whole entry, because a transaction can't span connections.
+
+## Check yourself
+
+1. Why can't our Python code just open the database files directly?
+2. Two requests each borrow a connection from the pool at the same moment. How many server processes are working for them in Postgres?
+3. What would go wrong if `post()` ran its `SELECT ... FOR UPDATE` on one connection and its INSERTs on another?
+4. The pool has 20 connections and 1,000 transfers start at once. What are the other 980 doing, and what happens if they wait more than 30 seconds?
+
+<details>
+<summary>Answers</summary>
+
+1. Only the `postgres` server reads and writes its files. Clients ask the server, which runs the SQL for them, so it can control who sees and changes what, and when.
+2. Two: one server process per connection, and each request holds a different connection.
+3. The locks and the inserts would be in two different transactions. The checks made while holding the locks wouldn't protect the inserts, and a failure halfway could leave some rows saved and others not.
+4. They're waiting at `async with self.pool.connection()` for a connection to be returned. Waiting longer than the timeout (30 seconds by default) raises `PoolTimeout`.
+
+</details>
+
+[^arch]: PostgreSQL 18 documentation, *1.2. Architectural Fundamentals*. [postgresql.org](https://www.postgresql.org/docs/18/tutorial-arch.html)
+[^posix]: The Open Group, *POSIX.1-2024, Base Definitions, Chapter 3*: 3.64 Child Process, 3.189 Live Process, 3.284 Process ID. [pubs.opengroup.org](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html)
+[^glossary]: PostgreSQL 18 documentation, *Appendix M. Glossary*: Backend (process), Postmaster (process), Server. [postgresql.org](https://www.postgresql.org/docs/18/glossary.html)
+[^bgwriter]: PostgreSQL 18 documentation, *19.4.4 Background Writer*. [postgresql.org](https://www.postgresql.org/docs/18/runtime-config-resource.html)
+[^ps]: PostgreSQL 18 documentation, *27.1. Standard Unix Tools* (process titles). [postgresql.org](https://www.postgresql.org/docs/18/monitoring-ps.html)
+[^port]: PostgreSQL 18 documentation, *19.3.1 Connection Settings*: `port`, "The TCP port the server listens on; 5432 by default." [postgresql.org](https://www.postgresql.org/docs/18/runtime-config-connection.html)
+[^maxconn]: PostgreSQL 18 documentation, *19.3.1 Connection Settings*: `max_connections`. [postgresql.org](https://www.postgresql.org/docs/18/runtime-config-connection.html)
+[^docker]: Docker docs, *Publishing and exposing ports* (`HOST_PORT:CONTAINER_PORT`). [docs.docker.com](https://docs.docker.com/get-started/docker-concepts/running-containers/publishing-ports/)
+[^overview]: PostgreSQL 18 documentation, *54.1. Overview* (of the frontend/backend protocol): message layout, and rolling back an open transaction when the connection closes. [postgresql.org](https://www.postgresql.org/docs/18/protocol-overview.html)
+[^flow]: PostgreSQL 18 documentation, *54.2. Message Flow*: start-up, simple query, termination. [postgresql.org](https://www.postgresql.org/docs/18/protocol-flow.html)
+[^formats]: PostgreSQL 18 documentation, *54.7. Message Formats*: ReadyForQuery and its transaction status indicator. [postgresql.org](https://www.postgresql.org/docs/18/protocol-message-formats.html)
+[^uri]: PostgreSQL 18 documentation, *32.1.1. Connection Strings* (connection URIs, `sslmode`). [postgresql.org](https://www.postgresql.org/docs/18/libpq-connect.html)
+[^activity]: PostgreSQL 18 documentation, *27.2.3. pg_stat_activity*. [postgresql.org](https://www.postgresql.org/docs/18/monitoring-stats.html)
+[^pool]: psycopg 3 docs, *Connection pools*. [psycopg.org](https://www.psycopg.org/psycopg3/docs/advanced/pool.html)
+[^poolapi]: psycopg 3 docs, *psycopg_pool API* (`min_size`, `max_size`, `timeout`, `PoolTimeout`, `connection()`). [psycopg.org](https://www.psycopg.org/psycopg3/docs/api/pool.html)
+[^usage]: psycopg 3 docs, *Basic module usage*. [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/usage.html)
+[^binding]: psycopg 3 docs, *Differences from psycopg2*, "Server-side binding". [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/from_pg2.html)
+[^tx]: psycopg 3 docs, *Transactions management* (implicit transactions, `transaction()`, autocommit). [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/transactions.html)

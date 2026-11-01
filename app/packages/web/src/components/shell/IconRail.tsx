@@ -1,4 +1,4 @@
-import { Clapperboard, Code2, ListChecks, MessagesSquare, NotebookPen, Settings, Sparkles } from 'lucide-react'
+import { BookOpenText, Clapperboard, Code2, ListChecks, MessagesSquare, NotebookPen, Settings, Sparkles } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { SECTIONS, useListVisible, type Section } from '@/state/sections'
@@ -12,6 +12,9 @@ const ICONS: Record<Section, typeof Code2> = {
   dryruns: Clapperboard,
   chats: MessagesSquare,
 }
+
+// The PocketPay notes site runs in its own container (docker-compose.yml); its port is baked in at build time.
+const notesUrl = () => `${location.protocol}//${location.hostname}:${import.meta.env.VITE_NOTES_PORT || '5200'}`
 
 const item = 'grid size-[34px] place-items-center rounded-[9px] transition-colors [&_svg]:size-[17px]'
 
@@ -78,6 +81,20 @@ export function IconRail() {
       )}
 
       <div className="flex-1" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a
+            href={notesUrl()}
+            target="_blank"
+            rel="noopener"
+            aria-label="PocketPay notes"
+            className={`${item} text-muted-foreground hover:bg-muted hover:text-foreground`}
+          >
+            <BookOpenText />
+          </a>
+        </TooltipTrigger>
+        <TooltipContent side="right">PocketPay notes (new tab)</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <button

@@ -1,0 +1,692 @@
+export const meta = {"title": "Python in an hour: a revision", "description": "A one-hour refresher on the Python you'll write in PocketPay: names and objects, strings, collections, functions, errors, and classes, with PocketPay-flavoured examples.", "section": "Start here", "order": 2, "label": "Python in an hour"};
+
+## Why this page exists
+
+From Block 3 on, you write the code. If it's been a while since you wrote Python by hand, you don't need a course. You need an hour that brings the syntax back to your fingers. This page is that hour.
+
+It covers the Python you'll actually use in PocketPay, in the order the ideas build on each other. Each section has a time budget. The examples use wallets, paise and payments, so the code will feel familiar when you see it again in `backend/`. They're illustrative examples written for this page, not code from the project. Every one of them was run on Python 3.14 (the version the backend uses) to check the results shown in the comments.
+
+**How to use it:** open a Python prompt next to this page and type the examples in. Don't paste them. Typing is the point.
+
+```bash
+cd backend
+uv run python        # a Python 3.14 prompt; exit() to leave
+```
+
+| Minutes | Section |
+|---|---|
+| 0–5 | Names and objects |
+| 5–12 | Numbers and strings |
+| 12–20 | Lists, tuples, dicts, sets |
+| 20–25 | Control flow |
+| 25–30 | Comprehensions and generators |
+| 30–38 | Functions and decorators |
+| 38–44 | Errors and `with` |
+| 44–58 | Classes and OOP |
+| 58–60 | Modules, then a final exercise |
+
+The table is a plan, not a rule. If one section is fresh in your mind, skim it and spend the time on classes, which take the longest.
+
+## 1. Names and objects (5 min)
+
+This is the one idea that explains most Python surprises, so it comes first. The language reference puts it plainly: "All data in a Python program is represented by objects", and "every object has an identity, a type and a value."[^datamodel]
+
+A variable isn't a box that holds a value. It's a **name** stuck on an object. `b = a` doesn't copy anything. It sticks a second name on the same object. Step through it:
+
+<NamesDiagram />
+
+Whether this matters depends on whether the object can change. The reference calls objects whose value can change **mutable**, and adds that "numbers, strings and tuples are immutable, while dictionaries and lists are mutable."[^datamodel] With an immutable object, sharing a name is harmless, because nothing can change it under you:
+
+```python
+x = 10
+y = x
+y += 1        # makes a new int 11 and moves the name y to it
+x             # 10, untouched
+```
+
+Two operators come out of this. `==` asks "do these have the same value?". `is` asks "are these the same object?". Use `is` only for `None` (`if x is None:`), and `==` for everything else.
+
+## 2. Numbers and strings (7 min)
+
+### Numbers
+
+```python
+7 / 2      # 3.5   "/" always gives a float
+7 // 2     # 3     floor division
+7 % 2      # 1     remainder
+-7 // 2    # -4    rounds towards minus infinity, not towards zero
+2 ** 100   # 1267650600228229401496703205376
+0.1 + 0.2  # 0.30000000000000004
+```
+
+The tutorial says division with `/` "always returns a float", while `//` does floor division.[^intro] The `//` result "is always rounded towards minus infinity", which is why `-7 // 2` is `-4`.[^stdtypes] Python integers represent "numbers in an unlimited range, subject to available (virtual) memory only",[^datamodel] so they never overflow the way fixed-size integers do in many other languages.
+
+The last line is why **PocketPay stores money as whole paise in an `int`, never as a `float`.** Most decimal fractions can't be stored exactly in binary floating point, so tiny errors creep in.[^float] With integers, `10 + 20` is always exactly `30`. Use `divmod(16050, 100)` to get `(160, 50)`: rupees and paise in one call.
+
+### Strings
+
+```python
+s = "canteen lunch"
+s[0]          # 'c'
+s[-5:]        # 'lunch'         negative indexes count from the end
+s[:7]         # 'canteen'       slice [start:stop], stop not included
+s[::-1]       # 'hcnul neetnac' a step of -1 reverses
+s.split()     # ['canteen', 'lunch']
+" | ".join(["a", "b"])           # 'a | b'
+"  hi ".strip()                  # 'hi'
+s.replace("lunch", "tea")        # 'canteen tea'
+"lunch" in s                     # True
+```
+
+Strings are immutable. The tutorial says "Python strings cannot be changed", so `s[0] = "C"` raises a `TypeError`.[^intro] Every method above returns a **new** string and leaves `s` alone.
+
+**f-strings** are how you build strings from values. Put an `f` before the quotes and expressions inside `{}`. After a colon you can add a format, and since Python 3.8 a trailing `=` prints the expression along with its value, which is handy for debugging:[^lexical]
+
+```python
+name, paise = "Riya", 16050
+f"{name} has ₹{paise / 100:,.2f}"     # 'Riya has ₹160.50'
+f"{paise // 100}.{paise % 100:02d}"   # '160.50'  (02d = at least 2 digits, pad with 0)
+f"{paise=}"                           # 'paise=16050'
+```
+
+The first line divides by 100 into a float **only for display**. The second line stays in integers the whole way, which is what PocketPay does wherever money is involved.
+
+## 3. Lists, tuples, dicts, sets (8 min)
+
+These four cover nearly all your data. Here's how to choose:
+
+| Type | Written | Changeable? | Use it for |
+|---|---|---|---|
+| list | `[1, 2, 3]` | yes | an ordered collection that grows: postings in an entry |
+| tuple | `(3, 4)` | no | a fixed group of values: a database row, a function returning two things |
+| dict | `{"riya": 16000}` | yes | looking things up by a key: balances by name, JSON |
+| set | `{1, 2, 3}` | yes | unique items, fast "is it in here?": account IDs to lock |
+
+The "Changeable?" column is mutability from section 1. Because tuples can't change, they're safe to share and can be dict keys. Lists can't be dict keys.
+
+### Lists
+
+```python
+nums = [5, 3, 8]
+nums.append(1)          # [5, 3, 8, 1]
+nums.extend([9, 2])     # [5, 3, 8, 1, 9, 2]
+nums.insert(0, 7)       # [7, 5, 3, 8, 1, 9, 2]
+nums.pop()              # returns 2, removes it
+sorted(nums)            # [1, 3, 5, 7, 8, 9]  a NEW sorted list
+nums.sort(reverse=True) # sorts nums itself, returns None
+nums[1:3]               # [8, 7]
+len(nums)               # 6
+```
+
+Watch the difference between `sorted(nums)`, which returns a new list, and `nums.sort()`, which changes `nums` and returns `None`. Writing `nums = nums.sort()` is a classic bug: `nums` becomes `None`.
+
+### Tuples and unpacking
+
+```python
+point = (3, 4)
+x, y = point             # unpacking: x = 3, y = 4
+first, *rest = [1, 2, 3, 4]   # first = 1, rest = [2, 3, 4]
+x, y = y, x              # swap, no temporary variable
+single = (5,)            # a one-item tuple needs the comma; (5) is just 5
+```
+
+You've seen unpacking in the ledger code: `(account_id,) = await cur.fetchone()` unpacks a one-item row tuple.
+
+### Dicts
+
+```python
+balances = {"riya": 160_00, "arjun": 50_00}
+balances["meera"] = 0             # add or overwrite
+balances["kabir"]                 # KeyError: no such key
+balances.get("kabir")             # None, no error
+balances.get("kabir", 0)          # 0, a default
+"riya" in balances                # True   (checks keys, not values)
+for name, paise in balances.items():
+    print(name, paise)
+del balances["meera"]
+balances | {"arjun": 60_00}       # a NEW merged dict; right side wins
+```
+
+Since Python 3.7, dicts are guaranteed to keep keys in the order you inserted them.[^dict] The underscore in `160_00` is just a digit separator. Python ignores it, so it's 16000 paise, written to read like ₹160.00.
+
+### Sets
+
+```python
+seen = {1, 2, 3}
+seen.add(2)          # still {1, 2, 3}, duplicates vanish
+{1, 2} & {2, 3}      # {2}        in both
+{1, 2} | {2, 3}      # {1, 2, 3}  in either
+{1, 2} - {2}         # {1}        in the first but not the second
+empty = set()        # not {}: {} is an empty dict
+```
+
+The ledger's `sorted({p.account_id for p in postings})` uses a set to drop duplicate account IDs before locking.
+
+### Truthiness
+
+`if x:` works on any object. The docs list what counts as false: `None` and `False`, zero of any number type, and empty collections such as `''`, `()`, `[]`, `{}`, `set()` and `range(0)`.[^truth] Everything else is true, including `[0]` and `"0"`. So `if postings:` means "if the list isn't empty".
+
+## 4. Control flow (5 min)
+
+```python
+if paise < 0:
+    status = "negative"
+elif paise == 0:
+    status = "empty"
+else:
+    status = "has money"
+
+size = "big" if amount > 100_00 else "small"     # one-line if/else
+```
+
+Loops in Python go over items directly. You rarely need an index, and when you do, `enumerate` gives you one:
+
+```python
+for i, name in enumerate(["riya", "arjun"], start=1):
+    print(f"{i}. {name}")                         # 1. riya / 2. arjun
+
+for name, paise in zip(["riya", "arjun"], [160, 50]):
+    print(name, paise)                            # pairs items up
+
+range(3)            # 0, 1, 2
+range(10, 0, -3)    # 10, 7, 4, 1
+
+count = 0
+while count < 3:
+    count += 1       # Python has no ++
+```
+
+`zip` stops quietly at the shortest input. Pass `strict=True` and it raises a `ValueError` if the inputs have different lengths, which catches bugs where you expected them to match.[^functions]
+
+`break` leaves a loop and `continue` skips to the next round. A `for` loop can also have an `else`, which runs only if the loop finished **without** a `break`:
+
+```python
+for n in [3, 7, 9]:
+    if n > 5:
+        print("found", n)
+        break
+else:
+    print("nothing above 5")
+```
+
+### match
+
+A `match` statement compares a value against patterns, and the tutorial notes it's "more similar to pattern matching in languages like Rust or Haskell" than to a C-style switch: "Only the first pattern that matches gets executed", and it can pull values out into variables.[^control] It's useful for handling events by type:
+
+```python
+def describe(event: dict) -> str:
+    match event:
+        case {"type": "topup", "amount": amount}:
+            return f"top-up of {amount}"
+        case {"type": "pay", "to": to}:
+            return f"paid {to}"       # extra keys like "amount" are fine
+        case _:
+            return "unknown"           # _ matches anything
+```
+
+## 5. Comprehensions and generators (5 min)
+
+A comprehension builds a collection in one expression. The glossary calls a list comprehension "a compact way to process all or part of the elements in a sequence and return a list with the results."[^glossary]
+
+```python
+[n * n for n in range(5)]                     # [0, 1, 4, 9, 16]
+[n for n in range(10) if n % 2 == 0]          # [0, 2, 4, 6, 8]  with a filter
+{name: p // 100 for name, p in balances.items()}   # dict comprehension
+{n % 3 for n in range(10)}                    # set comprehension: {0, 1, 2}
+sum(n * n for n in range(5))                  # 30, a generator expression
+```
+
+Read them right to left: "for each `n` in `range(10)`, if it's even, keep `n`". If one gets hard to read, switch to a normal loop.
+
+The last line has no brackets. That makes it a **generator expression**: it produces values one at a time as `sum` asks for them, instead of building a whole list first. A function with `yield` in it does the same thing:
+
+```python
+def countdown(n):
+    while n > 0:
+        yield n        # hand out one value, pause here until asked again
+        n -= 1
+
+gen = countdown(3)
+next(gen)      # 3
+list(gen)      # [2, 1]  the rest
+list(gen)      # []      a generator can only be used once
+```
+
+A few built-ins that pair well with these:
+
+```python
+any(x > 2 for x in [1, 3])          # True if at least one is
+all(x > 0 for x in [1, 3])          # True if every one is
+min(["riya", "al"], key=len)        # 'al'  compare by length
+sorted(rows, key=lambda r: r[1], reverse=True)   # sort tuples by 2nd item
+```
+
+## 6. Functions and decorators (8 min)
+
+```python
+def transfer(from_id: int, to_id: int, amount: int, note: str = "") -> str:
+    return f"{from_id}->{to_id} {amount} {note}".strip()
+
+transfer(1, 2, 500)                           # positional
+transfer(1, 2, amount=500, note="lunch")      # keyword: clearer for numbers
+```
+
+The `: int` and `-> str` parts are **type hints**. They help your editor, ruff and readers, but the docs are explicit: "The Python runtime does not enforce function and variable type annotations."[^typing] `transfer("a", "b", "c")` runs without complaint. That's exactly why we use Pydantic: it **does** check types at runtime, which a payments API needs.
+
+### Flexible arguments
+
+```python
+def total(*amounts, **tags):
+    return sum(amounts), tags
+
+total(1, 2, 3, note="x")      # (6, {'note': 'x'})
+```
+
+`*amounts` collects extra positional arguments into a tuple, and `**tags` collects extra keyword arguments into a dict. At a call site the stars work the other way round and spread a list or dict out into arguments: `transfer(*[1, 2, 500])`, `transfer(1, 2, **{"amount": 500})`.
+
+A bare `*` in the parameters makes everything after it **keyword-only**.[^control] Use it for arguments that are easy to mix up:
+
+```python
+def pay(amount: int, *, idempotency_key: str): ...
+
+pay(500, idempotency_key="k1")   # fine
+pay(500, "k1")                   # TypeError: must be named
+```
+
+### The mutable default trap
+
+The tutorial flags this as an "Important warning": "The default value is evaluated only once."[^control] So a list default is shared by every call:
+
+```python
+def bad_append(item, items=[]):
+    items.append(item)
+    return items
+
+bad_append(1)    # [1]
+bad_append(2)    # [1, 2]   the same list as last time!
+
+def good_append(item, items=None):
+    if items is None:
+        items = []          # a fresh list on every call
+    items.append(item)
+    return items
+```
+
+This is section 1 again: one list object, created once, with a name pointing at it from every call.
+
+### Functions are objects too
+
+You can pass a function around like any value, write a small one inline with `lambda`, and define one inside another. An inner function remembers the variables around it (a **closure**), and `nonlocal` lets it change them:
+
+```python
+def apply(fn, value):
+    return fn(value)
+
+apply(str.upper, "hi")          # 'HI'
+apply(lambda v: v * 2, 4)       # 8
+
+def make_counter():
+    count = 0
+    def increment():
+        nonlocal count
+        count += 1
+        return count
+    return increment
+```
+
+### Decorators
+
+The glossary defines a decorator as "a function returning another function, usually applied as a function transformation using the `@wrapper` syntax."[^glossary] `@logged` above a function is shorthand for `fn = logged(fn)`:
+
+```python
+import functools
+
+def logged(fn):
+    @functools.wraps(fn)              # keep fn's name and docstring
+    def wrapper(*args, **kwargs):
+        print(f"calling {fn.__name__}")
+        return fn(*args, **kwargs)    # call the original
+    return wrapper
+
+@logged
+def balance_of(account_id):
+    return 100
+
+balance_of(7)      # prints "calling balance_of", returns 100
+```
+
+You'll mostly *use* decorators rather than write them. In this codebase you've seen `@property`, `@pytest.fixture` and `@dataclass`, and in Block 3 you'll write `@app.post("/payments")` in FastAPI.
+
+## 7. Errors and `with` (6 min)
+
+```python
+class LedgerError(Exception):
+    pass
+
+class InsufficientFunds(LedgerError):
+    pass
+
+try:
+    ledger_post(...)
+except InsufficientFunds:
+    ...                      # one specific problem
+except LedgerError as e:
+    print(f"refused: {e}")   # any other ledger problem
+else:
+    ...                      # runs only if nothing was raised
+finally:
+    ...                      # runs no matter what
+```
+
+Order the `except` blocks from most specific to most general, because the first match wins. The tutorial explains the other two clauses. `else` is for code that should run only when the `try` succeeded, and it's better than putting more code in the `try`, "because it avoids accidentally catching an exception that wasn't raised by the code being protected". `finally` "runs whether or not the `try` statement produces an exception", which makes it the place for cleanup.[^errors]
+
+Custom exceptions "should typically be derived from the `Exception` class".[^errors] This is exactly how `ledger.py` is built: each problem is a class, and they all share `LedgerError`.
+
+When you catch one error and raise another, use `raise ... from` to keep the original attached. The tutorial calls this useful "when you are transforming exceptions":[^errors]
+
+```python
+def parse_amount(text: str) -> int:
+    try:
+        return int(text)
+    except ValueError as e:
+        raise LedgerError(f"bad amount: {text!r}") from e
+```
+
+Python's style here is what the glossary calls **EAFP**, "easier to ask for forgiveness than permission": assume the key or attribute exists, and catch the exception if it doesn't.[^glossary]
+
+### with
+
+A `with` block uses a **context manager**: an object that sets something up at the start of the block and cleans it up at the end, even if an exception escapes.[^glossary] You've used several already:
+
+```python
+with open("notes.txt", "w") as f:
+    f.write("hello")
+# the file is closed here, even if write() failed
+
+async with pool.connection() as conn, conn.transaction():
+    ...   # the async version: give the connection back, COMMIT or ROLLBACK
+```
+
+## 8. Classes and OOP (14 min)
+
+This is the biggest section, so here's one class built up step by step, then one that inherits from it.
+
+```python
+class Wallet:
+    currency = "INR"                          # class attribute: shared by all wallets
+
+    def __init__(self, owner: str, balance: int = 0):
+        self.owner = owner                    # instance attributes: one per wallet
+        self._balance = balance
+
+    @property
+    def balance(self) -> int:
+        return self._balance                  # read-only from outside
+
+    def deposit(self, amount: int) -> None:
+        if amount <= 0:
+            raise ValueError("amount must be positive")
+        self._balance += amount
+
+    @classmethod
+    def from_rupees(cls, owner: str, rupees: int) -> "Wallet":
+        return cls(owner, rupees * 100)       # another way to build a Wallet
+
+    @staticmethod
+    def to_rupees(paise: int) -> str:
+        return f"₹{paise // 100}.{paise % 100:02d}"
+
+    def __repr__(self) -> str:
+        return f"Wallet(owner={self.owner!r}, balance={self._balance})"
+```
+
+```python
+w = Wallet("Riya")
+w.deposit(500)
+w.balance                        # 500
+w.balance = 0                    # AttributeError: a property without a setter is read-only
+Wallet.from_rupees("Arjun", 50)  # Wallet(owner='Arjun', balance=5000)
+Wallet.to_rupees(16050)          # '₹160.50'
+```
+
+Here is each piece in turn.
+
+**`__init__` and `self`.** `Wallet("Riya")` creates an empty object and calls `__init__` on it to fill it in. `self` is that object. There's nothing magic about it. The tutorial explains that `x.f()` "is exactly equivalent to `MyClass.f(x)`":[^classes] Python passes the object in as the first argument. So `w.deposit(500)` is really `Wallet.deposit(w, 500)`.
+
+**Class vs instance attributes.** In the tutorial's words, "instance variables are for data unique to each instance and class variables are for attributes and methods shared by all instances of the class."[^classes] `self.owner` belongs to one wallet, while `currency` is shared by every wallet. A mutable class attribute is the mutable-default trap again: `items = []` at class level is one list that every instance shares. Set mutable things in `__init__`.
+
+**The underscore.** `_balance` isn't truly private. The tutorial says private variables "don't exist in Python". Instead, a leading underscore is a convention meaning "a non-public part of the API", which other code shouldn't touch.[^classes] The `balance` property gives outside code a read-only view of it.
+
+**The three kinds of method:**
+
+| Kind | First argument | Use it for | Example |
+|---|---|---|---|
+| normal method | `self`, the object | anything that reads or changes one object | `w.deposit(500)` |
+| `@classmethod` | `cls`, the class | other ways to build an object | `Wallet.from_rupees("Arjun", 50)` |
+| `@staticmethod` | none | a helper that belongs with the class but needs neither | `Wallet.to_rupees(16050)` |
+
+A `@classmethod` takes `cls` rather than writing `Wallet` by hand, so a subclass calling it gets an object of the subclass.
+
+**Dunder methods.** Methods named `__like_this__` ("double underscore") hook your class into Python's syntax. `__repr__` controls how the object prints. The reference says it should ideally "look like a valid Python expression that could be used to recreate an object with the same value."[^datamodel] Others make operators work:
+
+```python
+class Money:
+    def __init__(self, paise: int):
+        self.paise = paise
+    def __eq__(self, other):              # Money(5) == Money(5)
+        return isinstance(other, Money) and self.paise == other.paise
+    def __add__(self, other):             # Money(5) + Money(7)
+        return Money(self.paise + other.paise)
+    def __lt__(self, other):              # Money(1) < Money(2), and sorted() works
+        return self.paise < other.paise
+```
+
+One catch: "A class that overrides `__eq__()` and does not define `__hash__()` will have its `__hash__()` implicitly set to `None`."[^datamodel-hash] So a `Money` can't go in a set or be a dict key. The dataclasses below handle this for you.
+
+### Inheritance and super()
+
+```python
+class TeenWallet(Wallet):                 # a TeenWallet is a Wallet, plus a limit
+    def __init__(self, owner, balance=0, daily_limit=500_00):
+        super().__init__(owner, balance)  # let Wallet set up its part
+        self.daily_limit = daily_limit
+
+    def deposit(self, amount):            # override Wallet.deposit
+        if amount > self.daily_limit:
+            raise ValueError("over the daily limit")
+        super().deposit(amount)           # then do the normal deposit
+
+t = TeenWallet("Riya")
+isinstance(t, Wallet)                     # True
+```
+
+When you write `t.something`, Python looks on the object first, then its class. The tutorial explains that "if a requested attribute is not found in the class, the search proceeds to look in the base class", recursively up the chain.[^classes] That one rule explains both inheritance and overriding. Try a few lookups:
+
+<AttributeLookup />
+
+`super()` returns a stand-in that "delegates method calls to a parent or sibling class",[^functions] so `super().deposit(amount)` skips `TeenWallet`'s own `deposit` and runs `Wallet`'s. `TeenWallet.__mro__` shows the exact search order: `TeenWallet`, `Wallet`, `object`.
+
+### Interfaces: ABC and Protocol
+
+Sometimes you want to say "anything used here must have a `charge` method". Python gives you two ways.
+
+An **abstract base class** is the strict way. A class built on `ABC` "cannot be instantiated unless all of its abstract methods and properties are overridden".[^abc] Every payment method must inherit from it:
+
+```python
+from abc import ABC, abstractmethod
+
+class PaymentMethod(ABC):
+    @abstractmethod
+    def charge(self, amount: int) -> str: ...
+
+class UPI(PaymentMethod):
+    def charge(self, amount):
+        return f"UPI collect for {amount}"
+
+PaymentMethod()      # TypeError: can't instantiate an abstract class
+```
+
+A **Protocol** is the relaxed way. Python's natural style is duck typing: "If it looks like a duck and quacks like a duck, it must be a duck."[^glossary] A `Protocol` writes that down for type checkers, which call it "static duck-typing":[^typing] any class with the right method fits, with no base class needed.
+
+```python
+from typing import Protocol
+
+class Chargeable(Protocol):
+    def charge(self, amount: int) -> str: ...
+
+class Card:                       # doesn't inherit from anything
+    def charge(self, amount):
+        return f"card charge {amount}"
+
+def checkout(method: Chargeable, amount: int) -> str:
+    return method.charge(amount)  # Card() and UPI() both work
+```
+
+### Dataclasses and enums: less typing
+
+For classes that mostly hold data, writing `__init__`, `__repr__` and `__eq__` by hand is tedious. The `dataclasses` module adds "generated special methods such as `__init__()` and `__repr__()`" for you.[^dataclasses] With `frozen=True`, assigning to a field raises an exception, so the object is read-only.[^dataclasses] A frozen dataclass can also go in a set.
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass(frozen=True)
+class Posting:
+    account_id: int
+    direction: str
+    amount: int
+
+p = Posting(7, "debit", 500)
+p                             # Posting(account_id=7, direction='debit', amount=500)
+p == Posting(7, "debit", 500) # True: compares the fields
+p.amount = 1                  # FrozenInstanceError
+
+@dataclass
+class Entry:
+    description: str
+    postings: list[Posting] = field(default_factory=list)   # a NEW list per Entry
+```
+
+You can't write `postings: list = []`. The dataclass decorator raises a `ValueError` for that, for exactly the mutable-default reason; `default_factory` is the fix.[^dataclasses] PocketPay's `ledger.py` uses a frozen dataclass for `_Account`.
+
+Pydantic's `BaseModel`, which `Posting` uses in the real code, looks like a dataclass but also **checks and converts** the values at runtime. That's why it's used for anything that comes from outside, such as API requests.
+
+An **enum** is a fixed set of named values. A `StrEnum` member is also a real string, which is why `ledger.py` uses one for directions:[^enum]
+
+```python
+from enum import StrEnum
+
+class Direction(StrEnum):
+    DEBIT = "debit"
+    CREDIT = "credit"
+
+Direction.DEBIT == "debit"              # True
+Direction("credit") is Direction.CREDIT # True: look one up by value
+```
+
+## 9. Modules (1 min)
+
+Every `.py` file is a **module**, and a folder of them is a **package**. `pocketpay/ledger.py` is imported as `pocketpay.ledger`:
+
+```python
+import asyncio                          # the whole module: asyncio.gather(...)
+from pocketpay.ledger import Ledger, Posting   # specific names
+from collections import Counter, defaultdict
+```
+
+A file meant to be run as a script ends with the check that `db.py` uses. The block runs only when the file is run directly (`python -m pocketpay.db`), not when it's imported:[^main]
+
+```python
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+For `async def`, `await` and `asyncio.gather`, see [Async Python, from scratch](/day-1/async-python).
+
+## Final exercise (the last few minutes)
+
+Write this without looking anything up, then check it against the answer. It's an illustrative exercise, not PocketPay code.
+
+Write a frozen dataclass `Transfer` with `from_id`, `to_id` and `amount` (all `int`). Then write a function `net(transfers: list[Transfer]) -> dict[int, int]` that returns each account's net change: money in counts as positive and money out as negative. Raise `ValueError` if any amount isn't positive. `net([Transfer(1, 2, 500), Transfer(2, 3, 200)])` should return `{1: -500, 2: 300, 3: 200}`.
+
+<details>
+<summary>One possible answer</summary>
+
+```python
+from collections import defaultdict
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Transfer:
+    from_id: int
+    to_id: int
+    amount: int
+
+def net(transfers: list[Transfer]) -> dict[int, int]:
+    changes: defaultdict[int, int] = defaultdict(int)   # missing keys start at 0
+    for t in transfers:
+        if t.amount <= 0:
+            raise ValueError(f"amount must be positive, got {t.amount}")
+        changes[t.from_id] -= t.amount
+        changes[t.to_id] += t.amount
+    return dict(changes)
+```
+
+If you used `changes.get(t.from_id, 0) - t.amount` with a plain dict instead of `defaultdict`, that's fine too. Notice that the values always add up to zero: that's double-entry from the ledger page, in eight lines.
+</details>
+
+## Check yourself
+
+<details>
+<summary>After a = [1, 2]; b = a; b.append(3), what is a, and why?</summary>
+
+`[1, 2, 3]`. `b = a` doesn't copy. Both names point at the same list object, so changing it through `b` is visible through `a`. Use `a.copy()` or `list(a)` for a real copy.
+</details>
+
+<details>
+<summary>Why does PocketPay store ₹160.50 as 16050 and not 160.5?</summary>
+
+Floats can't represent most decimal fractions exactly (`0.1 + 0.2` is `0.30000000000000004`). Integers are exact and never overflow in Python, so whole paise in an `int` keeps every sum exact.
+</details>
+
+<details>
+<summary>What's wrong with def add(item, items=[]):?</summary>
+
+The default list is created once, when the function is defined, and shared by every call that doesn't pass `items`. Use `items=None` and create a new list inside the function.
+</details>
+
+<details>
+<summary>w.deposit(500) is the same as which other call?</summary>
+
+`Wallet.deposit(w, 500)`. Python passes the object as the first argument, `self`.
+</details>
+
+<details>
+<summary>A TeenWallet overrides deposit. How does it still run Wallet's deposit?</summary>
+
+By calling `super().deposit(amount)`, which skips its own class and continues the lookup in the parent class.
+</details>
+
+<details>
+<summary>Type hints say amount: int. Does Python stop you passing a string?</summary>
+
+No. The runtime doesn't enforce hints; they're for editors and type checkers. Pydantic is what checks values at runtime in PocketPay.
+</details>
+
+[^datamodel]: Python docs, *Data model*, 3.1 "Objects, values and types", 3.2 "The standard type hierarchy" (integers) and 3.3.1 "Basic customization" (`__repr__`). [docs.python.org](https://docs.python.org/3/reference/datamodel.html)
+[^datamodel-hash]: Python docs, *Data model*, `object.__hash__`. [docs.python.org](https://docs.python.org/3/reference/datamodel.html#object.__hash__)
+[^intro]: Python tutorial, *An Informal Introduction to Python* (numbers, division, strings are immutable). [docs.python.org](https://docs.python.org/3/tutorial/introduction.html)
+[^stdtypes]: Python docs, *Built-in Types*, "Numeric Types" (floor division rounds towards minus infinity). [docs.python.org](https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex)
+[^float]: Python tutorial, *Floating-Point Arithmetic: Issues and Limitations*. [docs.python.org](https://docs.python.org/3/tutorial/floatingpoint.html)
+[^lexical]: Python docs, *Lexical analysis*, f-strings ("Changed in version 3.8: Added the debug specifier (`=`)"). [docs.python.org](https://docs.python.org/3/reference/lexical_analysis.html#f-strings)
+[^dict]: Python docs, *Built-in Types*, "Mapping Types — dict": "Changed in version 3.7: Dictionary order is guaranteed to be insertion order." [docs.python.org](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)
+[^truth]: Python docs, *Built-in Types*, "Truth Value Testing". [docs.python.org](https://docs.python.org/3/library/stdtypes.html#truth-value-testing)
+[^functions]: Python docs, *Built-in Functions* (`zip` with `strict=True`, `super`). [docs.python.org](https://docs.python.org/3/library/functions.html)
+[^control]: Python tutorial, *More Control Flow Tools* (`match`, default values, special parameters). [docs.python.org](https://docs.python.org/3/tutorial/controlflow.html)
+[^glossary]: Python docs, *Glossary* (list comprehension, decorator, EAFP, context manager, duck-typing). [docs.python.org](https://docs.python.org/3/glossary.html)
+[^typing]: Python docs, *typing*: "The Python runtime does not enforce function and variable type annotations", and protocols as "static duck-typing". [docs.python.org](https://docs.python.org/3/library/typing.html)
+[^errors]: Python tutorial, *Errors and Exceptions* (`else`, `finally`, exception chaining, user-defined exceptions). [docs.python.org](https://docs.python.org/3/tutorial/errors.html)
+[^classes]: Python tutorial, *Classes* (method objects, class and instance variables, inheritance, private variables). [docs.python.org](https://docs.python.org/3/tutorial/classes.html)
+[^abc]: Python docs, *abc*, `abstractmethod`. [docs.python.org](https://docs.python.org/3/library/abc.html)
+[^dataclasses]: Python docs, *dataclasses* (generated methods, `frozen`, mutable default values and `default_factory`). [docs.python.org](https://docs.python.org/3/library/dataclasses.html)
+[^enum]: Python docs, *enum*, `StrEnum`. [docs.python.org](https://docs.python.org/3/library/enum.html#enum.StrEnum)
+[^main]: Python docs, *`__main__` — Top-level code environment*. [docs.python.org](https://docs.python.org/3/library/__main__.html)

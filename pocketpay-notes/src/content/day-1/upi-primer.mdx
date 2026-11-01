@@ -1,0 +1,245 @@
+export const meta = {"title": "How a UPI payment works", "description": "Block 1. What happens between scanning a QR code at the school canteen and the canteen getting paid.", "section": "Day 1: payments backend", "order": 1, "label": "1. UPI primer"};
+
+<Callout title="Where these facts come from">
+	The UPI flow on this page follows NPCI's own documents, mainly the **UPI Procedural Guidelines, version 1.5 (July 2016)** and NPCI's **Roles and Responsibilities** document. NPCI doesn't publish its current guidelines openly, so some details (for example, message names) may have changed since 2016. Each fact links to its source, and the full list is at the [bottom of the page](#sources). Anything marked **PocketPay design** is our project's choice, not how UPI works.
+</Callout>
+
+## Why a payments app needs this
+
+PocketPay's first real feature is this: a teen scans the canteen's QR code and pays ₹40. Everything we build this weekend exists because of something that can go wrong in that one flow:
+
+- The reply gets lost, and the app doesn't know if the money moved. That's why we need **[idempotency](/day-1/key-ideas#idempotency)** (Block 3).
+- Confirmations arrive late, or more than once. That's why we need **callbacks and events** (Block 4).
+- Money left your bank but the canteen never got it. That's why we need **refunds and reconciliation** (Block 5).
+- Every rupee has to be traced from one account to another. That's why we need a **ledger** (Block 2).
+
+So before writing code, we need a clear picture of who is involved and what messages they send.
+
+<Callout title="New words on this page?">
+	Idempotency, money in flight, reversal and reconciliation are explained from scratch in [1b. Three key ideas](/day-1/key-ideas). Read it alongside this page.
+</Callout>
+
+## The cast
+
+A UPI payment can involve six parties, even though you only see one app. NPCI's guidelines define the payer PSP, payee PSP, remitter bank and beneficiary bank as separate roles ([Procedural Guidelines, glossary](#sources)).
+
+| Who | What they do | In our story |
+|---|---|---|
+| **The app** (a Third Party Application Provider, or TPAP) | Shows the screens, reads the QR, sends your request. A TPAP "participates in UPI through PSP Bank" ([Roles](#sources)). | PocketPay |
+| **Payer PSP** (payment service provider) | "The entity on whose interface PIN/Biometric authorization credentials will be captured" ([Guidelines](#sources)). In UPI, a PSP must be a bank: "the term PSP shall mean 'banks only'". | Your app's PSP bank |
+| **NPCI** | "Owns and operates the Unified Payments Interface (UPI) platform", sets the rules, and routes, processes and settles transactions ([Roles](#sources)). | The switch in the middle |
+| **Payee PSP** | "The entity who will provide the Account details against a virtual address credit request" ([Guidelines](#sources)). | The PSP that owns `@pocket` |
+| **Remitter bank** | "The entity that will process the debit request". It's the payer's bank, and it checks the PIN. | Your bank |
+| **Beneficiary bank** | "The entity that will process the credit request". It's the payee's bank. | The canteen's bank |
+
+These roles can be the same company. When you pay from your own bank's app, your bank is both the payer PSP and the remitter bank. NPCI's guidelines describe separate flows for each combination ("two party", "three party" and "four party" models). The diagram below uses the **four-party** case, where every role is a different bank, because it shows every message.
+
+### UPI IDs
+
+A **UPI ID** (NPCI calls it a *virtual address*) has the format `username@psp`. NPCI gives each PSP its handle (the part after `@`) when the PSP joins, and the PSP keeps its own list mapping each UPI ID to a real bank account. That's why, when someone pays `canteen@pocket`, NPCI asks the PSP that owns `@pocket` to "resolve" it ([Guidelines, "Addresses Allowed"](#sources)).
+
+### Why does the app need a PSP at all?
+
+In a payment from your bank account, the money moves from the remitter bank to the beneficiary bank, as the diagram shows. The PSP doesn't hold it. But the PSP isn't just a messenger. According to NPCI's documents, it does these jobs:
+
+| Job | What NPCI's documents say |
+|---|---|
+| **Being a UPI member** | A PSP must be "a regulated entity by RBI under Banking Regulations Act 1949" and "authorized by RBI for providing mobile banking service" ([Guidelines](#sources)). A TPAP joins only through a PSP bank ([Roles](#sources)). |
+| **Issuing and resolving UPI IDs** | The PSP issues UPI IDs in the `username@psp` format, with the handle allotted by NPCI, and resolves them to accounts ([Guidelines](#sources)). |
+| **Onboarding customers** | The PSP "on-boards and registers the end-user customers on UPI and links their bank accounts to their respective UPI ID", and is responsible for authenticating the customer at registration ([Roles](#sources)). At registration the PSP sends an SMS and binds the mobile number to the device ([Guidelines](#sources)). |
+| **Securing the TPAP** | The PSP must make sure the TPAP's app and systems are secure and audited ([Roles](#sources)). |
+| **Complaints** | The PSP must run a grievance redressal mechanism ([Roles](#sources)). Its app must let customers check a transaction's status and raise a dispute ([Guidelines](#sources)). |
+
+So the PSP carries the responsibility, and the banks move the money.
+
+<Callout title="A real example: Paytm in 2024">
+	On 31 January 2024, RBI directed that after 29 February 2024 Paytm Payments Bank could take no further deposits or top-ups and could no longer offer UPI or fund transfers ([RBI press release](#sources)). On 14 March 2024, NPCI approved Paytm's parent company, One97 Communications, to take part in UPI as a TPAP, with Axis Bank, HDFC Bank, State Bank of India and YES Bank as its PSP banks ([NPCI press release](#sources)). Users' `@paytm` IDs were then moved to new handles: `@ptaxis`, `@pthdfc`, `@ptsbi` and `@ptyes` ([Business Today](#sources)). The app itself was fine, but it needed PSP banks behind it to keep offering UPI.
+</Callout>
+
+## What's inside the QR code
+
+A UPI QR code holds a link in the format NPCI defines in its **UPI Linking Specifications** ([v1.6 draft, Nov 2017](#sources)):
+
+```text
+upi://pay?pa=canteen@pocket&pn=School%20Canteen&am=40.00&cu=INR&tr=ORDER1023&tn=Lunch
+```
+
+| Field | Meaning (from the spec) | Static QR | Dynamic QR |
+|---|---|---|---|
+| `pa` | Payee's UPI ID | Mandatory | Mandatory |
+| `pn` | Payee name | Mandatory | Mandatory |
+| `am` | Amount. "If 'am' is not present then field is editable" | Optional | Mandatory |
+| `cu` | Currency. "Currently ONLY 'INR' is the supported value" | Optional | Optional |
+| `tr` | Transaction reference, such as an order or bill number. Mandatory "for Merchant transactions and dynamic URL generation" | Optional | Conditional |
+| `tn` | Transaction note | Optional | Optional |
+
+The spec defines more fields than this table shows, including `mc` (merchant code), `tid`, `url`, `mode`, `sign` and `orgid`. The v1.6 draft marks `mode`, `sign` and `orgid` as mandatory, so real QR codes often carry more fields than our example.
+
+A **static QR** is printed once. The spec's example is "a real small one person shop" that prints a QR "containing the payee address and name", and the customer types in the amount. A **dynamic QR** is generated per bill by the shop's billing software and carries the amount and a bill reference.
+
+## The payment, step by step
+
+This is NPCI's **four-party pay flow**, where the payer PSP, payee PSP, remitter bank and beneficiary bank are all different ([Guidelines, "Transactions with Virtual Address"](#sources)), applied to our ₹40 lunch. Click **Next step** to walk through it. Solid arrows are requests and dashed arrows are replies.
+
+<UpiFlow />
+
+Where the steps come from:
+
+- **Steps 1 and 2:** reading the QR is from the Linking Specification. The PIN is "always entered by the customer on the NPCI Library", is encrypted "using the Public key at the UPI", and the issuing bank "decrypts at its end using its Private key" ([Guidelines, "Perceived Risks & Mitigation"](#sources)).
+- **Steps 3 to 13:** NPCI's four-party push flow, plus the TPAP-to-PSP hop from the Roles document. The `ReqPay`, `ReqAuthDetails` and `RespAuthDetails` message names are the ones NPCI's guidelines use.
+- **Step 14:** NPCI settles each bank's net position to its settlement account at the RBI ([Guidelines, Annexure I](#sources)). As of September 2025, UPI ran **10 settlement cycles a day** ([Business Today](#sources)).
+
+When roles are combined, the order changes. In NPCI's three-party flow where your bank is also your PSP, your bank debits you *first* and then sends the request to UPI ([Guidelines](#sources)).
+
+### The three ideas to remember
+
+1. **In a bank-account payment, the app and the PSPs don't hold your money.** Only the remitter bank (debit) and the beneficiary bank (credit) change balances.
+2. **The debit and the credit are separate steps.** Your bank debits you at step 7 and the canteen's bank credits them at step 9. If something breaks in between, the money is ["in flight"](/day-1/key-ideas#money-in-flight) and has to be put back with a **[reversal](/day-1/key-ideas#reversal)**.
+3. **Success isn't settlement.** Balances change during the payment. The banks pay each other later, in netted settlement cycles. NPCI's guidelines say members "must perform reconciliation" and verify NPCI's daily settlement reports against their own data ([Guidelines](#sources)). ([Why is that the company's job too?](/day-1/key-ideas#reconciliation-why-its-the-companys-problem-too))
+
+## When things go wrong
+
+| What happens | What the rules say | Source |
+|---|---|---|
+| Wrong PIN or low balance | Your bank declines at step 8. Nothing moves. | Guidelines: the remitter bank "will process the debit request", and the PIN is the issuer bank's "authorization credentials" for the debit |
+| Debit done, credit fails, **paying a person** | Auto-reversal "latest on T + 1 day". ₹100 per day compensation if later. | [RBI, 20 Sept 2019](#sources), row 4a |
+| Debit done, merchant didn't get confirmation, **paying a merchant** (our canteen) | Auto-reversal "within T + 5 days". ₹100 per day compensation if later. | [RBI, 20 Sept 2019](#sources), row 4b |
+| NPCI gets no reply in time (a timeout) | Treated as declined. The reversal "will be generated by Beneficiary bank and/or NPCI as applicable". | [Guidelines, Dispute Management](#sources) |
+
+In the RBI rules, "T is the day of transaction and refers to the calendar date".
+
+<Callout tone="caution" title="Our app may not know the result yet">
+	If PocketPay doesn't receive a final answer, it must not treat the payment as failed and let the user pay again. UPI apps are required to offer "Check Transaction Status" ([Guidelines](#sources)), so the safe move is to check the status and wait for the final result. Blocks 3 to 5 build this.
+</Callout>
+
+## Pay and collect
+
+UPI has two kinds of request ([Guidelines](#sources)):
+
+- **Pay (push):** the payer starts the payment and pushes money, as in our canteen example.
+- **Collect (pull):** the payee sends a request and the payer approves it with their PIN.
+
+In a circular dated 29 July 2025, NPCI said that "By October 1, 2025, UPI P2P Collect shall not be allowed to be processed in UPI", to curb fraud. Merchants can still send collect requests ([Business Today, Aug 2025](#sources)). PocketPay builds only pay.
+
+## Wallet vs bank account
+
+Some payment apps also offer a **prepaid wallet**, which RBI calls a Prepaid Payment Instrument (PPI). Wallet money works differently from a UPI payment from a bank account:
+
+- The user has already moved money into the wallet.
+- A non-bank wallet issuer must keep that money in an **escrow account** with a scheduled commercial bank. At the end of each day, the escrow balance must not be lower than "the value of outstanding PPIs and payments due to merchants", and the issuer must monitor this daily ([RBI PPI Master Direction, para 12.3](#sources)).
+- Paying from the wallet means the issuer's own **ledger** moves value from your wallet to the merchant. That's why the wallet company's backend has to be right to the paisa.
+
+**PocketPay design:** PocketPay is wallet-first. Our ledger holds balances, and a **mock partner bank** stands in for NPCI and the banks. It confirms payments asynchronously and sometimes misbehaves on purpose (late or duplicate confirmations), so we can practise handling failures. Duplicate confirmations are a test scenario we choose, not a documented UPI behaviour.
+
+## How PocketPay will do it
+
+**PocketPay design.** There's no code yet. This is the plan the next blocks build.
+
+| Real world | PocketPay | Block |
+|---|---|---|
+| Your account and the canteen's account | Rows in an `accounts` table, with every movement recorded as ledger postings | 2 |
+| The pay request from app to PSP | `POST /payments` with an `Idempotency-Key` header | 3 |
+| The payment's life: created, pending, success, failed | A payment state machine | 3 |
+| Confirmations arriving later | A mock bank that calls our webhook (late, twice, or out of order) | 4 |
+| Reversals and refunds | Reversal and refund ledger entries, never edits | 5 |
+| Settlement and the bank's statement | A nightly `reconcile` job against a CSV statement | 5 |
+
+## Try it yourself
+
+**1. Read a real QR.** Point your phone's camera or Google Lens at any shop's UPI QR, and copy the text instead of paying. Find `pa` and `pn`. Is there an `am`? If not, it's static.
+
+**2. Parse it in Python.** This runs with only the standard library:
+
+```python
+from decimal import Decimal
+from urllib.parse import urlparse, parse_qs
+
+qr_text = "upi://pay?pa=canteen@pocket&pn=School%20Canteen&am=40.00&cu=INR&tr=ORDER1023&tn=Lunch"
+
+url = urlparse(qr_text)
+fields = {key: values[0] for key, values in parse_qs(url.query).items()}
+
+print(url.scheme, url.netloc)  # upi pay
+print(fields)  # {'pa': 'canteen@pocket', 'pn': 'School Canteen', 'am': '40.00', ...}
+
+# Money is always integer paise inside PocketPay. Never float("40.00").
+amount_paise = int(Decimal(fields["am"]) * 100)
+print(amount_paise)  # 4000
+```
+
+The QR gives the amount as text in rupees. We turn it into **4000 paise** using `Decimal`, not `float`. Python's documentation explains that "most decimal fractions cannot be represented exactly as binary fractions", and shows that `0.1 + 0.1 + 0.1 == 0.3` is `False` ([Python docs](#sources)).
+
+**3. Checkpoint.** Close this page and explain a QR payment out loud in 2 minutes. Name all six roles, say where the money actually moves, say what the payee PSP does, and say what happens if the credit fails.
+
+## Common mistakes
+
+- **Thinking the UPI app holds your money in a bank-account payment.** Only the remitter and beneficiary banks change balances. A wallet is different.
+- **Forgetting the payee PSP.** NPCI asks it to turn `canteen@pocket` into an account before any money moves.
+- **Treating "no answer yet" as failed.** A timeout ends in a reversal, not a lost payment. Check the status instead of charging again.
+- **Thinking money moves between banks during the payment.** Balances change then. Banks settle later, in netted cycles.
+- **Handling the PIN in your own code.** It's entered in NPCI's library, encrypted with UPI's public key, and decrypted only by the issuing bank.
+
+## Interview questions
+
+<details>
+<summary>Walk me through what happens when I scan a QR and pay ₹40.</summary>
+
+The app reads the payee's UPI ID, name, amount and reference from the `upi://pay` link in the QR. I enter my PIN in NPCI's library, which encrypts it. The app sends the request to its PSP bank, which sends `ReqPay` to NPCI. NPCI asks the payee's PSP to resolve the UPI ID to an account (`ReqAuthDetails`), then asks my bank to verify the PIN and debit ₹40, then asks the payee's bank to credit ₹40. The success goes back through NPCI to my PSP and app, and to the payee's side. Later, NPCI settles each bank's net position through their RBI settlement accounts.
+</details>
+
+<details>
+<summary>In a UPI payment from a bank account, who holds the money?</summary>
+
+The banks. The remitter bank debits the payer and the beneficiary bank credits the payee. The app, the PSPs and NPCI handle requests, rules and settlement. With a prepaid wallet it's different: a non-bank issuer keeps the wallet money in an escrow account at a scheduled commercial bank, as RBI requires.
+</details>
+
+<details>
+<summary>What does the payee PSP do?</summary>
+
+It owns the handle after `@` in the payee's UPI ID. When NPCI sends it `ReqAuthDetails`, it looks the UPI ID up in its own records and returns the account details, so NPCI knows where to send the credit.
+</details>
+
+<details>
+<summary>Why does an app need a PSP bank? Why can't it connect to NPCI directly?</summary>
+
+NPCI's guidelines say a PSP must be a bank regulated by RBI and authorised for mobile banking, and that a TPAP takes part in UPI only through a PSP bank. The PSP bank onboards and authenticates users, links their accounts to UPI IDs, makes sure the TPAP is secure and audited, and handles complaints. That's why Paytm had to get Axis, HDFC, SBI and YES Bank as PSP banks in 2024 to keep offering UPI.
+</details>
+
+<details>
+<summary>The debit went through but the canteen didn't get paid. What do the rules say?</summary>
+
+RBI's 2019 turnaround-time rules: for a merchant payment where the account was debited but the merchant didn't get confirmation, the auto-reversal must happen within T+5 days, and the customer gets ₹100 per day if it's late. For a transfer to a person it's T+1. In NPCI's guidelines, a timeout is treated as declined and a reversal is generated.
+</details>
+
+<details>
+<summary>What's the difference between a successful payment and settlement?</summary>
+
+Success means the payer was debited and the payee was credited. Settlement is the banks paying each other. NPCI works out each bank's net amount at every settlement cycle (10 a day, as reported in September 2025) and settles it through the banks' RBI settlement accounts. Because these are separate, members must reconcile NPCI's settlement reports against their own records.
+</details>
+
+<details>
+<summary>What's the difference between pay and collect? What changed in 2025?</summary>
+
+Pay is started by the payer; collect is a request from the payee that the payer approves with a PIN. NPCI stopped person-to-person collect requests from 1 October 2025 to curb fraud. Merchants can still use collect.
+</details>
+
+## Sources
+
+**NPCI**
+- NPCI, *Unified Payments Interface: Procedural Guidelines*, version 1.5, July 2016 (copy hosted by SLBC Madhya Pradesh): [PDF](https://www.slbcmadhyapradesh.in/docs/UPI_Procedural_Guidelines24_12_2016.pdf). Used for the glossary definitions, PSP membership, UPI ID format and resolution, PIN encryption, the two-, three- and four-party flows, settlement, reconciliation, timeouts, and Check Transaction Status.
+- NPCI, *Roles and Responsibilities of NPCI / PSP and TPAPs in Unified Payments Interface* (hosted by Axis Bank): [PDF](https://www.axis.bank.in/docs/default-source/default-document-library/roles-and-responsibilities-of-npci-psp-and-tpaps-in-unified-payments-interface.pdf?sfvrsn=4cafa017_1)
+- NPCI, *UPI Linking Specifications*, version 1.6 (draft), November 2017 (copy hosted by labnol.org): [PDF](https://www.labnol.org/files/linking.pdf)
+- NPCI press release, 14 March 2024, approval of One97 Communications as a TPAP: [PDF](https://www.npci.org.in/PDF/npci/press-releases/2024/NPCI-Press-Release-NPCI-grants-approval-to-One97-Communications-Limited-(OCL)-to-participate-in-UPI-as-a-Third-Party-Application-Provider-(TPAP).pdf)
+
+**RBI**
+- RBI, *Harmonisation of Turn Around Time (TAT) and customer compensation for failed transactions using authorised Payment Systems*, 20 September 2019: [rbi.org.in](https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=11693)
+- RBI, *Master Directions on Prepaid Payment Instruments (PPIs)*, 27 August 2021 (updated), para 12.3: [rbi.org.in](https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=12156)
+- RBI press release, 31 January 2024, *Action against Paytm Payments Bank Ltd*: [rbi.org.in](https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=57224)
+
+**News reports of NPCI circulars** (NPCI's circular archive wasn't reachable)
+- Business Today, 18 April 2024, Paytm handle migration to `@ptaxis`, `@pthdfc`, `@ptsbi`, `@ptyes`: [article](https://www.businesstoday.in/personal-finance/news/story/paytm-gets-nod-for-user-migration-to-psp-bank-handles-heres-how-it-can-affect-you-425968-2024-04-18)
+- Business Today, 13 August 2025, NPCI ends P2P collect from 1 October 2025: [article](https://www.businesstoday.in/personal-finance/banking/story/npci-to-tighten-upi-rules-peer-to-peer-collect-feature-to-end-in-october-489244-2025-08-13)
+- Business Today, 24 September 2025, "UPI operates 10 settlement cycles each day": [article](https://www.businesstoday.in/personal-finance/news/story/upi-users-on-alert-settlement-rules-to-change-from-november-3-heres-what-can-be-expected-495471-2025-09-24)
+
+**Other**
+- Python documentation, *Floating-Point Arithmetic: Issues and Limitations*: [docs.python.org](https://docs.python.org/3/tutorial/floatingpoint.html)

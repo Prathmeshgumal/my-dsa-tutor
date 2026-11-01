@@ -1,0 +1,257 @@
+export const meta = {"title": "The double-entry ledger", "description": "Block 2. How PocketPay records every rupee and reward coin so money can never appear or vanish by mistake, and how Postgres keeps that true when payments happen at the same moment.", "section": "Day 1: payments backend", "order": 2, "label": "2. Double-entry ledger"};
+
+<Callout title="Read this first">
+	This page builds on [How a wallet keeps track of money](/day-1/money-basics), which explains accounts, transactions, ledgers and escrow accounts from scratch.
+</Callout>
+
+## Where we left off
+
+On the last page we wrote PocketPay's ledger with plain + and − signs:
+
+| # | What happened | Cash at bank | Riya's wallet | Owed to the canteen |
+|---|---|---|---|---|
+| 1 | Riya adds ₹200 | +₹200 | +₹200 | |
+| 2 | Riya pays the canteen ₹40 | | −₹40 | +₹40 |
+
+That table is easy to read, but it has a weakness. We'd like the computer to check every transaction automatically, so that a bug can never create or destroy money. The obvious check would be "the entries in a transaction must add up to zero". Row 2 passes: −40 + 40 = 0. Row 1 fails: +200 + 200 = +400. Yet row 1 is perfectly correct.
+
+So why do both numbers in row 1 go up? Because the two accounts are different *kinds* of thing. Cash at bank is money PocketPay **has**. Riya's wallet is money PocketPay **owes** her, since she can ask for it back. When Riya adds ₹200, PocketPay has ₹200 more *and* owes ₹200 more. Both go up, and that's correct.
+
+Accounting solves this with two words: **debit** and **credit**. This page explains them, uses them to build PocketPay's ledger, and then shows how to store it safely in Postgres.
+
+## Two kinds of account
+
+Every account is one of two kinds:[^mt1]
+
+- **Debit-normal accounts** track money you **have**, or money you've **used**. Cash is the main example (accountants call it an *asset*). Money spent on running the business is another (an *expense*).
+- **Credit-normal accounts** track money you **owe**, or **where your money came from**. Users' wallet balances are the main example for us (a *liability*). The others are the owners' own money in the business (*equity*) and money earned (*revenue*).
+
+Modern Treasury's guide to building a wallet app treats each user's wallet balance as money held "on behalf of our users". That's money owed, so it's a liability.[^mt2]
+
+## Debit and credit
+
+Every entry is either a **debit** or a **credit**. What it does depends on the kind of account it lands in:[^mt1]
+
+| Kind of account | A debit… | A credit… |
+|---|---|---|
+| Debit-normal (asset, expense) | increases it | decreases it |
+| Credit-normal (liability, equity, revenue) | decreases it | increases it |
+
+Don't read them as "minus" and "plus". Think of them as two directions, and of the account's kind as deciding which direction makes the balance grow.
+
+This gives us the check we wanted. **In every transaction, the total of the debits must equal the total of the credits.** Let's redo PocketPay's moves with it:
+
+**Riya adds ₹200.** PocketPay has more cash (an asset, so debit it) and owes Riya more (a liability, so credit it).
+
+| Account | Kind | Debit | Credit |
+|---|---|---|---|
+| Cash at bank | Asset | ₹200 | |
+| Riya's wallet | Liability | | ₹200 |
+
+**Riya pays the canteen ₹40.** PocketPay owes Riya less (debit a liability) and owes the canteen more (credit a liability). No cash moves.
+
+| Account | Kind | Debit | Credit |
+|---|---|---|---|
+| Riya's wallet | Liability | ₹40 | |
+| Owed to the canteen | Liability | | ₹40 |
+
+**PocketPay sends the canteen its ₹40.** PocketPay owes the canteen less (debit a liability) and has less cash (credit an asset).
+
+| Account | Kind | Debit | Credit |
+|---|---|---|---|
+| Owed to the canteen | Liability | ₹40 | |
+| Cash at bank | Asset | | ₹40 |
+
+Each transaction now passes the same simple test: debits = credits. Notice that in the first transaction **both** balances went up, and in the last one **both** went down. A common mistake is to think one account must always go up while the other goes down. That's not true; it depends on the kinds of account involved.[^mt1]
+
+There's a second check for the whole ledger at once. Add up the balances of all debit-normal accounts, then all credit-normal ones. The two totals must be equal. If they aren't, the system has created or lost money somewhere.[^mt1] For PocketPay this says: **the cash we hold equals everything we owe.** It's the same idea as RBI's daily escrow check from the last page.
+
+Here are the three moves again, showing where real money goes. The **Dr** (debit) and **Cr** (credit) lines under each step are the tables above:
+
+<MoneyMap />
+
+## Try it
+
+This playground runs in your browser. Add money, pay, then reverse the last transaction. Each time, check three things: debits equal credits, every balance is worked out from the journal (the list of transactions), and a reversal adds new lines instead of removing old ones.
+
+<LedgerDemo />
+
+### Reward coins
+
+The playground also gives Riya reward coins. They're a separate currency (`COIN`), so they never mix with rupees, and each transaction must balance in each currency on its own. Handing out coins is a cost to PocketPay, so it debits a "Rewards expense" account and credits Riya's coin account. The rate of 1 coin per ₹10 is just our choice for this project.
+
+## Fixing mistakes: reversals
+
+Suppose we recorded the canteen payment twice by mistake. The tempting fix is to delete the extra row. Don't. Once you edit or delete a record, the old data is gone for good, and nobody can find out later what changed. Keeping every record forever gives you a paper trail.[^mt3]
+
+Instead, **reverse** it. You add a new transaction with the same amounts in the opposite directions, which cancels the original. Then, if needed, you add another new transaction with the correct amounts.[^mt3] Modern Treasury's own ledger product works this way: a transaction can't be changed once it's posted, and a reversal records the ID of the transaction it reverses.[^mt4]
+
+## Storing it safely in Postgres
+
+Now the database side. First, a naming clash to watch out for. A **ledger transaction** is a money event, like "Riya pays the canteen". A **database transaction** is a group of SQL statements that Postgres runs as one unit. We'll use the second to store the first safely.
+
+### All or nothing
+
+The simplest possible design keeps a balance column and updates it:
+
+```sql
+UPDATE wallets SET balance = balance - 4000 WHERE user_id = 'riya';
+UPDATE merchants SET balance = balance + 4000 WHERE id = 'canteen';
+```
+
+The PostgreSQL docs use almost exactly this bank-transfer example to introduce transactions. They warn up front that it's "simplifying outrageously".[^pg-tx] Besides losing all history, it has a dangerous gap. If the server crashes after the first line and before the second, Riya has lost ₹40 and the canteen never got it.
+
+A database transaction closes that gap. You wrap the statements in `BEGIN` … `COMMIT`, and Postgres guarantees the group either "happens completely or not at all". If anything fails partway through, "none of the steps executed so far will take effect".[^pg-tx] If your code spots a problem itself, such as a balance about to go negative, it runs `ROLLBACK` to cancel everything since `BEGIN`.
+
+So in PocketPay, one ledger transaction and all its debit and credit lines are saved inside one database transaction.
+
+### Two payments at the same moment
+
+All-or-nothing isn't enough on its own. Riya has ₹50. She taps "Pay ₹40" on her phone, and at the same moment her AI agent also pays ₹40 somewhere else. Both requests read her balance and see ₹50. Both decide there's enough. Both write a payment. She ends up at −₹30.
+
+Each request ran as a proper transaction. The problem is that they ran at the same time, which is called a **concurrency** problem. Step through it:
+
+<RaceDemo />
+
+The fix is a **row lock**. `SELECT ... FOR UPDATE` locks the rows it reads. Any other transaction that tries to update or lock those rows "will be blocked until the current transaction ends".[^pg-lock] So the second payment waits its turn, then reads the new balance of ₹10 and correctly refuses.
+
+(Postgres's default isolation level, which sets how much transactions can see of each other's changes, is called *Read Committed*.[^pg-iso] Row locks are how we get safe behaviour on top of it.)
+
+### Deadlocks
+
+Locks solve the double-spend problem, but they bring a new one. It only shows up when a single transaction needs to lock **more than one** row, which a transfer always does: it touches the payer's account and the payee's.
+
+Here's an everyday picture first (our analogy, not from the docs). Riya and Arjun each need a pen *and* a notebook to write. There's one of each. Riya grabs the pen, and at the same moment Arjun grabs the notebook. Riya now waits for the notebook, and Arjun waits for the pen. Neither will let go of what they have until they've finished writing, so both wait forever.
+
+That's a **deadlock**: two (or more) transactions, each holding a lock the other one wants.[^pg-lock] Neither is doing anything wrong on its own. The trouble comes from the order in which they grabbed things.
+
+In PocketPay it happens like this. Riya pays Arjun ₹40 (payment A), and at the same moment Arjun pays Riya ₹20 (payment B). Suppose our code locks the **payer's account first**, then the payee's:
+
+1. A locks Riya's account, because Riya is A's payer.
+2. B locks Arjun's account, because Arjun is B's payer.
+3. A asks for Arjun's account. B is holding it, so A waits.
+4. B asks for Riya's account. A is holding it, so B waits.
+
+A is waiting for B, and B is waiting for A. Nothing will ever change by itself. The PostgreSQL docs walk through exactly this situation with two bank accounts.[^pg-lock]
+
+Step through it, then switch to the other tab to see the fix:
+
+<DeadlockDemo />
+
+#### What Postgres does about it
+
+Postgres doesn't let the two wait forever. After a transaction has waited on a lock for a while (the `deadlock_timeout` setting, one second by default), Postgres checks whether the waiting has turned into a loop.[^pg-dlt] If it has, it cancels one of the transactions so the other can finish. The docs warn that exactly which one gets cancelled "is difficult to predict and should not be relied upon".[^pg-lock] The cancelled one fails with error code `40P01`, named `deadlock_detected`.[^pg-err]
+
+So a deadlock doesn't freeze the database, but it does make a payment fail with an error the user never expected.
+
+#### How PocketPay avoids it
+
+The docs' main advice is to make sure every part of the application takes locks "in a consistent order".[^pg-lock] In our example, the deadlock happened only because A and B grabbed the two accounts in opposite orders.
+
+So PocketPay uses one rule: **always lock the account with the lower ID first.** Say Riya's account is #1 and Arjun's is #2. Now both payments start by asking for #1. Whichever gets there first takes it. The other one waits, *while holding nothing*. The first payment then takes #2, finishes and releases both, and the second carries on. They queue up one after the other, and a waiting loop can't form.
+
+In code, this is just a sort before locking: put the two account IDs in order and run `SELECT ... FOR UPDATE` on them in that order.
+
+The docs also suggest a safety net: if a transaction is cancelled because of a deadlock, retry it.[^pg-lock] And they warn against keeping a transaction open for a long time, because anything waiting on its locks waits that whole time. So a transfer should take its locks, do its writes, and commit straight away.
+
+## PocketPay's ledger rules
+
+These are our project's design choices, built on everything above:
+
+1. Amounts are **whole numbers**: paise for rupees, whole coins for COIN. Never decimals with floating point (the [UPI primer](/day-1/upi-primer#try-it-yourself) shows why).
+2. Every line in a transaction has a direction (`debit` or `credit`) and a **positive** amount, as in Modern Treasury's model.
+3. In every transaction, debits = credits, checked separately for each currency before saving.
+4. Balances are worked out from the lines, never stored as the source of truth.
+5. Nothing is edited or deleted. Mistakes are fixed with reversals that point to the original.
+6. A transfer is one database transaction. It locks the affected accounts in ID order, checks the wallet won't go negative, writes the lines, and commits.
+
+### The tables (first draft)
+
+This is a starting point; we'll refine it while building. Note the names: a ledger transaction is stored in `journal_entries`, and its lines in `postings`. We call them journal entries so the name doesn't clash with database transactions.
+
+```sql
+CREATE TABLE accounts (
+    id         BIGSERIAL PRIMARY KEY,
+    name       TEXT NOT NULL,
+    type       TEXT NOT NULL CHECK (type IN ('asset', 'liability', 'equity', 'revenue', 'expense')),
+    currency   TEXT NOT NULL CHECK (currency IN ('INR', 'COIN')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE journal_entries (
+    id                BIGSERIAL PRIMARY KEY,
+    description       TEXT NOT NULL,
+    reverses_entry_id BIGINT UNIQUE REFERENCES journal_entries(id),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE postings (
+    id         BIGSERIAL PRIMARY KEY,
+    entry_id   BIGINT NOT NULL REFERENCES journal_entries(id),
+    account_id BIGINT NOT NULL REFERENCES accounts(id),
+    direction  TEXT   NOT NULL CHECK (direction IN ('debit', 'credit')),
+    amount     BIGINT NOT NULL CHECK (amount > 0)
+);
+```
+
+`reverses_entry_id` is `UNIQUE`, so a transaction can be reversed at most once. It plays the same role as the reversal field in Modern Treasury's API.[^mt4]
+
+## Checkpoint
+
+The weekend plan's test for this block is: **run 1,000 random transfers and check that the total money hasn't changed.** Our test will check two things:
+
+1. For each currency, total debits = total credits across the whole ledger.
+2. No wallet balance ever goes negative, even with transfers running at the same time.
+
+The code and a line-by-line walkthrough are on the next page: [The ledger in Python, line by line](/day-1/ledger-code).
+
+## Common mistakes
+
+- **Updating a balance column** instead of adding lines. You lose the history and can no longer explain a balance.
+- **Reading debit as minus.** A debit increases an asset and decreases a liability.
+- **Editing or deleting lines** to fix mistakes. Reverse them instead.
+- **Checking the balance without a lock.** Two payments can both pass the check and overdraw the wallet.
+- **Locking accounts in a random order.** This invites deadlocks. Always use the same order.
+- **Mixing currencies in one check.** Rupees and coins must each balance on their own.
+
+## Interview questions
+
+<details>
+<summary>Why not just store a balance on the wallet row?</summary>
+
+Updating a balance in place destroys the history, so you can't explain or audit a balance, and errors are hard to spot. Storing transactions that never change, and working out balances from them, keeps a full trail. (If summing gets slow, one option is to also store a running balance, updated in the same transaction.)
+</details>
+
+<details>
+<summary>What is double-entry, in one sentence?</summary>
+
+Every movement of money is recorded as a transaction with at least two lines, and in each transaction total debits equal total credits, so money only ever moves between accounts.
+</details>
+
+<details>
+<summary>Is a user's wallet balance an asset or a liability for the wallet company? Why?</summary>
+
+A liability. The company holds it on the user's behalf and owes it back to them. The cash the company holds at its bank is the asset.
+</details>
+
+<details>
+<summary>How do you stop two payments at the same time from overdrawing a wallet?</summary>
+
+Do the check and the write in one database transaction, and lock the wallet's row first with `SELECT ... FOR UPDATE`. The second payment waits for the first to finish, then sees the new balance. Lock multiple accounts in a fixed order to avoid deadlocks.
+</details>
+
+<details>
+<summary>A wrong transaction was posted. How do you fix it?</summary>
+
+Never edit or delete it. Post a reversing transaction with the opposite directions that points to the original, then post a new, correct one. The history shows exactly what happened.
+</details>
+
+[^mt1]: Modern Treasury, *Accounting For Developers, Part I: The Fundamentals*: debit-normal and credit-normal accounts, the debit/credit table, both balances moving the same way, and total debits = total credits. [moderntreasury.com](https://www.moderntreasury.com/journal/accounting-for-developers-part-i)
+[^mt2]: Modern Treasury, *Accounting For Developers, Part II: Ledgering for a Wallet App* ("funds we hold on behalf of our users"). [moderntreasury.com](https://www.moderntreasury.com/journal/accounting-for-developers-part-ii)
+[^mt3]: Modern Treasury, *Enforcing Immutability in your Double-Entry Ledger*: editing destroys data irreversibly, immutability gives a paper trail, and the fix is to reverse and then re-record. [moderntreasury.com](https://www.moderntreasury.com/journal/enforcing-immutability-in-your-double-entry-ledger)
+[^mt4]: Modern Treasury docs, *Ledger Transaction object*: immutable once posted; `reverses_ledger_transaction_id`. [docs.moderntreasury.com](https://docs.moderntreasury.com/reference/ledger-transaction-object)
+[^pg-tx]: PostgreSQL documentation, *3.4 Transactions*. [postgresql.org](https://www.postgresql.org/docs/current/tutorial-transactions.html)
+[^pg-lock]: PostgreSQL documentation, *13.3 Explicit Locking*, including 13.3.4 Deadlocks: what a deadlock is, the two-accounts example, Postgres cancelling one transaction, locking in a consistent order, retrying, and not holding transactions open. [postgresql.org](https://www.postgresql.org/docs/current/explicit-locking.html)
+[^pg-dlt]: PostgreSQL documentation, *19.12 Lock Management*: `deadlock_timeout`, default 1s. [postgresql.org](https://www.postgresql.org/docs/current/runtime-config-locks.html)
+[^pg-err]: PostgreSQL documentation, *Appendix A. PostgreSQL Error Codes*: `40P01 deadlock_detected`. [postgresql.org](https://www.postgresql.org/docs/current/errcodes-appendix.html)
+[^pg-iso]: PostgreSQL documentation, *13.2 Transaction Isolation* (Read Committed is the default). [postgresql.org](https://www.postgresql.org/docs/current/transaction-iso.html)

@@ -34,7 +34,11 @@ services:
 
   # The editor itself: the page, its file-saving and Claude chat endpoints, on one small Python server.
   editor:
-    build: ./app
+    build:
+      context: ./app
+      args:
+        # Baked into the page so its Notes site button knows where to go.
+        NOTES_PORT: ${NOTES_PORT:-5200}
     container_name: dsa-editor
     restart: unless-stopped
     depends_on: [piston]
@@ -60,6 +64,14 @@ services:
       - ./state:/workspace/state
       # Claude's own folder for this editor's chats. Your ~/.claude stays private to you.
       - claude-home:/home/node/.claude
+
+  # The PocketPay notes site (pocketpay-notes/), for revising. The editor's Notes site button opens it.
+  pocketpay-notes:
+    build: ./pocketpay-notes
+    container_name: pocketpay-notes
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NOTES_PORT:-5200}:80"
 
 volumes:
   piston-packages:

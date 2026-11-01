@@ -1,0 +1,303 @@
+export const meta = {"title": "The ledger in Python, line by line", "description": "Block 2 build. A walkthrough of PocketPay's async ledger code: the SQL tables, the migration runner, post() and its seven steps, and the test that runs 1,000 transfers at once.", "section": "Day 1: payments backend", "order": 2.5, "label": "2c. Ledger code walkthrough"};
+
+<Callout title="Read this first">
+	The code is async: every database call is awaited. If `async def`, `await` or `asyncio.gather` are new to you, read [Async Python, from scratch](/day-1/async-python) first.
+</Callout>
+
+## What we built
+
+The [ledger page](/day-1/ledger) designed PocketPay's ledger on paper. This page walks through the Python code that makes it real, in the order you'd read it. All of it lives in `backend/`:
+
+```text
+backend/
+├── pyproject.toml              the project and its libraries, managed with uv
+├── migrations/
+│   └── 001_ledger.sql          the three tables
+├── pocketpay/
+│   ├── db.py                   connection pool + migration runner
+│   └── ledger.py               types, errors, post, transfer, reverse, balance
+└── tests/
+    ├── conftest.py             a fresh database schema for every test
+    └── test_ledger.py          the tests, including 1,000 transfers at once
+```
+
+To run it yourself (Postgres must be up via `docker compose up -d` in the project root):
+
+```bash
+cd backend
+set -a; . ../.env; set +a       # load DATABASE_URL from .env into this shell
+uv run python -m pocketpay.db   # create the tables in the pocketpay database
+uv run pytest -v -s             # run every test (-s shows the printed transfer counts)
+```
+
+There's no FastAPI here yet. The ledger is plain async Python functions that talk to Postgres. Block 3 puts a FastAPI payments API on top of them.
+
+The rest of the page goes file by file. First, though, five pieces of psycopg that appear on almost every line.
+
+## Five things to know first
+
+### The connection pool
+
+(New to connections and pools? [How a program talks to a database](/day-1/connecting-to-postgres) explains them from scratch.)
+
+Rather than opening a new database connection for every query, an `AsyncConnectionPool` keeps a set of open connections and lends them out. You borrow one with an `async with` block, and it goes back to the pool when the block ends:
+
+```python
+async with pool.connection() as conn:
+    await conn.execute(...)
+```
+
+Borrowing is itself something that can wait: if all connections are in use, your task waits its turn. That's how the 1,000-transfer test works. It starts all 1,000 transfers at once, and the pool's 20 connections let 20 of them into the database at a time.
+
+### Running SQL: execute, fetchone, placeholders
+
+`await conn.execute(sql, params)` sends a query and gives back a *cursor*, an object holding the result. `await cur.fetchone()` then gives you the next row as a tuple, or `None` if there are no rows.[^cursor] `await cur.fetchall()` gives you a list of all the rows. Both steps are awaited, so the event loop can serve other work while Postgres answers.
+
+Values go in as `%s` placeholders, with the values passed separately as a tuple, never pasted into the SQL string.[^params] OWASP, the web-security project, says to "use parameterized queries for data values" because this is how you prevent SQL injection.[^owasp] An example from our code:
+
+```python
+cur = await conn.execute(
+    "INSERT INTO accounts (name, type, currency) VALUES (%s, %s, %s) RETURNING id",
+    (name, type, currency),
+)
+(account_id,) = await cur.fetchone()
+```
+
+`RETURNING id` makes the `INSERT` hand back the new row's ID. `fetchone()` returns it as a one-item tuple, `(7,)`, and `(account_id,) = ...` unpacks that tuple into a plain variable. You'll see this unpacking pattern all over the code. Note the comma: a one-item tuple needs it.
+
+### A database transaction in psycopg
+
+```python
+async with conn.transaction():     # BEGIN
+    await conn.execute(...)
+    await conn.execute(...)
+                                   # COMMIT when the block ends normally
+```
+
+When the block ends normally, psycopg commits. If an exception escapes the block, psycopg rolls everything back.[^tx] That's the whole error-handling story for the ledger: whenever a rule is broken, the code just `raise`s, and the transaction is undone.
+
+### One gotcha: psycopg starts transactions on its own
+
+A psycopg connection that isn't in autocommit mode starts a transaction **automatically** on its first query, even a plain `SELECT`. Connections from the pool behave this way by default. If you then open `async with conn.transaction():`, it doesn't start a new transaction. It only creates a *savepoint* inside the one that's already open.[^tx]
+
+For the ledger this matters. The `FOR UPDATE` locks and the writes must be in one real transaction that commits at the end of `post`. So `post` opens `conn.transaction()` **first**, before any query. Compare the two orders:
+
+<TxGotcha />
+
+We checked this on our own database: after one plain `SELECT` on a pool connection, psycopg reports the connection as `INTRANS` (inside a transaction), even though the code never asked for one.
+
+### Errors are exception classes
+
+`ledger.py` defines one exception class per problem: `InvalidPosting`, `AccountNotFound`, `Unbalanced`, `InsufficientFunds`, `AlreadyReversed`, `EntryNotFound`. They all inherit from `LedgerError`. Calling code can catch one specific problem (`except InsufficientFunds:`) or any ledger problem at all (`except LedgerError:`). In Block 3 the API will turn each one into a clear HTTP response, such as "not enough money".
+
+## File 1: the tables (001_ledger.sql)
+
+These are the tables from the ledger page, plus two indexes:
+
+```sql
+CREATE INDEX postings_account_id_idx ON postings (account_id);
+CREATE INDEX postings_entry_id_idx ON postings (entry_id);
+```
+
+We never store balances. We work them out by adding up an account's postings, so "find every posting for account 7" runs on every payment. The first index makes that lookup fast; without it, Postgres would read the whole `postings` table every time. The second index does the same for "find every posting in entry 42", which reversals use.
+
+The `CHECK` rules in the tables are a second line of defence. Even if the Python code had a bug, Postgres itself would refuse an amount of zero or a direction of `"sideways"`.
+
+## File 2: the pool and the migration runner (db.py)
+
+`make_pool` creates an `AsyncConnectionPool` with `open=False`, then calls `await pool.open()`. psycopg asks for this: opening an async pool in its constructor is deprecated, so you should call `await pool.open()` yourself.[^pool]
+
+A **migration** is a numbered SQL file that changes the database's structure. As the project grows we'll add `002_…`, `003_…` and so on. `migrate` runs each file exactly once, in order:
+
+1. It creates a small `schema_migrations` table if it doesn't exist. This table records the name of each file that has been run.
+2. It lists `migrations/*.sql` in name order. For each file, it opens a transaction, skips the file if it's already recorded, and otherwise runs it and records it. The file and its record are saved together or not at all, so a file that fails halfway leaves nothing behind.
+
+One detail: `await conn.execute(path.read_text())` runs a whole file containing several SQL statements. That works only because we pass no parameters. With parameters, psycopg can't run more than one statement in a single call.[^multi]
+
+`python -m pocketpay.db` calls `asyncio.run(main())`, which starts the event loop, reads `DATABASE_URL`, and runs `migrate`. Running it twice is harmless: the second time, every file is already recorded.
+
+## File 3: the ledger (ledger.py)
+
+### The types
+
+```python
+class AccountType(StrEnum):
+    ASSET = "asset"
+    LIABILITY = "liability"
+    ...
+
+    @property
+    def debit_normal(self) -> bool:
+        return self in (AccountType.ASSET, AccountType.EXPENSE)
+```
+
+A `StrEnum` member is also a real string, so `AccountType.ASSET == "asset"` is `True`. That's handy both ways. When we send one to the database, psycopg sends the text `"asset"`, which the table's `CHECK` rule accepts. When the database sends back the string `"liability"`, `AccountType("liability")` turns it into the enum. `debit_normal` encodes the table from the ledger page: assets and expenses grow with a debit, and everything else grows with a credit. It's the only place in the code that knows this rule.
+
+`Posting` is a **Pydantic model**:
+
+```python
+class Posting(BaseModel):
+    account_id: int
+    direction: Direction
+    amount: int = Field(gt=0)
+```
+
+Pydantic checks the values when a `Posting` is created. An amount of zero fails `gt=0` ("greater than 0"), and `"sideways"` isn't a `Direction`, so both raise a `ValidationError` before they ever reach the database.[^pydantic] This is the same Pydantic you'll use in Block 3 to check API requests.
+
+### post(): where all the rules live
+
+Every movement of money goes through one method, `post`. `transfer` and `reverse` are thin wrappers around it. Having a single door means each rule is written once and can't be skipped. Click through its seven steps:
+
+<PostFlow />
+
+A few lines deserve a closer look.
+
+**Locking in order (step 3).** `{p.account_id for p in postings}` builds a set, which removes duplicates, and `sorted(...)` puts the IDs in order. So an account that appears twice in an entry is locked once, and locks are always taken lowest ID first. That's the deadlock rule from the ledger page.
+
+**Why the balance check sees the latest money (step 5).** Suppose another payment was holding Riya's lock, and we waited. By the time we get the lock, that payment has committed. Postgres's default isolation level is Read Committed, in which each query "sees only data committed before the query began".[^pg-iso] Our balance query starts *after* we got the lock, so it includes the other payment's postings. That's why we lock first and read the balance second, never the other way round.
+
+**The `grows` line (step 5).** This line decides whether a posting makes its account bigger or smaller:
+
+```python
+grows = (p.direction == Direction.DEBIT) == accounts[p.account_id].type.debit_normal
+```
+
+It compares two true/false values. The account grows when they match:
+
+| Posting | Account kind | `direction == DEBIT` | `debit_normal` | Grows? |
+|---|---|---|---|---|
+| Debit | Asset (cash) | True | True | yes |
+| Credit | Asset (cash) | False | True | no, shrinks |
+| Debit | Liability (wallet) | True | False | no, shrinks |
+| Credit | Liability (wallet) | False | False | yes |
+
+We only check balances for accounts that shrink. An account that's only growing can't go negative.
+
+**Our design choice: no account may go negative.** Every account is checked, not just wallets. That suits PocketPay: cash at the bank can't go below zero, and neither can what we owe the canteen. A bigger system might allow some accounts to go negative. If we ever need that, we'd add a setting to each account.
+
+**The reversal check.** Before reversing, `post` checks that the entry hasn't already been reversed. This has to come early. Otherwise a second reversal fails later, at the balance check, with the confusing error "insufficient funds" instead of "already reversed". The table's `UNIQUE` rule stays as a backstop: if it ever fires, psycopg raises `UniqueViolation` (Postgres error `23505`),[^errors] and we turn that into `AlreadyReversed`.
+
+**Writing the postings (step 6).** `await cur.executemany(sql, rows)` runs the same `INSERT` once for each posting, with one tuple of values per row.
+
+### transfer, reverse, balance
+
+`transfer(from_id, to_id, amount)` builds two postings, debit `from_id` and credit `to_id`, and awaits `post` with them. That's correct for moving money between two liabilities, such as Riya's wallet and "owed to the canteen": a debit means we owe Riya less, and a credit means we owe the canteen more. A top-up isn't a transfer between two wallets (cash grows *and* the wallet grows), so the tests write it directly with `post`.
+
+`reverse(entry_id)` reads the original postings, flips every direction, and posts them as a new entry that points back at the original.
+
+`balance(account_id)` looks up the account's type and calls `_balance`, which adds up the postings with SQL: `SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END)`. That's debits minus credits. For a credit-normal account like a wallet, it flips the sign, so the answer always reads naturally: "Riya has ₹160". `post` calls the same `_balance` helper inside its transaction, while it holds the locks.
+
+**A bug the tests caught: `Decimal` instead of `int`.** An early version returned balances like `Decimal('57846')`. In Postgres, `sum` over a `bigint` column returns `numeric`, not `bigint`,[^pg-sum] and psycopg hands a `numeric` back as a Python `Decimal`. The comparisons still worked, so it was easy to miss. But money in this codebase is a whole number of paise, and a `Decimal` sneaking in would cause trouble later, for example when turning balances into JSON for the API. The fix is a cast in the SQL, `SUM(...)::bigint`, and the checkpoint test now asserts that every balance is an `int`.
+
+## File 4: the tests
+
+### Async tests
+
+Every test that touches the database is an `async def`, because it awaits the ledger. Plain pytest can't run those by itself. We use the **AnyIO pytest plugin**, which is already installed alongside FastAPI and is what FastAPI's own docs use for async tests.[^fastapi-tests] Two settings switch it on:
+
+- `anyio_mode = "auto"` in `pyproject.toml` runs every `async def` test and fixture through the plugin, with no extra markers needed.[^anyio]
+- An `anyio_backend` fixture in `conftest.py` returning `"asyncio"`. By default the plugin runs each test on every async backend it supports;[^anyio] we only use asyncio.
+
+`test_posting_rejects_bad_amount_and_direction` stays a plain `def`, because it never touches the database.
+
+### Every test gets its own empty schema (conftest.py)
+
+In Postgres, a **schema** is a named folder of tables inside one database, and the **search path** decides which schema an unqualified name like `postings` refers to.[^pg-schema] The async `ledger` fixture:
+
+1. creates a fresh schema, such as `test_1793390000000000000`
+2. opens a pool whose `configure` callback runs `SET search_path TO <schema>` on every new connection[^pool-api]
+3. runs the migrations there, and hands the test a `Ledger`
+4. after `yield`, closes the pool and drops the schema, even if the test failed[^pytest]
+
+So tests never see each other's rows, and your real tables stay untouched.
+
+Two small details:
+- `configure` calls `await conn.commit()` after the `SET`. The pool docs ask you to close any transaction you open in `configure`, and because of the gotcha above, that `SET` opened one.
+- The schema name is pasted into the SQL rather than passed as `%s`, because placeholders only work for *values*, not for names of things. That's safe here only because our own code generates the name. Never do it with user input.
+
+### Small tests for each rule (test_ledger.py)
+
+`test_top_up_and_pay`, `test_overdraft` and `test_reverse` each set up Riya, the canteen and cash through the `accounts` fixture, then check exact balances in paise. Amounts are written like `200_00`. Python ignores underscores in number literals,[^py-literals] so that's 20000 paise, and the underscore makes it read as ₹200.00.
+
+`test_rejects_bad_entries` uses `@pytest.mark.parametrize` to run once for each bad entry: one posting, unbalanced, rupees against coins, unknown account. Each run expects the matching exception, and afterwards cash must still be 0, which proves none of them left anything behind.
+
+### The checkpoint: 1,000 transfers at once
+
+`test_concurrent_transfers` is the test from the weekend plan:
+
+1. Create cash and ten wallets, and top up each wallet with ₹1,000.
+2. Build a list of 1,000 jobs in advance. Each job is a transfer of a random amount, up to ₹500, between two different random wallets.
+3. Start them all at once with `asyncio.gather`.[^tasks] The pool has 20 connections, so up to 20 transfers are inside Postgres at the same moment, competing for the same ten accounts, while the rest wait for a connection.
+4. Each job returns `"ok"`, or `"refused"` if the wallet didn't have enough at that moment. Both are fine. Any other exception escapes `gather` and fails the test. The results are counted with a `Counter`.
+5. Then check the books:
+   - total debits = total credits, per currency
+   - every balance is an `int`
+   - no wallet is negative
+   - the wallets still hold exactly ₹10,000 between them
+   - cash equals what's owed
+
+A typical run prints `810 transfers succeeded, 190 refused for insufficient funds`. The exact numbers change every run, because the amounts are random. The whole suite runs in under two seconds.
+
+### Proof the lock matters
+
+To check that this test can actually catch the bug it's meant to catch, we deleted `FOR UPDATE` from the lock query and ran it five times. Three of the five runs failed:
+
+```text
+E       assert -29170 >= 0
+```
+
+Without the lock, two transfers read the same balance, both decide there's enough money, and the wallet is overdrawn. That's exactly the race from the ledger page. The [async page](/day-1/async-python#async-doesnt-remove-the-need-for-locks) explains why async doesn't prevent it.
+
+The other two runs passed. That's normal for races: they only happen when two transfers hit the same wallet at just the wrong moment. This is why the test runs 1,000 transfers: it gives the race plenty of chances to show up. With `FOR UPDATE` restored, the test passes every time.
+
+## What's left for later
+
+We left these out on purpose. Each one comes in a later block:
+
+- **Idempotency keys.** If the same payment request arrives twice, it's currently posted twice. Block 3's FastAPI endpoint adds the `Idempotency-Key` header.
+- **Checking account kinds in `transfer`.** Nothing stops a caller from "transferring" between cash and a wallet. The API will only offer safe operations, like top-up, pay and payout, each building the right postings.
+- **Fast balances.** Adding up every posting gets slower as an account's history grows. One option is to also store a running balance, updated in the same transaction as the postings. We'll add that only if we need it.
+
+## Check yourself
+
+<details>
+<summary>Why does post() open conn.transaction() before running any query?</summary>
+
+Because psycopg starts a transaction automatically on the first query. If `post` ran a `SELECT` first, `conn.transaction()` would only create a savepoint, and the real commit, along with the release of the locks, would happen later than the code suggests.
+</details>
+
+<details>
+<summary>post() raises Unbalanced at step 4. What undoes the work, and what happens to the locks?</summary>
+
+The exception leaves the `async with conn.transaction():` block, so psycopg rolls the transaction back, and Postgres releases the row locks. Nothing was written anyway, because the writes only happen at step 6.
+</details>
+
+<details>
+<summary>Why did balances come back as Decimal, and why does it matter?</summary>
+
+Postgres's `sum` over `bigint` returns `numeric`, which psycopg returns as `Decimal`. Money here is a whole number of paise, so we cast with `::bigint` to keep it an `int` everywhere. The test checks this.
+</details>
+
+<details>
+<summary>The test starts 1,000 transfers with gather. How many are inside Postgres at once, and why?</summary>
+
+At most 20, because the pool has 20 connections. The other tasks wait at `async with self.pool.connection()` until a connection is free.
+</details>
+
+[^cursor]: psycopg 3 docs, *Cursor classes*: `fetchone()` returns `None` when the result set is finished. [psycopg.org](https://www.psycopg.org/psycopg3/docs/api/cursors.html)
+[^params]: psycopg 3 docs, *Passing parameters to SQL queries* (`%s` placeholders). [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/params.html)
+[^owasp]: OWASP Cheat Sheet Series, *SQL Injection Prevention Cheat Sheet*. [cheatsheetseries.owasp.org](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+[^tx]: psycopg 3 docs, *Transactions management*: a query starts a transaction by default; `transaction()` contexts commit, or roll back on an exception; inside an existing transaction they manage a savepoint. [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/transactions.html)
+[^pool]: psycopg 3 docs, *Connection pools*: "Opening an async pool in the constructor is deprecated"; call `await pool.open()`. [psycopg.org](https://www.psycopg.org/psycopg3/docs/advanced/pool.html)
+[^pool-api]: psycopg 3 docs, *psycopg_pool API*: the `configure` parameter, and closing any transaction it opens. [psycopg.org](https://www.psycopg.org/psycopg3/docs/api/pool.html)
+[^multi]: psycopg 3 docs, *Differences from psycopg2*, "Multiple statements in the same query". [psycopg.org](https://www.psycopg.org/psycopg3/docs/basic/from_pg2.html)
+[^pydantic]: Pydantic docs, *Fields* (numeric constraints such as `gt`). [docs.pydantic.dev](https://docs.pydantic.dev/latest/concepts/fields/)
+[^pg-iso]: PostgreSQL documentation, *13.2.1 Read Committed Isolation Level*. [postgresql.org](https://www.postgresql.org/docs/current/transaction-iso.html)
+[^errors]: psycopg 3 docs, *psycopg.errors*: SQLSTATE `23505` is `UniqueViolation`. [psycopg.org](https://www.psycopg.org/psycopg3/docs/api/errors.html)
+[^pg-sum]: PostgreSQL documentation, *9.21 Aggregate Functions*: `sum ( bigint ) → numeric`. [postgresql.org](https://www.postgresql.org/docs/current/functions-aggregate.html)
+[^fastapi-tests]: FastAPI docs, *Async Tests* (`pytest.mark.anyio`). [fastapi.tiangolo.com](https://fastapi.tiangolo.com/advanced/async-tests/)
+[^anyio]: AnyIO docs, *Testing with AnyIO*: `anyio_mode = "auto"`, and the default `anyio_backend` fixture that runs on all supported backends. [anyio.readthedocs.io](https://anyio.readthedocs.io/en/stable/testing.html)
+[^pg-schema]: PostgreSQL documentation, *5.10 Schemas* (schemas and the search path). [postgresql.org](https://www.postgresql.org/docs/current/ddl-schemas.html)
+[^pytest]: pytest docs, *How to use fixtures*, "Teardown/Cleanup (AKA Fixture finalization)". [docs.pytest.org](https://docs.pytest.org/en/stable/how-to/fixtures.html)
+[^py-literals]: Python docs, *Lexical analysis*, Integer literals (underscores for grouping digits). [docs.python.org](https://docs.python.org/3/reference/lexical_analysis.html#integer-literals)
+[^tasks]: Python docs, *Coroutines and Tasks*: `asyncio.gather` runs awaitables concurrently. [docs.python.org](https://docs.python.org/3/library/asyncio-task.html)

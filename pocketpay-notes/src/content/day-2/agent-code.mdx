@@ -1,0 +1,378 @@
+export const meta = {"title": "The spending agent in Python, line by line", "description": "Block 7 build. A walkthrough of PocketPay's agent code: merchant categories, two weeks of demo spending, the three read-only tools, the instructions with dates worked out in code, wiring the tools into the Claude Agent SDK, the terminal command and the tests.", "section": "Day 2: AI on top", "order": 7.5, "label": "7b. Agent code walkthrough"};
+
+<Callout title="Read this first">
+	This page assumes the [tool calling concept page](/day-2/agent) and the [payments code walkthrough](/day-1/payments-code). The ideas (the loop, MCP, why the user ID is fixed) are explained there; this page shows the code.
+</Callout>
+
+## What we built
+
+Everything for Block 7 lives in `backend/pocketpay/agent/`, plus one migration and some demo data:
+
+| File | What it does |
+|---|---|
+| `migrations/003_merchant_categories.sql` | Gives every merchant a spending category, and adds an index for “this user's payments between two dates” |
+| `pocketpay/seed.py` | `seed_history()`: ₹2,000 more for Riya and two weeks of real payments at six shops |
+| `agent/messages.py` | Three small types the tools speak: `ToolSpec`, `ToolCall`, `ToolResult` |
+| `agent/tools.py` | The three read-only tools, with argument checks and SQL |
+| `agent/prompt.py` | The instructions, with this week's and last week's dates already worked out |
+| `agent/claude_agent.py` | Wraps the tools for the Claude Agent SDK, locks the agent down, and runs one question |
+| `agent/__main__.py` | The terminal command: `python -m pocketpay.agent` |
+| `tests/test_agent.py` | 9 tests that need no model, plus 1 live test you opt into |
+
+The only new package is `claude-agent-sdk`, added with `uv add claude-agent-sdk`. It brings its own copy of Claude Code.[^loop]
+
+## File 1: categories (003_merchant_categories.sql)
+
+“How much did I spend on **food**?” needs to know which payments were food. Payments point at merchants, so the category goes on the merchant:
+
+```sql
+ALTER TABLE merchants
+    ADD COLUMN category TEXT NOT NULL DEFAULT 'other'
+        CHECK (category IN ('food', 'transport', 'education', 'entertainment', 'shopping', 'other'));
+
+CREATE INDEX payments_user_created_idx ON payments (user_id, created_at);
+```
+
+- `DEFAULT 'other'` lets the column be added to a table that already has rows: every existing merchant reads back as `'other'`, and Postgres doesn't even have to rewrite the table.[^alter]
+- The `CHECK` makes Postgres refuse any other value. The six categories are **PocketPay's own choice** for a teen wallet.
+- Every spending question asks for “this user's payments between these two times”. An index on `(user_id, created_at)` lets Postgres jump straight to those rows instead of reading the whole table.[^index]
+
+## File 2: two weeks of demo spending (seed.py)
+
+The agent needs some history to answer from. `seed_history()` adds six shops (a bakery, a bookshop, a cinema, a bus pass, and so on) and 17 payments over the last two weeks:
+
+```python
+reply = await payments.create(
+    ids["user_id"], str(uuid.uuid4()), PaymentRequest(merchant_id=merchant_ids[merchant], amount=amount)
+)
+...
+await conn.execute(
+    """WITH p AS (UPDATE payments SET created_at = %s, updated_at = %s WHERE id = %s RETURNING entry_id)
+       UPDATE journal_entries SET created_at = %s WHERE id = (SELECT entry_id FROM p)""",
+    (when, when, reply.body["id"], when),
+)
+```
+
+Each payment goes through the real `PaymentService` from Block 3, so the ledger postings, payment rows and idempotency keys are all real. Only afterwards are the timestamps moved into the past, on both the payment and its journal entry. That backdating is **for demo data only**. Real payments never have their times rewritten.
+
+The dates are relative to “now”, so the demo always has a “this week” and a “last week”. The tests pass a fixed now (Saturday 31 October 2026, noon India time) so their numbers never change.
+
+## File 3: the tool types (messages.py)
+
+```python
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    parameters: dict[str, Any]   # a JSON Schema
+
+@dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict[str, Any]
+
+@dataclass(frozen=True)
+class ToolResult:
+    name: str
+    content: str
+    is_error: bool = False
+```
+
+These don't mention Claude or the SDK. The tools only ever see these three types, so `tools.py` can be tested on its own, and Block 8's standalone MCP server can reuse it unchanged.
+
+## File 4: the tools (tools.py)
+
+`SpendingTools` holds the tools for **one** user. You create it with that user's ID, and the ID is never an argument again:
+
+```python
+@classmethod
+async def for_user(cls, ledger: Ledger, user_id: int) -> SpendingTools:
+    async with ledger.pool.connection() as conn:
+        cur = await conn.execute("SELECT wallet_account_id, name FROM users WHERE id = %s", (user_id,))
+        row = await cur.fetchone()
+    if row is None:
+        raise LookupError(f"there is no user {user_id}")
+    return cls(ledger, user_id, wallet_account_id=row[0], user_name=row[1])
+```
+
+### Checking the arguments
+
+Each tool has a Pydantic model for its arguments. `extra="forbid"` means an argument we didn't define (like `user_id`) is an error, not something quietly ignored:[^pydantic]
+
+```python
+class DateRange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def sensible_range(self):
+        if self.end_date < self.start_date:
+            raise ValueError("end_date is before start_date")
+        if (self.end_date - self.start_date).days >= MAX_DAYS:
+            raise ValueError(f"ask about at most {MAX_DAYS} days at a time")
+        return self
+
+
+class FilteredRange(DateRange):
+    category: Category | None = None   # one of the six, or left out
+```
+
+### Running a call: never crash, always explain
+
+`run()` is the single door every tool call goes through. It never raises. Every problem becomes an error result the model can read:
+
+```python
+async def run(self, call: ToolCall) -> ToolResult:
+    if call.name not in self._tools:
+        return ToolResult(call.name, f"there is no tool called {call.name!r}", is_error=True)
+    _, args_model, fn = self._tools[call.name]
+    try:
+        args = args_model.model_validate(call.arguments)
+    except ValidationError as e:
+        problems = "; ".join(f"{'.'.join(map(str, err['loc'])) or 'arguments'}: {err['msg']}" for err in e.errors())
+        return ToolResult(call.name, f"invalid arguments: {problems}", is_error=True)
+    try:
+        result = await fn(args)
+    except Exception:
+        log.exception("tool %s failed", call.name)
+        return ToolResult(call.name, "the tool failed unexpectedly; try again later", is_error=True)
+    return ToolResult(call.name, json.dumps(result, ensure_ascii=False))
+```
+
+The three outcomes are treated differently on purpose:
+
+- **Bad arguments:** the model gets the exact problem (`start_date: Input should be a valid date…`), because it can fix that.
+- **Our bug, or the database is down:** the model gets a vague message, and the details go to *our* log. Database internals are none of the model's business.
+- **Success:** the result as JSON. `ensure_ascii=False` keeps `₹` as `₹` instead of `₹`.[^json]
+
+### The SQL does the adding up
+
+```python
+async def spending_summary(self, args: FilteredRange) -> dict:
+    start, end = _bounds(args)
+    async with self.ledger.pool.connection() as conn:
+        cur = await conn.execute(
+            """SELECT m.category, count(*), sum(p.amount)::bigint
+                 FROM payments p JOIN merchants m ON m.id = p.merchant_id
+                WHERE p.user_id = %s AND p.status = ANY(%s) AND p.created_at >= %s AND p.created_at < %s
+                  AND (%s::text IS NULL OR m.category = %s)
+                GROUP BY m.category ORDER BY 3 DESC""",
+            (self.user_id, list(SPENT), start, end, args.category, args.category),
+        )
+```
+
+- `p.user_id = %s` is `self.user_id`, fixed when the tools were made. **This line is what keeps other users' money out**, whatever the model says.
+- `sum()` over a `bigint` column returns `numeric` in Postgres, so `::bigint` turns it back into a whole number of paise for Python.[^sum]
+- `(%s::text IS NULL OR m.category = %s)` makes the category filter optional with one query: pass `None`, and the first half is true for every row.
+- `SPENT` is the statuses where money has left the wallet: `processing`, `succeeded` and `partially_refunded`.
+
+### Days in India time
+
+```python
+def _bounds(args: DateRange) -> tuple[datetime, datetime]:
+    start = datetime.combine(args.start_date, time.min, IST)
+    end = datetime.combine(args.end_date + timedelta(days=1), time.min, IST)
+    return start, end
+```
+
+“26 October to 1 November” becomes “from midnight on 26 October, India time, up to (but not including) midnight at the start of 2 November”. `created_at` is a `timestamptz`, so Postgres compares the actual moments in time, whatever time zone they're written in.[^tz] Comparing against a range, rather than converting every row's `created_at` to a date, also lets Postgres use the index from File 1.
+
+## File 5: the instructions (prompt.py)
+
+```python
+def system_prompt(now: datetime, owner: str = "the user") -> str:
+    today = now.astimezone(IST).date()
+    monday = today - timedelta(days=today.weekday())
+    last_monday = monday - timedelta(days=7)
+    ...
+    return f"""You answer questions about one teenager's PocketPay wallet. Amounts are Indian rupees (₹).
+The wallet belongs to {owner}, who is the person asking. Your tools can only see this wallet.
+
+Today is {d(today)}, India time.
+- "this week" = {monday.isoformat()} to {today.isoformat()}
+- "last week" = {last_monday.isoformat()} to {(monday - timedelta(days=1)).isoformat()}
+- "this month" = {today.replace(day=1).isoformat()} to {today.isoformat()}
+
+Rules:
+- Get every number from a tool. Never guess, and never add amounts up yourself: spending_summary gives totals.
+...
+- If asked about anyone else's money, say you can only see {owner}'s own wallet. ...
+- If a question isn't about this wallet's balance or spending, say that's all you can help with.
+- Answer in one to three short sentences, with amounts written like ₹1,234.00."""
+```
+
+`date.weekday()` is 0 on Monday, so `today - weekday()` is this week's Monday.[^weekday] The owner line (“Riya (user 2)”) was added after the injection test described on the concept page.
+
+## File 6: plugging into the Agent SDK (claude_agent.py)
+
+### Our tools as SDK tools
+
+```python
+def wallet_tools(tools: SpendingTools) -> list[SdkMcpTool]:
+    def wrap(name: str, description: str, schema: dict) -> SdkMcpTool:
+        async def handler(arguments: dict) -> dict:
+            result = await tools.run(ToolCall(name, arguments))
+            return {"content": [{"type": "text", "text": result.content}], "is_error": result.is_error}
+
+        return SdkMcpTool(name, description, schema, handler, ToolAnnotations(readOnlyHint=True))
+
+    return [wrap(s.name, s.description, s.parameters) for s in tools.specs()]
+
+
+def wallet_server(tools: SpendingTools):
+    return create_sdk_mcp_server(SERVER, tools=wallet_tools(tools))
+```
+
+The SDK docs show tools made with the `@tool` decorator on a plain function. A tool is “defined by four parts”: name, description, input schema and handler.[^custom] `@tool` builds an `SdkMcpTool` from those four. We build the same object directly, because our handlers are methods on one user's `SpendingTools`, which only exists once we know who's asking.
+
+The handler is a thin translation. The SDK hands it the arguments Claude chose. It passes them to our `run()`, which already does all the checking, and turns our `ToolResult` into the MCP shape: a `content` list of text blocks, plus `is_error`.[^custom][^mcp]
+
+`readOnlyHint=True` is true for all three tools, and it lets Claude Code run two of them at once if Claude asks for both together.[^loop] It's a hint, not a lock. As the docs put it, “Annotations are metadata, not enforcement.”[^custom] What actually keeps the tools read-only is that their SQL only `SELECT`s.
+
+### The lockdown
+
+```python
+def agent_options(tools: SpendingTools, now: datetime, model: str | None = None) -> ClaudeAgentOptions:
+    return ClaudeAgentOptions(
+        system_prompt=system_prompt(now, owner=f"{tools.user_name} (user {tools.user_id})"),
+        mcp_servers={SERVER: wallet_server(tools)},
+        tools=[],
+        allowed_tools=tool_names(tools),
+        permission_mode="dontAsk",
+        strict_mcp_config=True,
+        setting_sources=[],
+        skills=[],
+        verbatim_prompts=True,
+        max_turns=MAX_TURNS,
+        model=model,
+    )
+```
+
+The concept page's fence diagram shows what each line shuts off. Where each one comes from:
+
+- `system_prompt` as a plain string means “use a custom system prompt”, instead of the `claude_code` preset that the SDK offers as the other choice.[^sdksrc] So the agent gets PocketPay's instructions, not Claude Code's coding-assistant ones.
+- `tools=[]`: “All built-ins are removed. Claude can only use your MCP tools.”[^custom]
+- `allowed_tools` lists `mcp__wallet__get_balance` and the other two, named by the rule `mcp__{server_name}__{tool_name}`. They run without asking for approval.[^custom]
+- `permission_mode="dontAsk"`: “Every call that would otherwise prompt is denied.”[^loop]
+- `strict_mcp_config=True`: “only use MCP servers passed via `mcp_servers`, ignoring all other MCP configurations”.[^sdksrc]
+- `setting_sources=[]`: “Pass `[]` to disable filesystem settings (SDK isolation mode).” And `skills=[]`: “to suppress every skill from the listing, use `[]`.”[^sdksrc]
+- `verbatim_prompts=True` delivers the question exactly as typed, with “no `@path` file-mention expansion”. Without it, a question containing `@/some/file` could make Claude Code read that file into the prompt.[^sdksrc]
+- `max_turns=6`. Hitting the limit ends the run with the subtype `error_max_turns` and no answer.[^loop]
+- `model=None` uses Claude Code's default model. Set `AGENT_MODEL=sonnet` (or another model name Claude Code accepts) to change it.
+
+### Asking one question
+
+```python
+async def ask(tools, question, *, now=None, model=None, on_message=None) -> AgentAnswer:
+    result: ResultMessage | None = None
+    async for message in query(prompt=question, options=agent_options(tools, now or datetime.now(UTC), model)):
+        if on_message:
+            on_message(message)
+        if isinstance(message, ResultMessage):
+            result = message
+        elif isinstance(message, AssistantMessage) and message.error:
+            raise AgentFailed(f"Claude couldn't answer: {message.error}")
+    if result is None or result.is_error or result.subtype != "success":
+        why = result and (result.terminal_reason or result.subtype)
+        raise AgentFailed(f"no answer ({why or 'the agent stopped early'})")
+    return AgentAnswer(answer=(result.result or "").strip(), turns=result.num_turns,
+                       seconds=result.duration_ms / 1000, cost_usd=result.total_cost_usd)
+```
+
+`query()` hands us a stream of messages as the loop runs. An `AssistantMessage` holds Claude's text or tool call, a `UserMessage` holds a tool's result going back, and a final `ResultMessage` holds the answer, the number of turns and the cost.[^loop]
+
+We read the stream to the end instead of stopping at the `ResultMessage`, because the docs warn that a few system messages can arrive after it.[^loop] The answer is only trusted when the subtype is `success`: that's the only subtype that has a `result` at all.[^loop] `on_message` lets the terminal command print each step as it happens.
+
+## File 7: the terminal command (__main__.py)
+
+```bash
+cd backend
+set -a; . ../.env; set +a        # DATABASE_URL
+uv run python -m pocketpay.agent --user 2 "How much did I spend on food this week?"
+```
+
+```
+[Riya, user 2] How much did I spend on food this week?
+  → Claude asks: spending_summary(start_date='2026-10-26', end_date='2026-11-01', category='food')
+  ← {"from": "2026-10-26", "to": "2026-11-01", "total": "₹225.00", "payments": 5, "by_category": [...]}
+
+This week (26 Oct to 1 Nov 2026), you spent ₹225.00 on food across 5 payments.
+
+(2 turns, 4.8 s, API price $0.0041)
+```
+
+The `→` lines are the `ToolUseBlock`s from Claude, and the `←` lines are the `ToolResultBlock`s going back. Before starting, the command checks for `ANTHROPIC_API_KEY`. If it's set, it warns that the question will be billed to that key rather than to your Claude plan.[^plan]
+
+On your laptop, Riya is **user 2**, because user 1 was made by the Block 3 demo and has no history. Run `uv run python -m pocketpay.seed` on an empty database to get a fresh Riya with the two weeks of spending.
+
+## File 8: the tests
+
+Most tests never call Claude. They run each tool, and the SDK wiring, against a fresh Postgres schema with the demo history:
+
+| Test | What it proves |
+|---|---|
+| `test_spending_summary_adds_up_this_week` | This week: ₹1,103.00 over 9 payments; food is ₹225.00 over 5 |
+| `test_spending_summary_for_one_category` | The category filter works |
+| `test_list_payments_filters_by_category_newest_first` | Order, India-time formatting, filtering |
+| `test_balance` | ₹500 + ₹2,000 − ₹1,723 spent = ₹777.00 |
+| `test_bad_calls_become_errors_the_model_can_read` | Backwards dates, “last monday” as a date, an unknown tool: all readable errors |
+| `test_the_model_cannot_pick_another_user` | Passing `user_id` is refused; another user's tools see only their own (empty) history |
+| `test_sdk_tools_run_our_tools_and_pass_errors_back` | The SDK handlers return MCP content, with `is_error` set correctly |
+| `test_agent_can_only_use_the_wallet_tools` | Every lockdown option is set, and the instructions carry Riya's name and this week's dates |
+| `test_system_prompt_works_out_the_dates` | Saturday 31 Oct → this week is 26–31 Oct, last week 19–25 Oct |
+| `test_live_food_this_week` | Asks real Claude; skipped unless `RUN_CLAUDE_TESTS=1` |
+
+The lockdown test is the important one. If someone later deletes `tools=[]` to “fix” something, a test fails instead of the agent quietly gaining a shell.
+
+```bash
+uv run pytest -q                              # 36 passed, 1 skipped
+RUN_CLAUDE_TESTS=1 uv run pytest -q -k live   # uses your Claude plan
+```
+
+## What changed from the first version
+
+Block 7 first ran on our own loop and a local model (qwen3:8b through Ollama). We removed that: `loop.py`, the Ollama adapter, and the `ollama` package. The answers were correct but took up to 85 seconds each on a laptop, and running the model got in the way of learning about the agent. The tools, the SQL, the date handling and the tests all stayed. Only the part that talks to a model changed, which is the point of keeping the tools separate.
+
+## Check yourself
+
+<details>
+<summary>Why does run() give the model the exact error for bad arguments, but a vague one for a database failure?</summary>
+
+The model can fix bad arguments, so it needs the details. It can't fix our database, and the error might expose internal details (table names, connection strings). Those go to our log instead.
+
+</details>
+
+<details>
+<summary>What would break if _bounds used created_at::date instead of a time range?</summary>
+
+Two things. Postgres stores a `timestamptz` in UTC and turns it into local time using the session's `TimeZone` setting,[^tz] which might not be India time, so late-night payments could land on the wrong day. And applying a function to every row's `created_at` stops Postgres from using the `(user_id, created_at)` index.
+
+</details>
+
+<details>
+<summary>readOnlyHint=True is set on every tool. Does that stop a tool from writing to the database?</summary>
+
+No. It's a hint the SDK uses to decide whether tools may run at the same time. The tools are read-only because their SQL only selects.
+
+</details>
+
+<details>
+<summary>Why does ask() check result.subtype instead of just reading result.result?</summary>
+
+Only a `success` result has a final answer. A run that hits the turn limit ends with `error_max_turns` and no result text, and we want to report that, not print an empty answer.
+
+</details>
+
+[^loop]: Claude Agent SDK docs, *How the agent loop works* (bundled Claude Code, message types, result subtypes, `max_turns`, `dontAsk`, parallel read-only tools). [code.claude.com](https://code.claude.com/docs/en/agent-sdk/agent-loop)
+[^custom]: Claude Agent SDK docs, *Give Claude custom tools* (the four parts of a tool, `create_sdk_mcp_server`, naming rule, `tools: []`, annotations, errors). [code.claude.com](https://code.claude.com/docs/en/agent-sdk/custom-tools)
+[^sdksrc]: `claude-agent-sdk` 0.2.176 for Python, docstrings on `ClaudeAgentOptions` in `types.py`: `system_prompt`, `strict_mcp_config`, `setting_sources`, `skills`, `verbatim_prompts`. Read from the installed package.
+[^mcp]: Model Context Protocol specification (2025-06-18), *Tools*: tool results and `isError`. [modelcontextprotocol.io](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)
+[^plan]: Claude Help Center, *Using Claude Code with your Pro or Max plan* (`ANTHROPIC_API_KEY` takes priority over the subscription). [support.claude.com](https://support.claude.com/en/articles/11145838-using-claude-code-with-your-pro-or-max-plan)
+[^alter]: PostgreSQL 18 documentation, *ALTER TABLE*, Notes: with a non-volatile `DEFAULT`, the value “will be returned when any existing rows are accessed”, and no table rewrite is needed. [postgresql.org](https://www.postgresql.org/docs/18/sql-altertable.html)
+[^index]: PostgreSQL 18 documentation, *11.3 Multicolumn Indexes*: equality on the leading column plus a range on the next both narrow the scan. [postgresql.org](https://www.postgresql.org/docs/18/indexes-multicolumn.html)
+[^sum]: PostgreSQL 18 documentation, *9.21 Aggregate Functions* (`sum` of `bigint` returns `numeric`). [postgresql.org](https://www.postgresql.org/docs/18/functions-aggregate.html)
+[^tz]: PostgreSQL 18 documentation, *8.5 Date/Time Types*: “All timezone-aware dates and times are stored internally in UTC. They are converted to local time in the zone specified by the TimeZone configuration parameter”. [postgresql.org](https://www.postgresql.org/docs/18/datatype-datetime.html)
+[^pydantic]: Pydantic docs, *Configuration*: with `extra='forbid'`, “Providing extra data is not permitted, and a ValidationError will be raised”. [pydantic.dev](https://pydantic.dev/docs/validation/latest/api/pydantic/config/)
+[^json]: Python docs, *json*: with `ensure_ascii` false, “all characters will be outputted as-is” apart from those that must be escaped. [docs.python.org](https://docs.python.org/3/library/json.html#json.dumps)
+[^weekday]: Python docs, *datetime*: `date.weekday()` (“Monday is 0 and Sunday is 6”). [docs.python.org](https://docs.python.org/3/library/datetime.html#datetime.date.weekday)

@@ -1,6 +1,50 @@
 # DSA Editor
 
-A local, browser-based code editor for practising DSA in C++, Java and Python.
+A local, browser-based code editor for practising DSA in C++, Java and Python, with a
+LeetCode-style judge, step-by-step dry runs of your own code, and a Claude tutor that can read
+your code and run your tests, but can't change anything until you click Apply.
+
+![Spiral Matrix open on the Problems screen: the description, your C++ solution, 9/9 test cases accepted, and Claude explaining why the solution works](docs/images/problem.png)
+
+## What it does
+
+- **Practise problems, LeetCode style.** Paste a question (or a screenshot) and Claude sets it
+  up: the description, a `class Solution` to fill in, and test cases that check themselves. Run
+  checks the examples; Submit checks every case, including Claude's extra edge cases.
+- **See your code run, step by step.** Ask for a dry run and the Playground plays your own code
+  line by line: variables, arrays, matrices, linked lists, trees, and the exact step where the bug
+  shows up, marked in red.
+- **A tutor that asks before it touches anything.** Claude reads your file, runs your tests and
+  explains. Every change it proposes (code, notes, test cases) waits for your **Apply**.
+- **Your work stays yours.** Solutions, notes, problems and dry runs are plain files in folders you
+  can open, back up or commit. Code runs locally in a sandboxed [Piston](https://github.com/engineer-man/piston)
+  container.
+
+| Find the bug | Watch a linked list reverse |
+|---|---|
+| ![A dry run of rotate-array stopped at the step marked "Here's the bug", with an arrow showing the wrong value copied into nums[0]](docs/images/dry-run-bug.png) | ![A dry run of reverseList showing prev, curr and next pointers on two linked lists](docs/images/dry-run-linked-list.png) |
+| **Claude proposes, you decide** | **Run code, type input like a terminal** |
+| ![Claude proposing a new test case for Spiral Matrix, with Reject and Apply change buttons](docs/images/approval.png) | ![A C++ program asking for numbers, the typed input shown in purple, and the answer printed](docs/images/code.png) |
+| **Matrices, drawn** | **Markdown notes beside your code** |
+| ![A dry run of spiralOrder on a 3×4 matrix with the current cell highlighted and the answer array filling up](docs/images/dry-run.png) | ![A note on Rotate an Array in preview mode, listing the bugs hit along the way](docs/images/notes.png) |
+
+## How it works
+
+![The browser talks to a Python server on localhost. The server saves plain files, forwards runs to a Piston container, and runs the Claude Code engine as a child process; Claude can only use the editor's own tools.](docs/images/architecture.svg)
+
+- **The page** (React, Monaco, Tailwind) talks to **one small Python server** (Uvicorn) on
+  `127.0.0.1:5199`. The server saves your files, watches the folders so outside edits show up
+  live, and judges test cases.
+- **Code runs in Piston**, a sandbox container pinned to one version. Interactive runs use a
+  WebSocket, so typed input reaches your running program.
+- **Claude runs as the Claude Code engine**, a child process of the server, signed in with your
+  Claude subscription (no API key). It sees only the editor's 21 tools: Claude Code's own shell,
+  web and file tools, your settings, plugins and MCP servers are all switched off.
+
+![One Claude reply: your message goes to the server, which starts the engine with only the editor tools. Claude asks for add_test_case, the server shows you a proposal card, you click Apply, and the reply streams back.](docs/images/claude-turn.svg)
+
+Replies stream to the page as server-sent events and keep going if you reload or the connection
+drops; the page picks the reply up where it left off.
 
 ## Run it
 
@@ -18,6 +62,10 @@ link. It also creates the data folders first, so they belong to you; after that,
 - **piston**: runs your code ([Piston](https://github.com/engineer-man/piston), free,
   no API key). It's pinned to one version, with a small patch (`piston/api-v2.js`) so
   **Stop** really ends a running program.
+- **pocketpay-notes**: the PocketPay notes site (`pocketpay-notes/`), for revising, at
+  http://localhost:5200. The book button near the bottom of the editor's left bar opens it in a
+  new tab. After changing a note, `./start.sh --build` updates it. Why it's set up this way:
+  `pocketpay-notes/DECISIONS.md`.
 - **piston-setup**: installs C++, Java and Python into Piston. The first run takes a
   few minutes (`docker compose logs -f piston-setup` shows progress); after that it
   only checks and exits.
@@ -47,8 +95,9 @@ project-me_editor-node-modules` frees its space.
 
 ### Settings
 
-The defaults need no setup. **In Docker**, the only setting is the port on your computer:
-`EDITOR_PORT=5300 ./start.sh`. The rest is fixed by
+The defaults need no setup. **In Docker**, the only settings are the ports on your computer:
+`EDITOR_PORT=5300 ./start.sh` for the editor, `NOTES_PORT=5301 ./start.sh --build` for the notes
+(the editor's link to the notes is built in, hence `--build`). The rest is fixed by
 `docker-compose.yml`, and a `dsa-tutor.json` isn't read.
 
 **Without Docker**, put a `dsa-tutor.json` in the data folder (the repo root unless you set

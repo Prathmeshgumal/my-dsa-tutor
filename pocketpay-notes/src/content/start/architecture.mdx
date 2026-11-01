@@ -1,0 +1,212 @@
+export const meta = {"title": "The architecture of PocketPay", "description": "The whole system on one page: what each part does, how a payment travels through it, where the data lives, and how the AI agents fit in without ever being trusted with money.", "section": "Start here", "order": 1.5, "label": "Architecture"};
+
+<Callout title="This is the plan, not the finished system">
+	Only the ledger and its database exist today (Block 2). Everything else is PocketPay's own design for the blocks ahead, a first draft that will change as we build. The diagrams mark each part as **Built**, **Next** or **Planned**. Facts about outside tools (MCP, LangGraph, Kafka, Redis, Stripe's idempotency) are cited in the Sources at the end.
+</Callout>
+
+## Why look at the whole thing first
+
+So far we've built one piece, the ledger, from the inside out. That's the right way to learn each idea, but it hides the shape of the whole. You can know exactly how `post()` locks accounts and still not know who calls it, or what happens after it commits.
+
+This page is the map. It shows every part PocketPay will have, how a payment travels through them, where each piece of data lives, and why it's split up this way. When you start a new block, come back here and find the box you're about to build. It will tell you what talks to it and what it must never do.
+
+One idea runs through the whole design, so here it is up front: **there is exactly one door to money, the PocketPay API, and every rule is checked behind that door, in code.** A teen's app, a parent, Claude Desktop and the support agent all go through the same door. None of them, least of all an AI model, can move money any other way. Most of the boxes below exist to make that door safe to walk through twice, at the same time, or with a lie in your hand.
+
+## The big picture
+
+Here is every part, on one map. The people and outside systems are along the top. The AI layer sits underneath them. The PocketPay API is in the middle, and the database and background workers are at the bottom.
+
+Press **Next step** to follow a payment through it, or pick another journey. Click any box to read what it does and which block builds it.
+
+<SystemMap />
+
+Read the map from top to bottom and three layers stand out.
+
+**The callers.** Riya's app, a parent, Claude Desktop and the support chat all *ask* for things. None of them holds money or rules. PocketPay has no app screens of its own (it's an API-only project), so "Riya's app" really means whatever sends the HTTP request: our tests, `curl`, or an agent.
+
+**The AI layer.** These are three ways an AI model can reach PocketPay, and each is a block of its own.
+- The **tool-calling loop** (Block 7) is a small agent: we first write the loop by hand, to see that an agent is, in Anthropic's words, "typically just LLMs using tools based on environmental feedback in a loop",[^agents] then hand it to the Claude Agent SDK, with our tools as in-process MCP tools. See [Tool calling](/day-2/agent).
+- The **MCP server** (Block 8) offers PocketPay's wallet actions as MCP tools. MCP defines tools as "executable functions that AI applications can invoke to perform actions", and an *MCP host* such as Claude Desktop connects to *MCP servers* through an MCP client.[^mcp]
+- The **support agent** (Block 10) is a LangGraph graph that answers from the refund policy and stops to ask a person before big refunds.
+
+Notice what the AI layer *doesn't* do: none of its arrows go to the database. Each one ends at the API.
+
+**The core and the background.** The API checks everything and writes to Postgres. What happens afterwards, such as paying the merchant, adding reward coins and checking the books each night, happens in separate background processes. They are connected by an event log, so a slow bank never makes Riya wait.
+
+### What exists and what's coming
+
+| Part | Status | Block | Its one job |
+|---|---|---|---|
+| Ledger + Postgres | **Built** | 2 | Record every movement of money as a balanced, append-only entry |
+| Payments API, idempotency, state machines | Next | 3 | One safe door for money; a double tap charges once |
+| Outbox, Redpanda, consumers, bank callbacks, rate limiter | Planned | 4 | Do the slow work later, exactly once in effect, without losing anything |
+| Refunds, reconciliation | Planned | 5 | Give money back safely; prove our books match the bank's |
+| Observability, system design | Planned | 6 | See problems before users do; scale it on paper |
+| Tool-calling loop | Planned | 7 | Answer questions about Riya's money from the ledger |
+| MCP server | Planned | 8 | Let any AI app use the wallet, through the API |
+| Mandates, agent tokens | Planned | 9 | Limits a parent sets, enforced in code |
+| Support agent | Planned | 10 | Refunds from policy; a person approves big ones |
+| Evals, tracing | Planned | 11 | Prove that no prompt can move money it shouldn't |
+| Risk checks | Planned | 12 | Hold suspicious bursts of payments |
+
+The table is the same map, in the order you'll build it. Each row's last column is worth memorising: if you can say a part's one job, you can defend its design in an interview.
+
+## The core idea: one door, rules behind it
+
+Why put *every* check in the API, rather than some in the app, some in the agent's prompt, and some in the database?
+
+Because each of those places can be bypassed. An app can be modified, so its checks only help honest users. A prompt is only text the model reads, and a prompt injection is text that tells it something else. A database constraint can't know that Riya's agent may spend ₹200 today. Only the service sits in the path of *every* request, so the rules live there. The handoff for this project puts it as a rule: agent spending limits live **in the payment service, not in prompts**.
+
+The database still keeps a second line of defence. The `CHECK` constraints in the ledger tables refuse a zero amount even if the Python has a bug. But the real decisions are made in one place, and every caller goes through it.
+
+## Inside the API: the layers
+
+Zoom into the big middle box and you find layers, each with one job. A request enters at the top and goes down. **Each layer only calls the one below it.** That is our design rule, and it's what makes each layer testable on its own. Pick a request to see what each layer does with it:
+
+<BackendLayers />
+
+Three things here are worth noticing.
+
+**The agent route is the payment route.** There is no special "agent payment" endpoint that could forget a check. The MCP server calls `POST /payments` like everyone else. What differs is who the caller *is*: an agent token, which brings its mandate with it.
+
+**The service opens the transaction, not the ledger.** In Block 2, `ledger.post()` always opened its own transaction. Block 3 changed that: the payment row and the ledger postings (and, from Block 4, the outbox event) must commit together, so the *service* opens the transaction and hands its connection to the ledger with `post(..., conn=conn)`. The [Block 3 code walkthrough](/day-1/payments-code) shows it.
+
+**Cheap checks come first.** Pydantic validation and the Redis rate limit cost almost nothing, so they run before anything touches Postgres. A flood of bad requests is turned away at the door.
+
+## The data: where everything lives
+
+Postgres is the source of truth. Anything that must not be lost, such as money, payments, keys and events, lives there. Click a table to see its links and why it exists:
+
+<DataModel />
+
+The tables in green are built: the ledger from Block 2, and users, merchants, cards, payments and idempotency keys from Block 3. The rest arrive block by block. Three ideas shape this draft:
+
+- **Money lives only in the ledger.** `payments.amount` records what was asked for, and `entry_id` points at the journal entry that actually moved it. A balance is never stored; it's always the sum of postings.
+- **Every "did we already do this?" question has its own table.** `idempotency_keys` answers it for requests that come in. `processed_events` answers it for events and bank callbacks. The `UNIQUE` constraint on each is what makes the answer reliable, even under concurrency.
+- **The outbox is just a table.** That's the trick behind it, explained in the next section.
+
+## How the pieces talk: sequence diagrams
+
+A sequence diagram shows who talks to whom, in what order. Time runs downwards. Solid arrows are requests, dashed arrows are replies, and dotted orange arrows are messages that don't wait for an answer. Step through each one.
+
+### A payment, end to end
+
+This is the most important diagram on the page, because almost every other flow reuses part of it.
+
+<Sequence name="pay" />
+
+Two pieces of design here deserve a closer look.
+
+**The outbox (steps 7 to 12).** After saving a payment, we need to tell other parts of the system, such as the payout worker and the rewards worker. The naive way is to commit to Postgres and *then* publish to Redpanda. But if the process crashes between the two, the payment exists and nobody ever hears about it. The *transactional outbox* pattern fixes this: you "store the message in the database as part of the transaction that updates the business entities", and "a separate process then sends the messages to the message broker".[^outbox] The catch is that the relay can publish the same message twice after a crash, so, in the same source's words, "a message consumer must be idempotent".[^outbox]
+
+**At-least-once, everywhere.** Kafka's documentation describes this delivery mode as "messages are never lost but may be redelivered", and explains that a consumer which crashes after processing messages but before saving its position will see them again.[^kafka] Redpanda, which we use instead of Kafka, works with the Kafka API.[^redpanda] Bank callbacks behave the same way: Stripe's webhook docs, for example, warn that endpoints "might occasionally receive the same event more than once" and that event order isn't guaranteed.[^webhooks] So every receiver in PocketPay records the IDs it has handled, and a repeat does nothing. **Duplicates are expected, not an error.**
+
+### Double tap: the idempotency key
+
+<Sequence name="doubleTap" />
+
+The idea comes straight from how payment APIs like Stripe's work. Stripe saves "the status code and body of the first request made with a given idempotency key", and retries with the same key "return the saved response". It also compares the parameters with the original request and errors if they differ.[^stripe] The HTTP status codes follow the IETF's draft standard for the `Idempotency-Key` header, which says to answer **409** when the first request is still being processed and **422** when a key is reused with a different body.[^ietf] That document is still an Internet-Draft, not a finished standard.
+
+One PocketPay design choice is worth spelling out: the key is saved and **committed on its own, before the payment starts** (step 3). If it were only saved inside the payment's transaction, the second tap couldn't see it until the first committed, and we couldn't answer "still running".
+
+### An AI agent pays
+
+<Sequence name="agentPay" />
+
+The model chooses *what* to do, and PocketPay's code decides *whether* it happens. MCP standardises the middle part: the host lists the server's tools, and calls one with `tools/call`.[^mcp]
+
+### A prompt injection tries to move money
+
+<Sequence name="injection" />
+
+This is the attack Block 11's evals are built around. The design doesn't try to make the model un-foolable. It assumes the model *can* be fooled (step 4) and makes sure being fooled doesn't matter, because the mandate is checked in code at step 7. This is also why every model call is traced: the eval needs to see what the model tried, as well as what happened. Langfuse traces capture "LLM calls, retrieval steps, tool executions, and custom logic".[^langfuse]
+
+### A big refund waits for a person
+
+<Sequence name="refund" />
+
+LangGraph's `interrupt()` is what makes "wait for a human" possible without keeping a process running for hours. It pauses the graph, and "LangGraph saves the current graph state and waits for you to resume execution with input". You resume by invoking the graph again with a `Command` carrying the resume value, using the same thread ID. This needs a checkpointer to store the state.[^langgraph]
+
+### The nightly reconciliation
+
+<Sequence name="reconcile" />
+
+Every other check on this page happens inside our own system. This is the one that compares us with the outside world. If a callback was lost, a payout went missing or someone made a typo at the bank, this is where it shows up.
+
+## Flowcharts: the decisions
+
+### Every check on a payment, in order
+
+The sequence diagrams show *who* talks. This flowchart shows *what is decided*, and in what order, for one `POST /payments`. Pick a situation:
+
+<PaymentDecision />
+
+The order is deliberate: cheapest first, money last. The rate limit is one Redis call. The idempotency check is one indexed lookup. Agent checks only run for agents. The ledger, which takes locks, runs last, so it only does work for requests that have passed everything else. 429 is the standard status for rate limiting, defined in RFC 6585 as "the user has sent too many requests in a given amount of time".[^rfc6585] The other status codes are PocketPay's choices, settled in Block 3.
+
+### State machines: what can happen next
+
+A payment isn't just "done" or "not done". It moves through states, and only some moves make sense. A failed payment must never become succeeded because a late callback arrived. The state machine writes those rules down, and the service refuses any move that isn't on the diagram. Try pressing events that aren't allowed:
+
+<StateMachines />
+
+## The rules that hold it together
+
+These rules come from the project's handoff, and each one is enforced by a specific box above. This table is the page in one view:
+
+| Rule | Where it's enforced | Which flow shows it |
+|---|---|---|
+| Money is integer paise, never floats | Pydantic models; `BIGINT` columns | every flow |
+| Ledger entries are append-only; fix with reversals | `ledger.py`; no `UPDATE` or `DELETE` on postings | callback failure, refunds |
+| Every money-moving request takes an idempotency key | Request checks layer; `idempotency_keys` table | double tap |
+| Consumers and callback handlers are idempotent | `processed_events` table | payment end to end |
+| DB write and event go out through the outbox | Service transaction + outbox relay | payment end to end |
+| Agent limits live in the service, not the prompt | Mandates in the services layer | agent pays, prompt injection |
+| Secrets stay in `.env`, never committed | `.gitignore` | (setup) |
+
+## How this changed from the original plan
+
+The handoff that started this project sketched the same architecture with **Django** and Django REST Framework. We switched to **FastAPI, Pydantic and psycopg 3 with plain SQL**, and made the backend **async**; the [tech stack page](/start/tech-stack) explains why. The boxes and arrows stayed the same. Only the framework inside the API box changed. That's a sign the architecture is about the problem, not the tools.
+
+## Check yourself
+
+<details>
+<summary>The AI model is tricked into calling create_payment for ₹5,000. Which box stops it, and why not the prompt?</summary>
+
+The mandate check in the API's services layer, because it runs in code on every request with an agent token. A prompt is only text the model reads, so another piece of text (the injection) can override it. The code can't be talked out of a limit.
+</details>
+
+<details>
+<summary>Why not publish payment.created to Redpanda straight after the COMMIT?</summary>
+
+If the process crashes between the commit and the publish, the payment exists but no event is ever sent, so the merchant is never paid. Writing the event into the outbox table in the *same* transaction means both happen or neither does. The relay publishes it afterwards.
+</details>
+
+<details>
+<summary>The outbox relay can publish the same event twice. Why is that acceptable?</summary>
+
+Because every consumer is idempotent: it records the event IDs it has processed in `processed_events`, and a repeat finds its ID and does nothing. "Never lost, possibly repeated" plus idempotent consumers gives the effect of exactly once.
+</details>
+
+<details>
+<summary>Why is the idempotency key committed before the payment starts, in its own transaction?</summary>
+
+So a second request with the same key can see it while the first is still running, and be told 409 instead of paying again. Inside the payment's own transaction it would stay invisible to other requests until the commit.
+</details>
+
+<details>
+<summary>Which flows does Postgres take part in, and which only touch Redis?</summary>
+
+Every flow that moves or records money goes through Postgres. Redis only holds rate-limit counters, which are safe to lose, so nothing precious ever lives only in Redis.
+</details>
+
+[^agents]: Anthropic, *Building effective agents*. [anthropic.com](https://www.anthropic.com/research/building-effective-agents)
+[^mcp]: Model Context Protocol docs, *Architecture overview* (hosts, clients and servers; tools; `tools/list` and `tools/call`). [modelcontextprotocol.io](https://modelcontextprotocol.io/docs/learn/architecture)
+[^outbox]: Chris Richardson, microservices.io, *Pattern: Transactional outbox*. [microservices.io](https://microservices.io/patterns/data/transactional-outbox.html)
+[^kafka]: Apache Kafka documentation, *Design*, "Message Delivery Semantics". [kafka.apache.org](https://kafka.apache.org/42/design/design/)
+[^redpanda]: Redpanda docs, *Introduction to Redpanda*: "Producers and consumers interact with Redpanda using the Apache Kafka® API." [docs.redpanda.com](https://docs.redpanda.com/current/get-started/intro-to-events/)
+[^webhooks]: Stripe docs, *Receive Stripe events in your webhook endpoint* ("Handle duplicate events", "Event ordering"). [docs.stripe.com](https://docs.stripe.com/webhooks)
+[^stripe]: Stripe API reference, *Idempotent requests*. [docs.stripe.com](https://docs.stripe.com/api/idempotent_requests)
+[^ietf]: IETF HTTPAPI working group, *The Idempotency-Key HTTP Header Field*, Internet-Draft `draft-ietf-httpapi-idempotency-key-header-08`. [datatracker.ietf.org](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
+[^langfuse]: Langfuse docs, *Observability overview*. [langfuse.com](https://langfuse.com/docs/observability/overview)
+[^langgraph]: LangGraph docs, *Interrupts*. [docs.langchain.com](https://docs.langchain.com/oss/python/langgraph/interrupts)
+[^rfc6585]: IETF, RFC 6585, *Additional HTTP Status Codes*, section 4 (429 Too Many Requests). [rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6585#section-4)

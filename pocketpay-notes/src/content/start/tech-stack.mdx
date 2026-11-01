@@ -1,0 +1,82 @@
+export const meta = {"title": "What payments companies build with", "description": "The backend stacks Indian payments companies hire for, and the stack PocketPay uses.", "section": "Start here", "order": 1, "label": "Tech stacks"};
+
+Before picking a stack for PocketPay, it helps to see what the companies you're applying to actually use. None of them publish a full picture, so this page uses **their own job postings only**, checked on 30 October 2026. Postings change and come down, so treat this as a snapshot.
+
+## What the postings say
+
+### FamApp (Trio)
+
+From [SDE 2 Infra](https://jobs.lever.co/fampay/9b8d4eaa-cd29-4aec-8dcc-a33fd78d5657) (Lever):
+- **Scale:** "1 Billion+ API requests per day", "~10M daily transactions", "10M+ users", "20,000+ RPS", and a "470+ node Kubernetes cluster".
+- **Event streaming:** "400+ topics, and 3,800+ partitions at ~46,700 messages/sec".
+- **Languages:** Python or Go.
+- **Infrastructure:** Kubernetes (EKS, GKE or AKS), Terraform, Karpenter.
+- **Observability (nice to have):** Prometheus or VictoriaMetrics, Loki, Jaeger, OpenTelemetry.
+
+From [Data Engineer (SDE 2)](https://jobs.lever.co/fampay/01750a61-a53b-433f-8d8c-bfb5a18417f8) (Lever):
+- **Change data capture:** "Debezium/Kafka for CDC-heavy use cases".
+- **Event-driven ingestion:** "MSK / Kafka".
+- **Data stack:** PySpark, Apache Iceberg, ClickHouse.
+- **AI tools (must have):** "Proficiency in using AI tools (Claude, Codex, Copilot) to write, test, and document code efficiently."
+
+From an older [Site Reliability Engineer](https://www.ycombinator.com/companies/fampay/jobs/N4ojybAAB-india-fampay-site-reliability-engineer) posting (Y Combinator):
+- **Languages:** "at least one of Python, Django, Go or Java".
+- **Other:** AWS, Kubernetes, Kafka, and observability tools "such as Prometheus or Zipkin".
+
+### slice
+
+From [SDE 2 - Backend](https://careers.kula.ai/slice/50594) (slice's careers board):
+- **Languages:** none named. It asks for "Strong programming skills".
+- **Frameworks:** "API development and frameworks such as Express, Loopback, Hapi". These are Node.js frameworks.
+- **Data and cloud:** "SQL and NoSQL databases", and "AWS/GCP/Azure".
+- **Observability:** "Prometheus or Kibana".
+
+### CRED and Razorpay: not verified
+
+- **CRED:** its Lever page had no backend engineering roles open, the postings I found earlier had been taken down, and its engineering blog blocked access.
+- **Razorpay:** I couldn't find a live Razorpay posting that lists a stack.
+
+Earlier versions of this page described their stacks using third-party job aggregators and a personal résumé. Those aren't reliable sources, so I've removed them.
+
+## What this means for you
+
+From the postings I could verify:
+
+- FamApp names **Python and Go** for backend and infrastructure work, plus **Kafka** for events, and expects you to use AI coding tools.
+- slice's backend posting uses **Node.js** frameworks.
+
+What both companies ask about is the same set of ideas: APIs, databases, events, observability and running systems at scale. Those ideas carry over between languages, and they're what the PocketPay blocks teach.
+
+## The options for PocketPay
+
+| Option | Good for you because | Cost |
+|---|---|---|
+| **FastAPI + Pydantic + psycopg 3 (chosen)** | You already know FastAPI. Plain SQL through psycopg keeps transactions and locks visible. One language for the backend, the AI agent and the evals. | No hidden magic to lean on: you write the SQL and transactions yourself. |
+| FastAPI + SQLAlchemy | You already know FastAPI, so all your attention goes to payments ideas. Python matches FamApp's postings. | You set up migrations and transactions yourself, which is extra learning. |
+| Django + DRF | Django appears in FamApp's SRE posting. [Database transactions](https://docs.djangoproject.com/en/stable/topics/db/transactions/) are built in through `transaction.atomic()`. | A new framework on top of new payments concepts, on a tight weekend. |
+| Node.js (Express) | Matches slice's posting. | Moves you away from Python, which is your strength and FamApp's. |
+
+## Decision: Python everywhere, with FastAPI, Pydantic and psycopg 3
+
+You want to put understanding the concepts first, and you see yourself as an AI Engineer more than a backend engineer. So PocketPay is all Python:
+
+- **Payments API in FastAPI**, which its docs describe as a web framework "for building APIs with Python based on standard Python type hints".[^fastapi] **Pydantic** checks request data, for example that an amount is a whole number above zero.[^pydantic]
+- **PostgreSQL with plain SQL through psycopg 3**, a "PostgreSQL database adapter for the Python programming language".[^psycopg] You still write `BEGIN`, `FOR UPDATE` and `COMMIT` yourself, exactly as on the ledger pages. We chose it over the SQLAlchemy ORM because an ORM writes that SQL for you, and seeing it is the point right now.
+- **Async throughout.** Endpoints are `async def` and use psycopg's async API, so the server keeps serving other users while one request waits on the database or an LLM. See [Async Python, from scratch](/day-1/async-python).
+- **MCP server in Python.** Python is a Tier 1 official MCP SDK.[^mcp]
+- **AI support agent and evals in Python with LangGraph**.[^langgraph]
+
+FamApp's [infra posting](https://jobs.lever.co/fampay/9b8d4eaa-cd29-4aec-8dcc-a33fd78d5657) asks for "Python or Go", so Python covers what it asks for.
+
+## Decisions so far
+
+- **Experience:** 6 to 8 months of backend, comfortable with FastAPI. The notes explain payments ideas from scratch.
+- **Product:** PocketPay, API only. No web UI.
+- **Backend:** Python: FastAPI + Pydantic + psycopg 3 (plain SQL, async) + PostgreSQL, managed with uv. **AI layer:** Python for LangGraph, the MCP server and evals.
+- **Notes site:** Vite + React + MDX + Tailwind, the app you're reading now. Hosting comes later.
+
+[^fastapi]: FastAPI documentation, home page. [fastapi.tiangolo.com](https://fastapi.tiangolo.com/)
+[^pydantic]: Pydantic documentation, *Fields* (numeric constraints such as `gt`). [docs.pydantic.dev](https://docs.pydantic.dev/latest/concepts/fields/)
+[^psycopg]: psycopg 3 documentation, home page. [psycopg.org](https://www.psycopg.org/psycopg3/docs/)
+[^mcp]: Model Context Protocol, *SDKs* (tier list). [modelcontextprotocol.io](https://modelcontextprotocol.io/docs/sdk)
+[^langgraph]: LangGraph documentation, overview. [docs.langchain.com](https://docs.langchain.com/oss/python/langgraph/overview)

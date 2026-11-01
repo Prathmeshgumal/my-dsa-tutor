@@ -1,0 +1,116 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* PocketPay Notes: indigo ink (Day 1) + marigold (Day 2) on cool paper. */
+:root {
+  --paper: #f7f8fc;
+  --panel: #ffffff;
+  --ink: #1b1f4b;
+  --muted: #5b6386;
+  --rule: #d5d9ea;
+  --sat: #3a3fb8;
+  --sat-soft: #e3e4fa;
+  --on-sat: #ffffff;
+  --sun: #d98e04;
+  --sun-soft: #fcefd2;
+  --keep: #1e7a5a;
+  --cut: #b8433b;
+}
+.dark {
+  --paper: #12142b;
+  --panel: #1a1d3a;
+  --ink: #e7e9f6;
+  --muted: #a2a8cb;
+  --rule: #2e3260;
+  --sat: #8d92f5;
+  --sat-soft: #262a5c;
+  --on-sat: #12142b;
+  --sun: #f2b33d;
+  --sun-soft: #3a2f17;
+  --keep: #5cc79c;
+  --cut: #f08a80;
+}
+
+@theme inline {
+  --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-sat: var(--sat);
+  --color-sat-soft: var(--sat-soft);
+  --color-on-sat: var(--on-sat);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-keep: var(--keep);
+  --color-cut: var(--cut);
+}
+
+html { background: var(--paper); color: var(--ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--sat); outline-offset: 2px; border-radius: 3px; }
+
+/* Long-form notes. The typography plugin reads these variables. */
+.prose {
+  --tw-prose-body: var(--ink);
+  --tw-prose-headings: var(--ink);
+  --tw-prose-lead: var(--muted);
+  --tw-prose-links: var(--sat);
+  --tw-prose-bold: var(--ink);
+  --tw-prose-counters: var(--sat);
+  --tw-prose-bullets: var(--muted);
+  --tw-prose-hr: var(--rule);
+  --tw-prose-quotes: var(--ink);
+  --tw-prose-quote-borders: var(--sat);
+  --tw-prose-captions: var(--muted);
+  --tw-prose-code: var(--ink);
+  --tw-prose-th-borders: var(--rule);
+  --tw-prose-td-borders: var(--rule);
+  max-width: 72ch;
+}
+.prose :where(h2, h3):not(:where(.not-prose *)) { font-weight: 900; letter-spacing: -0.02em; scroll-margin-top: 5rem; }
+.prose :where(h2):not(:where(.not-prose *)) { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+.prose :where(a):not(:where(.not-prose *)) { text-underline-offset: 3px; font-weight: 500; }
+.prose :where(code):not(:where(pre code, .not-prose *)) {
+  background: var(--sat-soft); padding: 2px 5px; border-radius: 4px; font-weight: 500; font-size: 0.86em;
+}
+.prose :where(code):not(:where(pre code, .not-prose *))::before,
+.prose :where(code):not(:where(pre code, .not-prose *))::after { content: none; }
+.prose pre { border: 1px solid var(--rule); border-radius: 8px; font-size: 0.88em; line-height: 1.6; }
+.prose table { display: block; overflow-x: auto; }
+
+/* Shiki dual themes: light colours inline, dark via variables. */
+.dark .shiki, .dark .shiki span { color: var(--shiki-dark) !important; background-color: var(--shiki-dark-bg) !important; }
+
+/* Interview questions as flashcards. */
+.prose details { border: 1px solid var(--rule); border-radius: 8px; padding: 0.75rem 1rem; background: var(--panel); }
+.prose details + details { margin-top: 0.6rem; }
+.prose summary { cursor: pointer; font-weight: 500; }
+.prose details[open] summary { margin-bottom: 0.5rem; }
+.prose details > p:last-child { margin-bottom: 0; }
+
+/* Weekend plan bars: striped = cuttable, and a one-time grow-in on load. */
+.hatch {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 28%, transparent) 0 2px, transparent 2px 8px), var(--paper);
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.grow-in { transform-origin: left center; animation: grow 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes grow { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .grow-in { animation: none; } }
+
+/* Footnote citations: small superscript numbers in the text, a quiet list at the end. */
+.prose sup a[data-footnote-ref] { text-decoration: none; font-weight: 700; padding: 0 0.1em; }
+.prose sup a[data-footnote-ref]::before { content: '['; }
+.prose sup a[data-footnote-ref]::after { content: ']'; }
+.prose section[data-footnotes] { font-size: 0.9em; color: var(--muted); }
+.prose section[data-footnotes] li { scroll-margin-top: 5rem; }
+.prose section[data-footnotes] li:target { background: var(--sun-soft); border-radius: 6px; }
+.prose a[data-footnote-backref] { text-decoration: none; margin-left: 0.25em; }
+
+/* Architecture diagrams: the edge being followed right now marches in its direction. */
+.arch-flow { stroke-dasharray: 9 6; animation: arch-march 0.9s linear infinite; }
+@keyframes arch-march { to { stroke-dashoffset: -15; } }
+@media (prefers-reduced-motion: reduce) { .arch-flow { animation: none; stroke-dasharray: none; } }
