@@ -1,0 +1,79 @@
+{
+  "title": "Shift Array Elements by One Position",
+  "difficulty": "easy",
+  "description": "You are given an array of integers `arr`. Shift all its elements to the **right by one position**: each element moves one place to the right, and the last element wraps around to the first position. This is called a **right rotation** of the array.\n\nFor example, `[1,2,3,4]` becomes `[4,1,2,3]`.\n\nDo it in place and return the array.\n\n**Example 1:**\n```\nInput: arr = [1,2,3,4]\nOutput: [4,1,2,3]\n```\n\n**Example 2:**\n```\nInput: arr = [1,2]\nOutput: [2,1]\nExplanation: An array with two elements shifted by one position.\n```\n\n**Example 3:**\n```\nInput: arr = [1]\nOutput: [1]\nExplanation: A single-element array stays the same after shifting.\n```\n\n**Constraints:**\n- `0 <= arr.length <= 10^5`\n- `-10^9 <= arr[i] <= 10^9`",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>&"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[1,2,3,4]"
+      ],
+      "expected": "[4,1,2,3]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2]"
+      ],
+      "expected": "[2,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1]"
+      ],
+      "expected": "[1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[]"
+      ],
+      "expected": "[]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-1,-2,0,3,8,9]"
+      ],
+      "expected": "[9,-1,-2,0,3,8]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[7,7,7,7,7]"
+      ],
+      "expected": "[7,7,7,7,7]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[11,22,33,44,55,66,77,88,99]"
+      ],
+      "expected": "[99,11,22,33,44,55,66,77,88]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1000000000,-1000000000]"
+      ],
+      "expected": "[-1000000000,1000000000]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792499316600
+}

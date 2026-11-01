@@ -1,0 +1,89 @@
+{
+  "title": "Spiral Matrix",
+  "difficulty": "medium",
+  "description": "Given an `m x n` `matrix`, return *all elements of the* `matrix` *in spiral order*.\n\n**Example 1:**\n\n```\n1 → 2 → 3\n        ↓\n4 → 5   6\n↑       ↓\n7 ← 8 ← 9\n```\n\n```\nInput: matrix = [[1,2,3],[4,5,6],[7,8,9]]\nOutput: [1,2,3,6,9,8,7,4,5]\n```\n\n**Example 2:**\n\n```\nInput: matrix = [[1,2,3,4],[5,6,7,8],[9,10,11,12]]\nOutput: [1,2,3,4,8,12,11,10,9,5,6,7]\n```\n\n**Constraints:**\n\n- `m == matrix.length`\n- `n == matrix[i].length`\n- `1 <= m, n <= 10`\n- `-100 <= matrix[i][j] <= 100`",
+  "params": [
+    {
+      "name": "matrix",
+      "type": "vector<vector<int>>"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[[1,2,3],[4,5,6],[7,8,9]]"
+      ],
+      "expected": "[1,2,3,6,9,8,7,4,5]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1,2,3,4],[5,6,7,8],[9,10,11,12]]"
+      ],
+      "expected": "[1,2,3,4,8,12,11,10,9,5,6,7]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1]]"
+      ],
+      "expected": "[1]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1,2,3,4]]"
+      ],
+      "expected": "[1,2,3,4]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1],[2],[3]]"
+      ],
+      "expected": "[1,2,3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1,2],[3,4]]"
+      ],
+      "expected": "[1,2,4,3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1,2,3],[4,5,6],[7,8,9],[10,11,12]]"
+      ],
+      "expected": "[1,2,3,6,9,12,11,10,7,4,5,8]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[-1,2],[3,-4],[5,6]]"
+      ],
+      "expected": "[-1,2,-4,6,5,3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]"
+      ],
+      "expected": "[1,2,3,4,8,12,16,15,14,13,9,5,6,7,11,10]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792605238366,
+  "formatVersion": 1,
+  "link": "https://leetcode.com/problems/spiral-matrix/"
+}

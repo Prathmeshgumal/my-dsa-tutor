@@ -1,0 +1,95 @@
+{
+  "title": "Find First Unsorted Element in Array",
+  "difficulty": "easy",
+  "description": "Given an array of integers, your task is to find the index of the first element that disrupts the sorted order of the array. In a non-decreasing order sequence, each element should be less than or equal to the next element.\n\nIf the array is already sorted or maintains the non-decreasing order criterion throughout, return `-1`.\n\n### Example\n\n- **Input:** `[1, 2, 3, 4, 6, 5, 7, 8]`\n- **Output:** `4`\n\nIn the given input, elements from index 0 to 3 (`1`, `2`, `3`, `4`) are in non-decreasing order. The element at index 4 is `6`, which is followed by `5` at index 5, violating the non-decreasing order since `6` is greater than `5`. Hence, index 4 is the first unsorted element.\n\nTry to identify this pattern and apply the logic to solve the problem for any given input array.\n\n### Examples\n\n**Example 1:**\n```\nInput: arr = [1, 2, 3, 4, 5]\nOutput: -1\nExplanation: The array is already sorted.\n```\n\n**Example 2:**\n```\nInput: arr = [10, 20, 30, 25, 40]\nOutput: 2\nExplanation: First unsorted element is at index 2 (30 > 25).\n```\n\n**Example 3:**\n```\nInput: arr = [5, 4, 3, 2, 1]\nOutput: 0\nExplanation: First unsorted element is at index 0 (5 > 4).\n```\n\n### Constraints\n- `1 <= nums.length <= 100`\n- `0 <= nums[i] <= 1000`\n\n*Tags: Array, Linear Search*",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[1,2,3,4,6,5,7,8]"
+      ],
+      "expected": "4",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3,4,5]"
+      ],
+      "expected": "-1",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[10,20,30,25,40]"
+      ],
+      "expected": "2",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[5,4,3,2,1]"
+      ],
+      "expected": "0",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[7]"
+      ],
+      "expected": "-1",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,1,2,2,3]"
+      ],
+      "expected": "-1",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[4,4,4,4]"
+      ],
+      "expected": "-1",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[3,3,2]"
+      ],
+      "expected": "1",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3,5,4]"
+      ],
+      "expected": "3",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,1000,0]"
+      ],
+      "expected": "1",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792692007296
+}

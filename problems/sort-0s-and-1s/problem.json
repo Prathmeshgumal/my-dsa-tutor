@@ -1,0 +1,87 @@
+{
+  "title": "Sort 0s and 1s",
+  "difficulty": "easy",
+  "description": "You are given an array `arr` that contains only `0`s and `1`s. Sort it **in place** so that all `0`s come before all `1`s, and return the array.\n\nTry to do it in a single pass with two pointers, without counting.\n\n**Example 1:**\n```\nInput: arr = [1,1,0,1,0,0,1,1,1]\nOutput: [0,0,0,1,1,1,1,1,1]\n```\n\n**Example 2:**\n```\nInput: arr = [1,1,1,1,1]\nOutput: [1,1,1,1,1]\n```\n\n**Example 3:**\n```\nInput: arr = [1,0]\nOutput: [0,1]\n```\n\n**Constraints:**\n- `0 <= arr.length <= 10^5`\n- `arr[i]` is `0` or `1`",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>&"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[1,1,0,1,0,0,1,1,1]"
+      ],
+      "expected": "[0,0,0,1,1,1,1,1,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,1,1,1,1]"
+      ],
+      "expected": "[1,1,1,1,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,0]"
+      ],
+      "expected": "[0,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,0,1,1,0,1,1,0,0]"
+      ],
+      "expected": "[0,0,0,0,0,1,1,1,1]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[]"
+      ],
+      "expected": "[]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0]"
+      ],
+      "expected": "[0]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1]"
+      ],
+      "expected": "[1]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,1]"
+      ],
+      "expected": "[0,1]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,0,0]"
+      ],
+      "expected": "[0,0,0]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792499336895
+}

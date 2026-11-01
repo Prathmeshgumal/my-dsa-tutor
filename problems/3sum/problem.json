@@ -1,0 +1,73 @@
+{
+  "title": "3Sum",
+  "difficulty": "medium",
+  "description": "Given an integer array `arr`, return all the **unique** triplets `[arr[i], arr[j], arr[k]]` such that `i`, `j`, `k` are different indices and `arr[i] + arr[j] + arr[k] == 0`.\n\nThe answer must not contain duplicate triplets. The order of the triplets, and the order inside each triplet, doesn't matter.\n\n**Example 1:**\n```\nInput: arr = [-1,0,1,2,-1,-4]\nOutput: [[-1,-1,2],[-1,0,1]]\nExplanation: [-1,0,1] can be formed in two ways, but it is listed only once.\n```\n\n**Example 2:**\n```\nInput: arr = [0,1,1]\nOutput: []\nExplanation: No triplet sums to 0.\n```\n\n**Example 3:**\n```\nInput: arr = [0,0,0]\nOutput: [[0,0,0]]\n```\n\n**Constraints:**\n- `0 <= arr.length <= 3000`\n- `-10^5 <= arr[i] <= 10^5`",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>&"
+    }
+  ],
+  "compare": "any_order_nested",
+  "tests": [
+    {
+      "input": [
+        "[-1,0,1,2,-1,-4]"
+      ],
+      "expected": "[[-1,-1,2],[-1,0,1]]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,1,1]"
+      ],
+      "expected": "[]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,0,0]"
+      ],
+      "expected": "[[0,0,0]]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,0,0,0]"
+      ],
+      "expected": "[[0,0,0]]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-2,0,1,1,2]"
+      ],
+      "expected": "[[-2,0,2],[-2,1,1]]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[]"
+      ],
+      "expected": "[]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2]"
+      ],
+      "expected": "[]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792499331392,
+  "formatVersion": 1,
+  "link": "https://leetcode.com/problems/3sum/"
+}

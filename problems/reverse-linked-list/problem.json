@@ -1,0 +1,58 @@
+{
+  "title": "Reverse Linked List",
+  "difficulty": "easy",
+  "description": "Given the `head` of a singly linked list, reverse the list, and return *the reversed list*.\n\n**Example 1:**\n\nInput: head = [1,2,3,4,5]\nOutput: [5,4,3,2,1]\n\n**Example 2:**\n\nInput: head = [1,2]\nOutput: [2,1]\n\n**Example 3:**\n\nInput: head = []\nOutput: []\n\n**Constraints:**\n\n- The number of nodes in the list is in the range `[0, 5000]`.\n- `-5000 <= Node.val <= 5000`",
+  "params": [
+    {
+      "name": "head",
+      "type": "ListNode*"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[1,2,3,4,5]"
+      ],
+      "expected": "[5,4,3,2,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2]"
+      ],
+      "expected": "[2,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[]"
+      ],
+      "expected": "[]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[7]"
+      ],
+      "expected": "[7]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-1,0,1]"
+      ],
+      "expected": "[1,0,-1]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792866360969,
+  "link": "https://leetcode.com/problems/reverse-linked-list/",
+  "starter": "class Solution {\npublic:\n    ListNode* reverseList(ListNode* head) {\n        \n    }\n};",
+  "formatVersion": 1
+}

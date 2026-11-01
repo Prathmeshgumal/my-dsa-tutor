@@ -1,0 +1,87 @@
+{
+  "title": "Return Sum of Positive and Negative Elements in Array Using Pair",
+  "difficulty": "easy",
+  "description": "Given an array of integers, your task is to implement a function that calculates two separate sums: one for all the positive integers in the array, and another for all the negative integers. The function should return these two sums as a pair (tuple) of integers.\n\n- The first integer in the pair should be the sum of all positive numbers.\n- The second integer should be the sum of all negative numbers.\n\n> **Note:** Here the returned pair is shown as `[positiveSum,negativeSum]`. For example, `(10, -5)` appears as `[10,-5]`.\n\n**Example 1:**\n\n```\nInput: arr = [-1, 2, 3, -4, 5]\nOutput: (10, -5)\n```\n**Explanation:** The positive numbers are [2, 3, 5], whose sum is 10. The negative numbers are [-1, -4], whose sum is -5.\n\n**Example 2:**\n\n```\nInput: arr = [1, 2, 3, -1, -2]\nOutput: (6, -3)\n```\n**Explanation:** Sum of positives is 6 and negatives is -3.\n\n**Example 3:**\n\n```\nInput: arr = [0, 1, -1]\nOutput: (1, -1)\n```\n**Explanation:** Sum of positives is 1 and negatives is -1.\n\n**Example 4:**\n\n```\nInput: arr = [-5, -10, -15]\nOutput: (0, -30)\n```\n**Explanation:** Sum of positives is 0 and negatives is -30.\n\nThis problem tests your ability to traverse an array and perform conditional aggregation based on the sign of each element.\n\n**Constraints:**\n\n- The constraints were cut off in the screenshot. Assume `1 <= arr.length` and that `arr[i]` fits in an `int`. The sums can be larger than an `int`, which is why the function returns `long long`.",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[-1,2,3,-4,5]"
+      ],
+      "expected": "[10,-5]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3,-1,-2]"
+      ],
+      "expected": "[6,-3]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,1,-1]"
+      ],
+      "expected": "[1,-1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-5,-10,-15]"
+      ],
+      "expected": "[0,-30]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0]"
+      ],
+      "expected": "[0,0]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[7]"
+      ],
+      "expected": "[7,0]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,0,-3,0,4]"
+      ],
+      "expected": "[4,-3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1000000000,1000000000,1000000000]"
+      ],
+      "expected": "[3000000000,0]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-1000000000,-1000000000,-1000000000,5]"
+      ],
+      "expected": "[5,-3000000000]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792691211121
+}

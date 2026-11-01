@@ -1,0 +1,102 @@
+{
+  "title": "Rotate an Array",
+  "difficulty": "medium",
+  "description": "You are given an array of integers `nums` and a non-negative integer `k`. Your task is to rotate the array to the right by `k` steps, and you must do this **in-place** with a space complexity of `O(1)`, meaning that the operation should use minimal extra space. This problem challenges your understanding of array manipulation and in-place algorithms.\n\nIn an array rotation, each element is shifted to the right. The last element moves to the first position, and all other elements are also shifted. When the array is rotated by `k` steps, an element that was at index `i` will move to index `(i + k) % length of array`.\n\n### Example 1:\n**Input:** nums = [1, 2, 3, 4, 5, 6, 7], k = 3\n**Output:** [5, 6, 7, 1, 2, 3, 4]\n**Explanation:** Rotating the array to the right by 3 steps produces the array `[5, 6, 7, 1, 2, 3, 4]`. Elements are moved to the right, and the trailing elements are repositioned at the beginning of the array.\n\n### Example 2:\n**Input:** nums = [-1, -100, 3, 99], k = 2\n**Output:** [3, 99, -1, -100]\n**Explanation:** Rotating the array to the right by 2 steps results in `[3, 99, -1, -100]`. The elements at the end wrap around to the start of the array.\n\n### Note\n- The number of rotations exceeds the array length in some cases. Take into consideration that rotating the array `n` times results in the same arrangement as rotating it `n % length of array` times, thus simplifying the problem.",
+  "params": [
+    {
+      "name": "nums",
+      "type": "vector<int>"
+    },
+    {
+      "name": "k",
+      "type": "int"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[1,2,3,4,5,6,7]",
+        "3"
+      ],
+      "expected": "[5,6,7,1,2,3,4]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-1,-100,3,99]",
+        "2"
+      ],
+      "expected": "[3,99,-1,-100]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3]",
+        "0"
+      ],
+      "expected": "[1,2,3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3]",
+        "4"
+      ],
+      "expected": "[3,1,2]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[5]",
+        "10"
+      ],
+      "expected": "[5]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2]",
+        "2"
+      ],
+      "expected": "[1,2]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3,4,5,6]",
+        "11"
+      ],
+      "expected": "[2,3,4,5,6,1]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1,2,3,4,5]",
+        "1"
+      ],
+      "expected": "[5,1,2,3,4]",
+      "example": false,
+      "addedBy": "claude"
+    },
+    {
+      "input": [
+        "[1,2,3,4,5,6,7]",
+        "2"
+      ],
+      "expected": "[6,7,1,2,3,4,5]",
+      "example": false,
+      "addedBy": "claude"
+    }
+  ],
+  "createdAt": 1792511497989,
+  "formatVersion": 1,
+  "link": "https://leetcode.com/problems/rotate-array/"
+}

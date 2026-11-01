@@ -1,0 +1,75 @@
+{
+  "title": "Two Sum",
+  "difficulty": "easy",
+  "description": "Given an array of integers `arr` and an integer `target`, return the **indices** of the two numbers that add up to `target`.\n\nYou may assume exactly one solution exists, and you may not use the same element twice. Return the indices in increasing order.\n\n**Example 1:**\n```\nInput: arr = [2,7,11,15], target = 9\nOutput: [0,1]\nExplanation: arr[0] + arr[1] = 2 + 7 = 9.\n```\n\n**Example 2:**\n```\nInput: arr = [3,2,4], target = 6\nOutput: [1,2]\n```\n\n**Example 3:**\n```\nInput: arr = [3,3], target = 6\nOutput: [0,1]\n```\n\n**Constraints:**\n- `2 <= arr.length <= 10^4`\n- `-10^9 <= arr[i] <= 10^9`\n- `-10^9 <= target <= 10^9`\n- Exactly one valid answer exists.\n\n**Follow-up:** Can you do it in less than O(n²) time?",
+  "params": [
+    {
+      "name": "arr",
+      "type": "vector<int>&"
+    },
+    {
+      "name": "target",
+      "type": "int"
+    }
+  ],
+  "compare": "exact",
+  "tests": [
+    {
+      "input": [
+        "[2,7,11,15]",
+        "9"
+      ],
+      "expected": "[0,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[3,2,4]",
+        "6"
+      ],
+      "expected": "[1,2]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[3,3]",
+        "6"
+      ],
+      "expected": "[0,1]",
+      "example": true,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[-1,-2,-3,-4,-5]",
+        "-8"
+      ],
+      "expected": "[2,4]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[0,4,3,0]",
+        "0"
+      ],
+      "expected": "[0,3]",
+      "example": false,
+      "addedBy": "problem"
+    },
+    {
+      "input": [
+        "[1000000000,5,-1000000000]",
+        "0"
+      ],
+      "expected": "[0,2]",
+      "example": false,
+      "addedBy": "problem"
+    }
+  ],
+  "createdAt": 1792499322536,
+  "formatVersion": 1,
+  "link": "https://leetcode.com/problems/two-sum/"
+}
