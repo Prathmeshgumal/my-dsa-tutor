@@ -49,8 +49,8 @@ services:
       PISTON_URL: http://piston:2000
       # Your data folders below are mounted here.
       DATA_DIR: /workspace
-      # Your Claude login, made with `claude setup-token` and saved in .env by ./start.sh.
-      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Where the editor keeps its Claude login (Setup → Sign in to Claude) and chats: the claude-home volume below.
+      DSA_CLAUDE_CONFIG_DIR: /home/node/.claude
     ports:
       - "127.0.0.1:${EDITOR_PORT:-5199}:5199"
     volumes:

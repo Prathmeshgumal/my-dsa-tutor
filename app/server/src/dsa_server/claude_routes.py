@@ -1,4 +1,4 @@
-"""The editor's Claude agent (the Claude Code engine, using the existing Claude Code login).
+"""The editor's Claude agent (the Claude Code engine, signed in from the Setup dialog: see claude_account.py).
   POST /api/claude/chat      { message, sessionId, context, model?, effort? } → one turn, streamed as server-sent events
   GET  /api/claude/models                                    → the models (and their effort levels) the engine offers
   GET  /api/claude/turns/:id?after=n                         → the same turn's events after the nth (reconnect)
@@ -376,6 +376,10 @@ class Models:
                     for m in await self.fetch()
                 ]
             return self.models
+
+    def forget(self) -> None:
+        """Asks again next time: another account can offer other models."""
+        self.models = None
 
     async def check(self, model, effort) -> tuple[str | None, str | None] | str:
         """The --model and --effort to start the engine with, or why the choice can't be used. "default" (or no

@@ -52,6 +52,26 @@ def engine_path() -> str:
     return str(BUNDLED_ENGINE) if BUNDLED_ENGINE.exists() else "claude"
 
 
+CONFIG_DIR_ENV = "DSA_CLAUDE_CONFIG_DIR"
+"""Where the editor keeps its own Claude login and chats. The server sets it at start-up (state/claude unless given),
+so the editor's login is never the one your terminal's Claude Code uses: signing out here can't sign that out."""
+
+IGNORED_LOGINS = ("CLAUDE_CODE_OAUTH_TOKEN",)
+"""Logins from the environment would beat the one made in the Setup dialog, and Sign out couldn't end them."""
+
+
+def claude_env() -> dict[str, str]:
+    """The environment every `claude` the editor starts gets: the editor's own login folder, no outside login token."""
+    env = dict(os.environ)
+    for name in IGNORED_LOGINS:
+        env.pop(name, None)
+    config_dir = os.environ.get(CONFIG_DIR_ENV)
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    env.pop(CONFIG_DIR_ENV, None)
+    return env
+
+
 def _request_id() -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
 
@@ -137,7 +157,7 @@ class Engine:
         return args
 
     def env(self) -> dict[str, str]:
-        env = dict(os.environ)
+        env = claude_env()
         env["CLAUDE_AGENT_SDK_VERSION"] = SDK_VERSION
         env["CLAUDE_CODE_SDK_READS_SESSION_STATE"] = "1"
         env.setdefault("CLAUDE_CODE_ENTRYPOINT", "sdk-ts")

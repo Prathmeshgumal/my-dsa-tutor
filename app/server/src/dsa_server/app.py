@@ -9,7 +9,9 @@ from pathlib import Path
 import httpx
 
 from .atomic_write import remove_leftover_temp_files
-from .claude_routes import Turns, claude_routes
+from .claude_account import account_routes
+from .claude_routes import Models, Turns, claude_routes
+from .engine import CONFIG_DIR_ENV
 from .config import Config
 from .folder_events import FolderEvents
 from .health import health_routes
@@ -117,6 +119,11 @@ class App:
         # A fresh data folder (first start, or a new DATA_DIR) gets everything it needs.
         for folder in folders.values():
             os.makedirs(folder, exist_ok=True)
+        # The editor's own Claude login (Setup → Sign in), apart from your terminal's. The Docker image keeps it in
+        # its claude-home volume instead.
+        os.environ.setdefault(CONFIG_DIR_ENV, os.path.join(folders["state"], "claude"))
+        os.makedirs(os.environ[CONFIG_DIR_ENV], mode=0o700, exist_ok=True)
+        models = Models()
         try:
             remove_leftover_temp_files([folders[name] for name in ("solutions", "notes", "playground", "problems", "state")])
         except OSError as e:
@@ -134,7 +141,8 @@ class App:
             problems_routes(folders["problems"]),
             # Tabs, chats and settings.
             state_routes(folders["state"]),
-            claude_routes(folders, config.piston_url, self.client, logger, self.turns),
+            account_routes(logger, models.forget),
+            claude_routes(folders, config.piston_url, self.client, logger, self.turns, models=models),
         ]
 
     async def __call__(self, scope: dict, receive: Receive, send: Send) -> None:

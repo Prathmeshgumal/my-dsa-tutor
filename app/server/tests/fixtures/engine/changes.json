@@ -220,7 +220,8 @@
    "value": {
     "CLAUDE_AGENT_SDK_VERSION": "0.3.302",
     "CLAUDE_CODE_ENTRYPOINT": "sdk-ts",
-    "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1"
+    "CLAUDE_CODE_SDK_READS_SESSION_STATE": "1",
+    "CLAUDE_CONFIG_DIR": "<data>/state/claude"
    }
   },
   {

@@ -16,6 +16,8 @@ import type { Health } from '@dsa/core/health'
 import { cn } from '@/lib/utils'
 import { useHealth } from '@/state/health'
 import { useSettingsDialog } from '@/state/settingsDialog'
+import { describeAccount, useAccount } from '@/state/account'
+import { ClaudeAccountControls } from './ClaudeAccount'
 
 export { useSettingsDialog }
 
@@ -48,6 +50,7 @@ const STATE_NOT_SAVED =
 
 function Checks({ health, stateSaveFailing }: { health: Health; stateSaveFailing: boolean }) {
   const { piston, claude, folders } = health
+  const account = useAccount((s) => s.account)
   const langs = [
     ['C++', piston.languages.cpp],
     ['Java', piston.languages.java],
@@ -80,14 +83,30 @@ function Checks({ health, stateSaveFailing }: { health: Health; stateSaveFailing
       </Row>
       <Row
         label="Claude"
-        tone={claude.signedIn === true ? 'ok' : claude.signedIn === 'unknown' ? 'unknown' : 'problem'}
-        detail={
-          claude.problem ??
-          (claude.signedIn === 'unknown'
-            ? 'Your login is kept in the system keychain, so it can’t be checked from here. Ask Claude something to try it.'
-            : 'Signed in.')
+        tone={
+          account
+            ? account.signedIn
+              ? 'ok'
+              : 'problem'
+            : claude.signedIn === true
+              ? 'ok'
+              : claude.signedIn === 'unknown'
+                ? 'unknown'
+                : 'problem'
         }
-      />
+        detail={
+          account
+            ? account.signedIn
+              ? `Signed in as ${describeAccount(account)}`
+              : 'Not signed in. Sign in with your Claude account to use the Claude panel.'
+            : (claude.problem ??
+              (claude.signedIn === 'unknown'
+                ? 'Your login is kept in the system keychain, so it can’t be checked from here. Ask Claude something to try it.'
+                : 'Signed in.'))
+        }
+      >
+        <ClaudeAccountControls />
+      </Row>
       <Row
         label="Saving your work"
         tone={badFolders.length || stateSaveFailing ? 'problem' : 'ok'}

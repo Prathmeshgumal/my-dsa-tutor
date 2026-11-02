@@ -81,8 +81,48 @@ def run_turn(user: dict) -> None:
     record("done", None)
 
 
+FAKE_URL = "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=fake-state"
+GOOD_CODE = "good-code#fake-state"
+
+
+def auth(command: str) -> int:
+    """`claude auth status|login|logout`, keeping a pretend login in CLAUDE_CONFIG_DIR (so a test can see which
+    folder the server used). The code `good-code#fake-state` signs in as fake@example.com."""
+    file = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "fake-login.json")
+    if command == "status":
+        login = json.load(open(file)) if os.path.exists(file) else None
+        status = {"loggedIn": False, "authMethod": "none", "apiProvider": "firstParty"}
+        if login:
+            status = {"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty", "email": login["email"], "orgName": "Fake Org", "subscriptionType": "pro"}
+        print(json.dumps(status, indent=2))
+        return 0 if login else 1
+    if command == "logout":
+        if os.path.exists(file):
+            os.unlink(file)
+        print("Successfully logged out from your Anthropic account.")
+        return 0
+    if command == "login":
+        print("Opening browser to sign in…")
+        print(f"If the browser didn't open, visit: {FAKE_URL}", flush=True)
+        sys.stdout.write("Paste code here if prompted > ")
+        sys.stdout.flush()
+        code = sys.stdin.readline().strip()
+        record("login_code", code)
+        if code != GOOD_CODE:
+            print("Login failed: Request failed with status code 400")
+            return 1
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        json.dump({"email": "fake@example.com"}, open(file, "w"))
+        print("Login successful.")
+        return 0
+    return 2
+
+
 def main() -> None:
     record("argv", sys.argv[1:])
+    if sys.argv[1:2] == ["auth"]:
+        record("env", {k: v for k, v in sorted(os.environ.items()) if k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "BROWSER")})
+        sys.exit(auth(sys.argv[2] if len(sys.argv) > 2 else ""))
     # Values too (they can change how the engine behaves), except secrets and what differs on every run.
     changing = ("TOKEN", "KEY", "SOCKET", "SESSION_ID", "PID", "EXECPATH")
     record("env", {k: ("<varies>" if any(c in k for c in changing) else v) for k, v in sorted(os.environ.items()) if k.startswith(("CLAUDE", "ANTHROPIC"))})

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import httpx
 
+from .engine import CONFIG_DIR_ENV
 from .web import Request
 
 ROUTE = "/api/health"
@@ -50,16 +51,20 @@ async def check_piston(piston_url: str, client: httpx.AsyncClient) -> dict:
         return {"ok": False, "languages": none, "problem": "Can’t reach Piston, which runs your code. Start it with ./start.sh."}
 
 
-def check_claude(env: dict[str, str], platform: str, home: str) -> dict:
-    if env.get("CLAUDE_CODE_OAUTH_TOKEN") or env.get("ANTHROPIC_API_KEY"):
+NOT_SIGNED_IN = "Claude isn’t signed in. Click Sign in below."
+
+
+def check_claude(env: dict[str, str], platform: str) -> dict:
+    """A quick look for the editor's own login (the Setup dialog's account section asks Claude Code for the details)."""
+    if env.get("ANTHROPIC_API_KEY"):
         return {"signedIn": True}
-    config_dir = env["CLAUDE_CONFIG_DIR"] if "CLAUDE_CONFIG_DIR" in env else os.path.join(home, ".claude")
-    if os.path.exists(os.path.join(config_dir, ".credentials.json")):
+    config_dir = env.get(CONFIG_DIR_ENV)
+    if config_dir and os.path.exists(os.path.join(config_dir, ".credentials.json")):
         return {"signedIn": True}
     # On macOS, Claude Code keeps the login in the keychain, where the server can't look.
-    if platform == "darwin" and "CLAUDE_CONFIG_DIR" not in env:
+    if platform == "darwin":
         return {"signedIn": "unknown"}
-    return {"signedIn": False, "problem": "Claude isn’t signed in. Run claude setup-token, then ./start.sh and paste the token."}
+    return {"signedIn": False, "problem": NOT_SIGNED_IN}
 
 
 def check_folder(name: str, folder: str) -> dict:
@@ -80,7 +85,7 @@ def health_routes(piston_url: str, folders: dict[str, str], client: httpx.AsyncC
             return False
         # The folder checks take microseconds; they run while Piston answers.
         piston = asyncio.ensure_future(check_piston(piston_url, client))
-        claude = check_claude(dict(os.environ), sys.platform, os.path.expanduser("~"))
+        claude = check_claude(dict(os.environ), sys.platform)
         dirs = [check_folder(name, folder) for name, folder in folders.items()]
         await req.send_json(200, {"piston": await piston, "claude": claude, "folders": dirs}, {"Cache-Control": "no-store"})
         return True

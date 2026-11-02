@@ -91,12 +91,18 @@ class TestHealth:
                 "languages": {"cpp": True, "java": False, "python": True},
                 "problem": "Java isn’t installed yet. Run ./start.sh (or: docker compose up -d piston-setup) to install it.",
             },
-            "claude": {"signedIn": False, "problem": "Claude isn’t signed in. Run claude setup-token, then ./start.sh and paste the token."},
+            "claude": {"signedIn": False, "problem": "Claude isn’t signed in. Click Sign in below."},
             "folders": [{"name": n, "ok": True} for n in ["solutions", "notes", "playground", "problems", "state", "logs"]],
         }
 
-    def test_a_login_file_counts_as_signed_in(self, client, data):
-        creds = data / "home" / ".claude" / ".credentials.json"
+    def test_the_editors_own_login_file_counts_as_signed_in(self, client, data):
+        # Your terminal's login (~/.claude) is not the editor's: it doesn't count.
+        terminal = data / "home" / ".claude" / ".credentials.json"
+        terminal.parent.mkdir(parents=True, exist_ok=True)
+        terminal.write_text("{}")
+        assert client.get("/api/health").json()["claude"]["signedIn"] is False
+        terminal.unlink()
+        creds = data / "state" / "claude" / ".credentials.json"
         creds.parent.mkdir(parents=True, exist_ok=True)
         creds.write_text("{}")
         assert client.get("/api/health").json()["claude"] == {"signedIn": True}

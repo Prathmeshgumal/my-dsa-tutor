@@ -70,10 +70,12 @@ link. It also creates the data folders first, so they belong to you; after that,
   few minutes (`docker compose logs -f piston-setup` shows progress); after that it
   only checks and exits.
 
-The Claude panel signs in with a token from your Claude subscription. The first time,
-`./start.sh` asks for it: run `claude setup-token` in another terminal and paste what it
-prints. It's saved in `.env`, which git ignores. The editor never sees the rest of your
-`~/.claude` folder. To stop everything: `docker compose down`.
+The Claude panel signs in with your Claude account from **Setup** (the ⚙️ button in the left
+bar): click **Sign in to Claude**, approve in the tab that opens, and paste the code it shows
+back into Setup. **Sign out** and **Switch account** are in the same place. The editor keeps
+this login to itself (in Docker, its `claude-home` volume; otherwise `state/claude/`), so it
+never touches the Claude Code login in your terminal or the rest of your `~/.claude`. To stop
+everything: `docker compose down`.
 
 **Something not working?** The ⚙️ button in the left bar opens **Setup**. It checks that
 Piston is running with C++, Java and Python, that Claude is signed in, and that your folders
@@ -88,6 +90,10 @@ you change the code, page or server. `npm test` runs the unit tests, `npm run te
 tests (the first time: `npx playwright install chromium`) and `cd server && uv run pytest` the
 server's tests. The code is in three parts under `app/`: `packages/web` (the page),
 `packages/core` (shared by the page and Claude's tools) and `server` (the API, in Python).
+
+Updating from a version that signed in with `claude setup-token`? The `CLAUDE_CODE_OAUTH_TOKEN`
+line in `.env` isn't used any more: delete it, rebuild (`./start.sh --build`) and sign in once
+from Setup.
 
 Updating from a version before the editor ran on its own server? Docker's old
 `project-me_editor-node-modules` volume isn't used any more; `docker volume rm
